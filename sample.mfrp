@@ -1,0 +1,50 @@
+switchmodule FanState
+in   clock : Int,
+     di    : Double,
+out  ctime : Int,
+     otime : Int,
+     fan   : bool
+init FanOff()
+
+state FanOff() {
+  node ctime = ctime@last
+  
+  node otime = 0
+
+  node fan = False
+
+  switch :
+    if di >= 75.5 then FanOn(clock) else Retain
+}
+
+state FanOn(begin : Int) {
+  node ctime = {
+    dt = clock - clock@last
+    ctime@last + dt
+  }
+  
+  node otime = clock - begin
+
+  node fan = True
+
+  switch :
+    if di <= 74.5 then FanOff() else
+    if otime > 7200 then FanSleep() else
+    Retain
+}
+
+state FanSleep() {
+  node ctime = ctime@last
+
+  node otime = 0
+
+  node fan = False
+
+  node init[1800] timer = {
+    dt = clock - clock@last
+    timer@last - dt
+  }
+
+  switch :
+    if timer <= 0 then FanOff() else Retain
+}
