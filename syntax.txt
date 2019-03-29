@@ -1,0 +1,114 @@
+# switch-extension syntax
+# refer xfrp syntax(https://github.com/psg-titech/xfrp/blob/master/syntax.txt)
+
+# Legends
+#   foo      : nonterminal symbol
+#   'foo'    : terminal symbol
+#   [ ... ]  : optional
+#   { ... }* : repetition (0 or more times)
+#   { ... }+ : repetition (1 or more times)
+#
+# Grammar Definitions
+#   foo ::= ...  : definition in EBNF
+#   foo = ...    : definition in regular expression
+
+progModule ::=
+   'switchmodule' identifier
+  ['in'  inNode {',' inNode}*]
+  ['out' idAndType {',' idAndType}*]
+  ['use' identifier {',' identifier}*]
+  'init' identifier '(' [{literal}*]')'
+  { definition }+
+
+definition ::=
+    'data' idAndTypeOpt '=' expression
+  | 'type' identifier '=' typeDef {'|' typeDef}*
+  | 'func' identifier fargs [':' typeSpec] '=' expression
+  | stateDefinition
+
+stateDefinition ::=
+  'state' identifier sprms '{'
+  {nodeDefinition}+
+  'switch:' expression
+  '}'
+nodeDefinition ::= 'node' ['init' '[' expression ']'] idAndTypeOpt '=' expression
+
+expression ::=
+    uniOp expression
+  | expression binOp expression
+  | simpleExpression
+
+uniOp ::= '+' | '-' | '!' | '~'
+
+binOp ::=
+    '*' | '/' | '%'
+  | '+' | '-'
+  | '<<' | '>>'
+  | '<' | '<=' | '>=' | '>'
+  | '==' | '!='
+  | '&'
+  | '^'
+  | '|'
+  | '&&'
+  | '||'
+
+simpleExpression ::=
+    '(' expression {',' expression}* ')'                 # tuple
+  | literal                                              # constant
+  | 'Retain'                                             # Retain
+  | identifier                                           # node or data
+  | identifier '@' annotation                            # node with annotation
+  | identifier '(' [ expression {',' expression}* ] ')'  # funcall or AGT constructor
+  | 'if' expression 'then' expression 'else' expression  # if-expr
+  | '{' { binder }+  expression '}'                      # let-expr
+  | expression 'of:' {pattern '->' expression ';'}+      # pattern match
+
+literal ::=
+    'True'
+  | 'False'
+  | number
+# todo :
+#  | '()'
+#  | charLiteral       
+
+number ::=
+    decimalNumber
+# todo :
+#  | octalNumber
+#  | hexadecimalNumber
+#  | floatNumber
+
+annotation ::= 'last'
+
+inNode ::= identifier '(' literal ')' ':' typeSpec
+typeDef ::= identifier | identifier '(' typeSpec {',' typeSpec}*')'
+args ::= '(' [expression {',' expression}*] ')'
+fargs ::= '(' [idAndTypeOpt {',' idAndTypeOpt}* ] ')'
+sprms ::= '(' [idAndType {',' idAndType}* ] ')'
+idAndType ::= identifier ':' typeSpec
+idAndTypeOpt ::= identifier [':' typeSpec]
+binder ::= idAndTypeOpt '=' expression
+
+identifier = [A-Za-z][A-Za-z0-9_]*
+
+typeSpec ::=
+    primTypeSpec
+  | '(' [primTypeSpec {',' primTypeSpec}*] ')'
+
+primTypeSpec ::= 'Bool' | 'Int' | 'Float' | identifier
+# todo :
+'Unit' | 'Char'
+
+# note : nested pattern match is unsupported
+pattern ::=
+    primPattern
+  | '(' [primPattern {',' primPattern}*] ')' # tuple
+  | identifier '(' [primPattern {',' primPattern}*] ')' # ADT
+
+primPattern ::=
+    '_'
+  | identifier
+  | literal
+
+
+
