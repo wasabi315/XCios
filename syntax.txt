@@ -12,6 +12,8 @@
 #   foo ::= ...  : definition in EBNF
 #   foo = ...    : definition in regular expression
 
+
+### whole module ###
 progModule ::=
    'switchmodule' identifier
   ['in'  inNode {',' inNode}*]
@@ -19,24 +21,45 @@ progModule ::=
   ['use' identifier {',' identifier}*]
   'init' identifier '(' [{literal}*]')'
   { definition }+
+inNode ::= identifier ['(' literal ')'] ':' typeSpec
 
+
+### toplevel definitions ###
 definition ::=
     'data' idAndTypeOpt '=' expression
   | 'type' identifier '=' typeDef {'|' typeDef}*
   | 'func' identifier fargs [':' typeSpec] '=' expression
   | stateDefinition
 
+typeDef ::= identifier ['(' typeSpec {',' typeSpec}*')']
+
 stateDefinition ::=
   'state' identifier sprms '{'
   {nodeDefinition}+
   'switch:' expression
   '}'
-nodeDefinition ::= 'node' ['init' '[' expression ']'] idAndTypeOpt '=' expression
 
+nodeDefinition ::= 'node' ['init' '[' expression ']'] idAndTypeOpt '=' expression
+sprms ::= '(' [idAndType {',' idAndType}* ] ')'
+fargs ::= '(' [idAndTypeOpt {',' idAndTypeOpt}* ] ')'
+
+### expression ###
+# note : pattern match syntax with indent is not supported 
 expression ::=
     uniOp expression
   | expression binOp expression
-  | simpleExpression
+  | '(' expression {',' expression}* ')'                 # tuple or paren
+  | literal                                              # constant
+  | 'Retain'                                             # Retain
+  | identifier                                           # node or data
+  | identifier '@' annotation                            # node with annotation
+  | identifier args                                      # funcall or AGT constructor
+  | 'if' expression 'then' expression 'else' expression  # if-expr
+  | '{' { binder }+  expression '}'                      # let-expr
+  | expression 'of' matchBranch {',' matchBranch}*       # pattern match
+args ::= '(' [expression {',' expression}*] ')'
+binder ::= idAndTypeOpt '=' expression
+matchBranch :: = pattern '->' expression
 
 uniOp ::= '+' | '-' | '!' | '~'
 
@@ -52,16 +75,20 @@ binOp ::=
   | '&&'
   | '||'
 
-simpleExpression ::=
-    '(' expression {',' expression}* ')'                 # tuple
-  | literal                                              # constant
-  | 'Retain'                                             # Retain
-  | identifier                                           # node or data
-  | identifier '@' annotation                            # node with annotation
-  | identifier '(' [ expression {',' expression}* ] ')'  # funcall or AGT constructor
-  | 'if' expression 'then' expression 'else' expression  # if-expr
-  | '{' { binder }+  expression '}'                      # let-expr
-  | expression 'of:' {pattern '->' expression ';'}+      # pattern match
+annotation ::= 'last'
+
+pattern ::=
+    '_'
+  | identifier
+  | literal
+  | '(' pattern {',' pattern}* ')' # tuple
+  | identifier '(' pattern {',' pattern}* ')' # ADT
+
+### primitives ###
+identifier = [A-Za-z][A-Za-z0-9_]*
+
+idAndType ::= identifier ':' typeSpec
+idAndTypeOpt ::= identifier [':' typeSpec]
 
 literal ::=
     'True'
@@ -78,37 +105,9 @@ number ::=
 #  | hexadecimalNumber
 #  | floatNumber
 
-annotation ::= 'last'
-
-inNode ::= identifier '(' literal ')' ':' typeSpec
-typeDef ::= identifier | identifier '(' typeSpec {',' typeSpec}*')'
-args ::= '(' [expression {',' expression}*] ')'
-fargs ::= '(' [idAndTypeOpt {',' idAndTypeOpt}* ] ')'
-sprms ::= '(' [idAndType {',' idAndType}* ] ')'
-idAndType ::= identifier ':' typeSpec
-idAndTypeOpt ::= identifier [':' typeSpec]
-binder ::= idAndTypeOpt '=' expression
-
-identifier = [A-Za-z][A-Za-z0-9_]*
-
 typeSpec ::=
-    primTypeSpec
-  | '(' [primTypeSpec {',' primTypeSpec}*] ')'
-
-primTypeSpec ::= 'Bool' | 'Int' | 'Float' | identifier
+    'Bool' | 'Int' | 'Float' | identifier
+  | '(' [typeSpec {',' typeSpec}*] ')'
 # todo :
 'Unit' | 'Char'
-
-# note : nested pattern match is unsupported
-pattern ::=
-    primPattern
-  | '(' [primPattern {',' primPattern}*] ')' # tuple
-  | identifier '(' [primPattern {',' primPattern}*] ')' # ADT
-
-primPattern ::=
-    '_'
-  | identifier
-  | literal
-
-
 
