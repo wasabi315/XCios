@@ -27,9 +27,9 @@ type expression =
   | EPat of expression * (branch list)
 and uni_op = UPos| UNeg | UNot | UInv
 and bin_op =
-  | BMul | BDiv | BMod 
-  | BAdd | BSub
-  | BShl | BShr
+  | BMul | BDiv | BAdd | BSub
+  | BFMul | BFDiv | BFAdd | BFSub
+  | BMod | BShl | BShr
   | BLt | BLeq | BGt | BGeq
   | BEq | BNeq
   | BLand | BLor
