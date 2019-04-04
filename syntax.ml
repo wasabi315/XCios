@@ -37,14 +37,14 @@ and bin_op =
 and annotation = ALast
 and binder =
   {
-    bind_id = identifier;
-    bind_type = typespec option;
-    bind_body = expression;
+    bind_id : identifier;
+    bind_type : typespec option;
+    bind_body : expression;
   }
 and branch =
   {
-    branch_pat = pattern;
-    branch_expr = expression;
+    branch_pat : pattern;
+    branch_expr : expression;
   }
 and pattern = 
   | PWild
