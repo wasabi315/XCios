@@ -27,11 +27,11 @@ inNode ::= identifier ['(' literal ')'] ':' typeSpec
 ### toplevel definitions ###
 definition ::=
     'data' idAndTypeOpt '=' expression
-  | 'type' identifier '=' typeDef {'|' typeDef}*
+  | 'type' identifier '=' consDefinition {'|' consDefinition}*
   | 'func' identifier fargs [':' typeSpec] '=' expression
   | stateDefinition
 
-typeDef ::= identifier ['(' typeSpec {',' typeSpec}*')']
+consDefinition ::= identifier ['(' typeSpec {',' typeSpec}*')']
 
 stateDefinition ::=
   'state' identifier sprms '{'
@@ -107,7 +107,7 @@ number ::=
 
 typeSpec ::=
     'Bool' | 'Int' | 'Float' | identifier
-  | '(' [typeSpec {',' typeSpec}*] ')'
+  | '(' typeSpec {',' typeSpec}* ')'
 # todo :
 'Unit' | 'Char'
 
