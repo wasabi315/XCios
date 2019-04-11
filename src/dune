@@ -1,0 +1,6 @@
+(alias
+ (name debug)
+ (deps parser.mly))
+
+(menhir
+ (modules parser.mly))
