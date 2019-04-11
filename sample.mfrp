@@ -14,7 +14,8 @@ state FanOff() {
   node fan = False
 
   switch :
-    if di >= 75.5 then FanOn(clock) else Retain
+    if di >=. 75.5 then FanOn(clock)
+    else Retain
 }
 
 state FanOn(begin : Int) {
@@ -28,9 +29,9 @@ state FanOn(begin : Int) {
   node fan = True
 
   switch :
-    if di <= 74.5 then FanOff() else
-    if otime > 7200 then FanSleep() else
-    Retain
+    if di <=. 74.5 then FanOff()
+    else if otime >. 7200 then FanSleep()
+    else Retain
 }
 
 state FanSleep() {
@@ -46,5 +47,5 @@ state FanSleep() {
   }
 
   switch :
-    if timer <= 0 then FanOff() else Retain
+    if timer <=. 0 then FanOff() else Retain
 }
