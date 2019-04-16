@@ -73,6 +73,10 @@ rule read = parse
   | '<'     { LT }
   | ">="    { GEQ }
   | '>'     { GT }
+  | "<=."   { LEQDOT }
+  | "<."    { LTDOT }
+  | ">=."   { GEQDOT }
+  | ">."    { GTDOT }
   | "<<"    { LSHIFT }
   | ">>"    { RSHIFT }
   | '!'     { BANG }

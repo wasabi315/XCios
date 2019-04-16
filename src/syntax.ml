@@ -67,6 +67,7 @@ type bin_op =
   | BFMul | BFDiv | BFAdd | BFSub
   | BMod | BShl | BShr
   | BLt | BLeq | BGt | BGeq
+  | BFLt | BFLeq | BFGt | BFGeq
   | BEq | BNeq
   | BLand | BLor
   | BAnd | BOr | BXor
@@ -77,6 +78,7 @@ let pp_bin_op ppf op =
      | BFMul -> "*." | BFDiv -> "/." | BFAdd -> "+." | BFSub -> "-."
      | BMod -> "%" | BShl -> "<<" | BShr -> ">>"
      | BLt -> "<" | BLeq -> "<=" | BGt -> ">" | BGeq -> ">="
+     | BFLt -> "<." | BFLeq -> "<=." | BFGt -> ">." | BFGeq -> ">=."
      | BEq -> "==" | BNeq -> "!="
      | BLand -> "&&" | BLor -> "||"
      | BAnd -> "&" | BOr -> "|" | BXor -> "^")
