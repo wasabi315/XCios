@@ -48,11 +48,11 @@ let pp_id_and_args pp_args ppf (id, args) =
 type literal =
   | LTrue
   | LFalse
-  | LNum of string
+  | LNum of int
 let pp_literal ppf = function
   | LTrue -> fprintf ppf "<literal True>"
   | LFalse -> fprintf ppf "<literal False>"
-  | LNum(n) -> fprintf ppf "<literal Num %s>" n
+  | LNum(n) -> fprintf ppf "<literal Num %a>" pp_print_int n
 
 (* Operators *)
 type uni_op = UPos| UNeg | UNot | UInv
