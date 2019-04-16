@@ -229,15 +229,15 @@ and pp_nodedef ppf {init; node_id; node_type; node_body} =
 
 (* toplevel definitions *)
 type definition =
-  | DefData of datadef
-  | DefType of typedef
-  | DefFunc of funcdef
-  | DefState of statedef
+  | DataDef of datadef
+  | TypeDef of typedef
+  | FuncDef of funcdef
+  | StateDef of statedef
 let pp_definition ppf = function
-  | DefData(d) -> pp_datadef ppf d
-  | DefType(d) -> pp_typedef ppf d
-  | DefFunc(d) -> pp_funcdef ppf d
-  | DefState(d) -> pp_statedef ppf d
+  | DataDef(d) -> pp_datadef ppf d
+  | TypeDef(d) -> pp_typedef ppf d
+  | FuncDef(d) -> pp_funcdef ppf d
+  | StateDef(d) -> pp_statedef ppf d
 
 (* whole module *)
 type switchmodule =

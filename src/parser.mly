@@ -84,19 +84,19 @@ definition:
     { 
       let (id, topt) = signature in
       let def = { data_id = i; data_type = topt; data_body = expr } in
-      DefData def
+      DataDef def
     }
   | TYPE id = ID EQUAL constructors = separated_nonempty_list(OR, cons_definition)
     {
       let def = { type_id = id; constructors = constructors } in
-      DefType def
+      TypeDef def
     }
   | FUNC id = ID params = fparams
     t = preceded(COLON, typespec)? EQUAL body = expression
     {
       let def = 
 	{ func_id = id; func_type = t; func_params = params; func_body = body } in
-      DefFunc def
+      FuncDef def
     }
   | STATE id = ID params = sparams LBRACE
     nodes = node_definition+ 
@@ -105,7 +105,7 @@ definition:
     {
       let def =
 	{ state_id = id; state_params = params; nodes = nodes; switch = switch } in
-      DefState state
+      StateDef state
     }
 
 cons_definition:
