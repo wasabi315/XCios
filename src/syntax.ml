@@ -48,11 +48,13 @@ let pp_id_and_args pp_args ppf (id, args) =
 type literal =
   | LTrue
   | LFalse
-  | LNum of int
+  | LInt of int
+  | LFloat of float
 let pp_literal ppf = function
   | LTrue -> fprintf ppf "<literal True>"
   | LFalse -> fprintf ppf "<literal False>"
-  | LNum(n) -> fprintf ppf "<literal Num %a>" pp_print_int n
+  | LInt(n) -> fprintf ppf "<literal int %a>" pp_print_int n
+  | LFloat(n) -> fprintf ppf "<literal float %a>" pp_print_float n
 
 (* Operators *)
 type uni_op = UPos| UNeg | UNot | UInv

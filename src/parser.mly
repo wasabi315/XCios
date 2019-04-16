@@ -19,6 +19,7 @@ RSHIFT GEQ GT BANG EQUAL
 
 %token <string> ID
 %token <int> INT
+%token <float> FLOAT
 
 %token EOF
 
@@ -218,7 +219,8 @@ id_and_type_opt:
 literal:
   | TRUE { LTrue }
   | FALSE { LFalse }
-  | i = INT { LNum i }
+  | n = INT { LInt n }
+  | n = FLOAT { LFloat n }
 
 typespec:
   | id = ID
