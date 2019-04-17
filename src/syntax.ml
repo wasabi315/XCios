@@ -32,11 +32,11 @@ let pp_typespec_opt =
   pp_opt pp_typespec (fun ppf () -> pp_print_string ppf "_")
 
 let pp_id_and_type ppf (id, t) =
-  fprintf ppf "%a:%a"
+  fprintf ppf "%a : %a"
     pp_identifier id pp_typespec t
 
 let pp_id_and_typeopt ppf (id, topt)=
-  fprintf ppf "%a:%a"
+  fprintf ppf "%a : %a"
     pp_identifier id pp_typespec_opt topt
 
 let pp_id_and_args pp_args ppf (id, args) =
@@ -246,22 +246,25 @@ let pp_definition ppf = function
 (* whole module *)
 type switchmodule =
   {
+    module_id   : identifier;
     (* (identifier / init value) list *)
-    in_nodes    : (identifier * typespec * (literal option)) list;
+    in_nodes    : (identifier * (literal option) * typespec) list;
     out_nodes   : (identifier * typespec) list;
     use         : identifier list;
     (* state id / state parameters *)
     init        : identifier * (literal list);
     definitions : definition list;
   }
-let pp_switchmodule ppf {in_nodes; out_nodes; use; init; definitions} =
-  let pp_in_node ppf (id, t, init) =
+let pp_switchmodule ppf {module_id; in_nodes; out_nodes; use; init; definitions} =
+  let pp_in_node ppf (id, init, t) =
     let pp_init_none ppf () = pp_print_string ppf "_" in
-    fprintf ppf "%a(%a)"
-      pp_id_and_type (id, t)
+    fprintf ppf "%a(%a) : %a"
+      pp_identifier id
       (pp_opt pp_literal pp_init_none) init
+      pp_typespec t
   in
   fprintf ppf "<@[<2>SwitchModule:@;";
+  fprintf ppf "id:@ %a@;" pp_identifier module_id;
   fprintf ppf "in_nodes:@ @[<1>(%a)@]@;"
     (pp_list_comma pp_in_node) in_nodes;
   fprintf ppf "out_nodes:@ @[<1>(%a)@]@;"

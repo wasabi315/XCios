@@ -6,7 +6,7 @@
     Hashtbl.create tb_size
 
   let () =
-    List.iter (fun (id, tok) -> Hashtbl.add id tok)
+    List.iter (fun (id, tok) -> Hashtbl.add lex_context id tok)
       [
         "switchmodule", SWITCHMODULE;
         "in",           IN;
@@ -86,7 +86,7 @@ rule read = parse
         try
           Hashtbl.find lex_context s
         with Not_found ->
-          Id s
+          ID s
     }
   | digits  { INT (int_of_string (Lexing.lexeme lexbuf))}
   | fdigits { FLOAT (float_of_string (Lexing.lexeme lexbuf))}

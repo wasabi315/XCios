@@ -53,6 +53,7 @@ switchmodule:
     EOF
     {
       {
+        module_id = id;
 	in_nodes = in_nodes;
 	out_nodes = out_nodes;
 	use = use;
@@ -86,7 +87,7 @@ definition:
   | DATA signature = id_and_type_opt EQUAL body = expression
     { 
       let (id, topt) = signature in
-      let def = { data_id = i; data_type = topt; data_body = expr } in
+      let def = { data_id = id; data_type = topt; data_body = body } in
       DataDef def
     }
   | TYPE id = ID EQUAL constructors = separated_nonempty_list(OR, cons_definition)
@@ -108,11 +109,12 @@ definition:
     {
       let def =
 	{ state_id = id; state_params = params; nodes = nodes; switch = switch } in
-      StateDef state
+      StateDef def
     }
 
 cons_definition:
-  | id = ID ts = delimited(LPAREN, separated_nonempty_list(COMMA, typespec), RPAREN)?
+  | id = ID
+    ts = loption(delimited(LPAREN, separated_nonempty_list(COMMA, typespec), RPAREN))
     { (id, ts) }
 
 fparams: 
@@ -138,9 +140,9 @@ node_init:
 expression:
   | op = uni_op expr = expression 
     %prec prec_uni
-    { EUniOp op expr }
+    { EUniOp(op, expr) }
   | expr1 = expression op = bin_op expr2 = expression
-    { EBinOP op expr1 expr2 }
+    { EBinOp(op, expr1, expr2) }
   | expr = delimited(LPAREN, separated_nonempty_list(COMMA, expression), RPAREN)
     { 
       match expr with
@@ -149,22 +151,22 @@ expression:
       | _ -> ETuple expr
     }
   | expr = literal
-    { EConst expr }
+    { EConst(expr) }
   | RETAIN
     { ERetain }
   | expr = ID
-    { EID expr }
+    { EId(expr) }
   | id = ID AT annot = annotation
-    { EAnnot id annot }
+    { EAnnot(id, annot) }
   | id = ID args = delimited(LPAREN, separated_list(COMMA, expression), RPAREN)
-    { EFuncall id args }
+    { EFuncall(id, args) }
   | IF etest = expression THEN ethen = expression ELSE eelse = expression
     %prec prec_if
-    { EIf etest ethen eelse}
+    { EIf(etest, ethen, eelse) }
   | LBRACE binds = binder+ body = expression RBRACE
-    { ELet binds body }
+    { ELet(binds, body) }
   | expr = expression OF branchs = separated_nonempty_list(COMMA, match_branch)
-    { EPat expr branchs }
+    { EPat(expr, branchs) }
 
 binder:
   | signature = id_and_type_opt EQUAL body = expression
@@ -185,11 +187,11 @@ pattern:
       | _ -> PId id
     }
   | c = literal
-    { PConst c }
+    { PConst(c) }
   | ps = delimited(LPAREN, separated_nonempty_list(COMMA, pattern), RPAREN)
-    { PTuple ps }
+    { PTuple(ps) }
   | id = ID ps = delimited(LPAREN, separated_nonempty_list(COMMA, pattern), RPAREN)
-    { PADT id ps }
+    { PADT(id, ps) }
 
 %inline
 uni_op:
@@ -206,7 +208,7 @@ bin_op:
   | LTDOT { BFLt } | LEQDOT { BFLeq } | GTDOT { BFGt } | GEQDOT { BFGeq }
   | EQUAL2 { BEq } | NEQ { BNeq }
   | AND2 { BLand } | OR2 { BLor }
-  | AND { BAnd } | OR { Bor } | XOR { BXor }
+  | AND { BAnd } | OR { BOr } | XOR { BXor }
 
 annotation:
   | LAST { ALast }
@@ -222,8 +224,8 @@ id_and_type_opt:
 literal:
   | TRUE { LTrue }
   | FALSE { LFalse }
-  | n = INT { LInt n }
-  | n = FLOAT { LFloat n }
+  | n = INT { LInt(n) }
+  | n = FLOAT { LFloat(n) }
 
 typespec:
   | id = ID
@@ -232,7 +234,7 @@ typespec:
       | "Bool" -> TBool
       | "Int" -> TInt
       | "Float" -> TFloat
-      | _ -> TID id
+      | _ -> TID(id)
     }
   | ts = delimited(LPAREN, separated_nonempty_list(COMMA, typespec), RPAREN)
-    { TTuple ts }
+    { TTuple(ts) }
