@@ -1,6 +1,16 @@
-(alias
- (name debug)
- (deps parser.mly))
+(env
+ (dev
+  (flags (:standard -warn-error -A))))
+
+(executable
+ (name main))
+
+(ocamllex lexer)
 
 (menhir
- (modules parser.mly))
+ (modules parser))
+
+(alias
+ (name runtest)
+ (deps %{project_root}/sample.mfrp)
+ (action (run ./main.exe %{project_root}/sample.mfrp)))
