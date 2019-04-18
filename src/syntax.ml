@@ -115,18 +115,11 @@ type expression =
   | EAnnot of identifier * annotation
   | EFuncall of identifier * (expression list)
   | EIf of expression * expression * expression
-  | ELet of (binder list) * expression
   | EPat of expression * (branch list)
 and branch =
   {
     branch_pat : pattern;
     branch_expr : expression;
-  }
-and binder =
-  {
-    bind_id : identifier;
-    bind_type : typespec option;
-    bind_body : expression;
   }
 let rec pp_expression ppf = function
   | EUniOp(op, e) -> fprintf ppf "<uniop @[%a@ %a@]>"
@@ -145,14 +138,8 @@ let rec pp_expression ppf = function
                                   pp_expression etest
                                   pp_expression ethen
                                   pp_expression eelse
-  | ELet(binds, body) -> fprintf ppf "<let @[@[<1>(%a)@]@;%a@]>"
-                         (pp_list_comma pp_binder) binds pp_expression body
   | EPat(e, branchs) -> fprintf ppf "<match @[%a@;@[<1>(%a)@]@]>"
                         pp_expression e (pp_list_comma pp_branch) branchs
-and pp_binder ppf {bind_id; bind_type; bind_body} =
-  fprintf ppf "@[<2>%a =@ %a@]"
-    pp_id_and_typeopt (bind_id, bind_type)
-    pp_expression bind_body
 and pp_branch ppf {branch_pat; branch_expr} =
   fprintf ppf "@[<2>%a ->@ %a@]"
     pp_pattern branch_pat pp_expression branch_expr

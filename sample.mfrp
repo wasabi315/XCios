@@ -1,9 +1,9 @@
 switchmodule FanState
 in   clock : Int,
-     di    : Double,
+     di    : Float
 out  ctime : Int,
      otime : Int,
-     fan   : bool
+     fan   : Bool
 init FanOff()
 
 state FanOff() {
@@ -19,10 +19,8 @@ state FanOff() {
 }
 
 state FanOn(begin : Int) {
-  node ctime = {
-    dt = clock - clock@last
-    ctime@last + dt
-  }
+  node dt = clock - clock@last
+  node ctime = ctime@last + dt
   
   node otime = clock - begin
 
@@ -41,10 +39,8 @@ state FanSleep() {
 
   node fan = False
 
-  node init[1800] timer = {
-    dt = clock - clock@last
-    timer@last - dt
-  }
+  node dt = clock - clock@last
+  node init[1800] timer = timer@last - dt
 
   switch :
     if timer <=. 0 then FanOff() else Retain

@@ -163,17 +163,8 @@ expression:
   | IF etest = expression THEN ethen = expression ELSE eelse = expression
     %prec prec_if
     { EIf(etest, ethen, eelse) }
-  | LBRACE binds = binder+ body = expression RBRACE
-    { ELet(binds, body) }
   | expr = expression OF branchs = separated_nonempty_list(COMMA, match_branch)
     { EPat(expr, branchs) }
-
-binder:
-  | signature = id_and_type_opt EQUAL body = expression
-    { 
-      let (id, topt) = signature in 
-      { bind_id = id; bind_type = topt; bind_body = body }
-    }
 
 match_branch:
   | pat = pattern ARROW expr = expression
