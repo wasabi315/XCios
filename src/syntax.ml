@@ -5,6 +5,9 @@ open Extension.Format
 type identifier = string
 let pp_identifier = pp_print_string
 
+let pp_id_and_args pp_args =
+  pp_funcall pp_identifier pp_args
+
 (* Type specification *)
 type typespec =
   | TBool | TInt | TFloat
@@ -15,8 +18,8 @@ let rec pp_typespec ppf = function
   | TInt -> pp_print_string ppf "<type Int>"
   | TFloat -> pp_print_string ppf "<type Float>"
   | TID(t) -> fprintf ppf "<type %a>" pp_identifier t
-  | TTuple(ts) -> let lst_printer = pp_list_comma pp_typespec in
-                 fprintf ppf "<type (@[%a@])>" lst_printer ts
+  | TTuple(ts) -> fprintf ppf "<type (@[%a@])>"
+                    (pp_list_comma pp_typespec) ts
 
 let pp_typespec_opt =
   pp_opt pp_typespec (fun ppf () -> pp_print_string ppf "_")
@@ -28,11 +31,6 @@ let pp_id_and_type ppf (id, t) =
 let pp_id_and_typeopt ppf (id, topt)=
   fprintf ppf "%a : %a"
     pp_identifier id pp_typespec_opt topt
-
-let pp_id_and_args pp_args ppf (id, args) =
-  fprintf ppf "%a(@[%a@])"
-    pp_identifier id
-    (pp_list_comma pp_args) args
 
 (* Literal *)
 type literal =
@@ -87,7 +85,7 @@ type pattern =
   | PConst of literal
   | PTuple of (pattern list)
   | PADT of identifier * (pattern list)
-let rec pp_pattern ppf  = function
+let rec pp_pattern ppf = function
   | PWild -> pp_print_string ppf "_"
   | PId(id) -> pp_identifier ppf id
   | PConst(c) -> pp_literal ppf c
