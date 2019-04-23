@@ -9,8 +9,8 @@ RETAIN LAST IF THEN ELSE OF
 TRUE FALSE
 
 %token
-LBRACKET RBRACKET LBRACE RBRACE LPAREN RPAREN 
-COMMA COLON AT ARROW 
+LBRACKET RBRACKET LBRACE RBRACE LPAREN RPAREN
+COMMA COLON AT ARROW
 PLUS MINUS ASTERISK SLASH
 PLUSDOT MINUSDOT ASTERISKDOT SLASHDOT
 TILDE PERCENT XOR OR2 AND2 OR AND
@@ -62,22 +62,22 @@ switchmodule:
       }
     }
 
-in_node_decl: 
+in_node_decl:
   | IN inodes = separated_list(COMMA, in_node) { inodes }
 
-in_node: 
+in_node:
   | id = ID init = delimited(LPAREN, literal, RPAREN)? COLON t = typespec
     { (id, init, t) }
 
-out_node_decl: 
-  | OUT out_nodes = separated_list(COMMA, id_and_type) 
+out_node_decl:
+  | OUT out_nodes = separated_list(COMMA, id_and_type)
     { out_nodes }
 
-use_decl: 
-  | USE use = separated_list(COMMA, ID) 
+use_decl:
+  | USE use = separated_list(COMMA, ID)
     { use }
 
-init_state_decl: 
+init_state_decl:
   | INIT id = ID LPAREN params = separated_list(COMMA, literal) RPAREN
     { (id, params) }
 
@@ -85,7 +85,7 @@ init_state_decl:
 (* toplevel definitions *)
 definition:
   | DATA signature = id_and_type_opt EQUAL body = expression
-    { 
+    {
       let (id, topt) = signature in
       let def = { data_id = id; data_type = topt; data_body = body } in
       DataDef def
@@ -98,12 +98,12 @@ definition:
   | FUNC id = ID params = fparams
     t = preceded(COLON, typespec)? EQUAL body = expression
     {
-      let def = 
+      let def =
 	{ func_id = id; func_type = t; func_params = params; func_body = body } in
       FuncDef def
     }
   | STATE id = ID params = sparams LBRACE
-    nodes = node_definition+ 
+    nodes = node_definition+
     SWITCH COLON switch = expression
     RBRACE
     {
@@ -117,16 +117,16 @@ cons_definition:
     ts = loption(delimited(LPAREN, separated_nonempty_list(COMMA, typespec), RPAREN))
     { (id, ts) }
 
-fparams: 
+fparams:
   | params = delimited(LPAREN, separated_list(COMMA, id_and_type_opt), RPAREN)
     { params }
 sparams:
   | params = delimited(LPAREN, separated_list(COMMA, id_and_type), RPAREN)
     { params }
 
-node_definition: 
+node_definition:
   | NODE init = node_init? signature = id_and_type_opt EQUAL body = expression
-    { 
+    {
       let (id, topt) = signature in
       { init = init; node_id = id; node_type = topt; node_body = body }
     }
@@ -138,13 +138,13 @@ node_init:
 
 (* expressions *)
 expression:
-  | op = uni_op expr = expression 
+  | op = uni_op expr = expression
     %prec prec_uni
     { EUniOp(op, expr) }
   | expr1 = expression op = bin_op expr2 = expression
     { EBinOp(op, expr1, expr2) }
   | expr = delimited(LPAREN, separated_nonempty_list(COMMA, expression), RPAREN)
-    { 
+    {
       match expr with
       | [] -> assert false
       | [x] -> x
@@ -221,7 +221,7 @@ literal:
 typespec:
   | id = ID
     {
-      match id with 
+      match id with
       | "Bool" -> TBool
       | "Int" -> TInt
       | "Float" -> TFloat
