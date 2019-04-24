@@ -4,9 +4,9 @@ in   clock : Int,
 out  ctime : Int,
      otime : Int,
      fan   : Bool
-init FanOff()
+init FanOff
 
-state FanOff() {
+state FanOff {
   node ctime = ctime@last
   
   node otime = 0
@@ -27,12 +27,12 @@ state FanOn(begin : Int) {
   node fan = True
 
   switch :
-    if di <=. 74.5 then FanOff()
-    else if otime >. 7200 then FanSleep()
+    if di <=. 74.5 then FanOff
+    else if otime >. 7200 then FanSleep
     else Retain
 }
 
-state FanSleep() {
+state FanSleep {
   node ctime = ctime@last
 
   node otime = 0
@@ -43,5 +43,5 @@ state FanSleep() {
   node init[1800] timer = timer@last - dt
 
   switch :
-    if timer <=. 0 then FanOff() else Retain
+    if timer <=. 0 then FanOff else Retain
 }

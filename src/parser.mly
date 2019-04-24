@@ -41,6 +41,8 @@ BANG EQUAL
 %right prec_uni
 
 %%
+paren(rule):
+  | ret = delimited(LPAREN, rule, RPAREN) { ret }
 
 (* whole module *)
 switchmodule:
@@ -66,7 +68,7 @@ in_node_decl:
   | IN inodes = separated_list(COMMA, in_node) { inodes }
 
 in_node:
-  | id = ID init = delimited(LPAREN, literal, RPAREN)? COLON t = typespec
+  | id = ID init = paren(literal)? COLON t = typespec
     { (id, init, t) }
 
 out_node_decl:
@@ -78,7 +80,7 @@ use_decl:
     { use }
 
 init_state_decl:
-  | INIT id = ID LPAREN params = separated_list(COMMA, literal) RPAREN
+  | INIT id = ID params = loption(paren(separated_nonempty_list(COMMA, literal)))
     { (id, params) }
 
 
@@ -102,7 +104,7 @@ definition:
 	{ func_id = id; func_type = t; func_params = params; func_body = body } in
       FuncDef def
     }
-  | STATE id = ID params = sparams LBRACE
+  | STATE id = ID params = loption(sparams) LBRACE
     nodes = node_definition+
     SWITCH COLON switch = expression
     RBRACE
@@ -114,14 +116,14 @@ definition:
 
 cons_definition:
   | id = ID
-    ts = loption(delimited(LPAREN, separated_nonempty_list(COMMA, typespec), RPAREN))
+    ts = loption(paren(separated_nonempty_list(COMMA, typespec)))
     { (id, ts) }
 
 fparams:
-  | params = delimited(LPAREN, separated_list(COMMA, id_and_type_opt), RPAREN)
+  | params = paren(separated_list(COMMA, id_and_type_opt))
     { params }
 sparams:
-  | params = delimited(LPAREN, separated_list(COMMA, id_and_type), RPAREN)
+  | params = paren(separated_nonempty_list(COMMA, id_and_type))
     { params }
 
 node_definition:
@@ -143,7 +145,7 @@ expression:
     { EUniOp(op, expr) }
   | expr1 = expression op = bin_op expr2 = expression
     { EBinOp(op, expr1, expr2) }
-  | expr = delimited(LPAREN, separated_nonempty_list(COMMA, expression), RPAREN)
+  | expr = paren(separated_nonempty_list(COMMA, expression))
     {
       match expr with
       | [] -> assert false
@@ -158,7 +160,7 @@ expression:
     { EId(expr) }
   | id = ID AT annot = annotation
     { EAnnot(id, annot) }
-  | id = ID args = delimited(LPAREN, separated_list(COMMA, expression), RPAREN)
+  | id = ID args = paren(separated_list(COMMA, expression))
     { EFuncall(id, args) }
   | IF etest = expression THEN ethen = expression ELSE eelse = expression
     %prec prec_if
@@ -179,9 +181,9 @@ pattern:
     }
   | c = literal
     { PConst(c) }
-  | ps = delimited(LPAREN, separated_nonempty_list(COMMA, pattern), RPAREN)
+  | ps = paren(separated_nonempty_list(COMMA, pattern))
     { PTuple(ps) }
-  | id = ID ps = delimited(LPAREN, separated_nonempty_list(COMMA, pattern), RPAREN)
+  | id = ID ps = paren(separated_nonempty_list(COMMA, pattern))
     { PADT(id, ps) }
 
 %inline
@@ -227,5 +229,5 @@ typespec:
       | "Float" -> TFloat
       | _ -> TID(id)
     }
-  | ts = delimited(LPAREN, separated_nonempty_list(COMMA, typespec), RPAREN)
+  | ts = paren(separated_nonempty_list(COMMA, typespec))
     { TTuple(ts) }
