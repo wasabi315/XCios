@@ -182,6 +182,8 @@ let gen_funcdef ctx ppf {func_id;func_type;func_params;func_body} =
 (* state definition *)
 let gen_statedef ctx ppf {state_id; state_params; nodes; switch} =
 
+  let uc_state_id = String.uncapitalize_ascii state_id in
+
   (* base context *)
   let state_ctx =
     let node_ids = List.map (fun n -> n.node_id) nodes in
@@ -196,19 +198,23 @@ let gen_statedef ctx ppf {state_id; state_params; nodes; switch} =
   (* parameter *)
   let param_len = List.length state_params in
   let gen_state_param pos ppf (param_id, t) =
-    let nid = state_id ^ "_" ^ param_id in
+    let nid = uc_state_id ^ "_" ^ param_id in
     let pat = List.init param_len (fun i -> if i == pos then "x" else "_") in
     fprintf ppf "@[<2>node %a =@ " gen_id_and_type (nid, t);
-    fprintf ppf "@[<v 2>%a of:@;" gen_identifier state_ctx.state_node;
+    fprintf ppf "@[<v 2>%a%@last of:@;" gen_identifier state_ctx.state_node;
     fprintf ppf "%a -> x@;" (gen_id_and_args pp_print_string) (state_id, pat);
     fprintf ppf "_ -> %s@last@]@]" nid
   in
 
   (* node *)
   let gen_state_node ppf {init; node_id; node_type; node_body} =
-    let nid = state_id ^ "_" ^ node_id in
-    let node_ctx = { state_ctx with scope = SNode(state_id, nid) } in
-    fprintf ppf "@[<2>node %a=@ "
+    let nid = uc_state_id ^ "_" ^ node_id in
+    let node_ctx = { state_ctx with scope = SNode(uc_state_id, nid) } in
+    let gen_init_some ppf e =
+      fprintf ppf " init[%a]" (gen_expression state_ctx) e
+    in
+    fprintf ppf "@[<2>node%a %a =@ "
+      (pp_opt gen_init_some pp_none) init
       gen_id_and_typeopt (nid, node_type);
     (gen_expression node_ctx) ppf node_body;
     fprintf ppf "@]";
@@ -219,7 +225,7 @@ let gen_statedef ctx ppf {state_id; state_params; nodes; switch} =
         | None -> ()
         | Some(l) ->
            fprintf ppf "@;@;";
-           fprintf ppf "@[<2>node %a_atlast=@ " gen_identifier nid;
+           fprintf ppf "@[<2>node %a_atlast =@ " gen_identifier nid;
            fprintf ppf "@[if %a%@last@ " gen_identifier node_ctx.switch_node;
            fprintf ppf "then %a@ " (gen_expression node_ctx) l;
            fprintf ppf "else %s%@last@]@]" nid
@@ -228,8 +234,8 @@ let gen_statedef ctx ppf {state_id; state_params; nodes; switch} =
 
   (* switch *)
   let gen_state_swich ppf body =
-    let nid = state_id ^ "_state" in
-    let switch_ctx = { state_ctx with scope = SSwitch(state_id) } in
+    let nid = uc_state_id ^ "_state" in
+    let switch_ctx = { state_ctx with scope = SSwitch(uc_state_id) } in
     fprintf ppf "@[<2>node %s = @ " nid;
     (gen_expression switch_ctx) ppf body;
     fprintf ppf "@]"
@@ -329,51 +335,60 @@ let gen_switchmodule ppf {module_id; in_nodes; out_nodes; use; init; definitions
     fprintf ppf "@]"
   in
 
-  (* print branch for each state *)
-  let gen_state_branch pp_body ppf (st, body) =
+  (* print branch's pattern for matching state ADT constructor *)
+  let gen_state_cons_pattern ppf st =
     let param_len = List.length st.state_params  in
     let pat = List.init param_len (fun _ -> "_") in
     match pat with
-    | [] -> fprintf ppf "%a -> %a"
-              gen_identifier st.state_id
-              pp_body body
-    | _ -> fprintf ppf "%a -> %a"
-              (gen_id_and_args pp_print_string) (st.state_id, pat)
-              pp_body body
+    | [] -> gen_identifier ppf st.state_id
+    | _ -> (gen_id_and_args pp_print_string) ppf (st.state_id, pat)
   in
 
   (* print actual onode *)
   let gen_onode_def ppf (onode_id, t) =
-    let branchs =
-      (* state -> out node definition of each state *)
-      List.map (fun st -> (st, (st.state_id ^ "_" ^ onode_id))) states
+    let gen_state_branch ppf st =
+      let nid = (String.uncapitalize_ascii st.state_id) ^ "_" ^ onode_id in
+        fprintf ppf "%a -> %a"
+          gen_state_cons_pattern st gen_identifier nid
     in
-    let gen_branch = (gen_state_branch pp_print_string) in
-    fprintf ppf "@[<v 2>node %a =@ " gen_id_and_type (onode_id, t);
-    (pp_print_list gen_branch) ppf branchs;
-    fprintf ppf "@]"
+    fprintf ppf "@[<2>node %a =@ " gen_id_and_type (onode_id, t);
+    fprintf ppf "@[<v 2>%a%@last of:@;" gen_identifier ctx.state_node;
+    (pp_print_list gen_state_branch) ppf states;
+    fprintf ppf "@]@]"
   in
 
   (* print state node *)
   let gen_statenode ppf () =
-    let branchs =
-      (* state -> state node definition of each state *)
-      List.map (fun st -> (st, (st.state_id ^ "_state"))) states
-    in
-    let gen_branch = (gen_state_branch pp_print_string) in
     let gen_init_state ppf (cons, param) =
       match param with
       | [] -> gen_identifier ppf cons
       | _ -> gen_id_and_args gen_literal ppf (cons, param)
     in
-    fprintf ppf "@[<v 2>node init[%a] %a =@ "
+    let gen_state_branch ppf st =
+      let nid = (String.uncapitalize_ascii st.state_id) ^ "_state" in
+      fprintf ppf "%a -> %a"
+        gen_state_cons_pattern st gen_identifier nid
+    in
+    fprintf ppf "@[<2>node init[%a] %a =@ "
       gen_init_state init gen_identifier ctx.state_node;
-    (pp_print_list gen_branch) ppf branchs;
-    fprintf ppf "@]@;@;";
-    fprintf ppf "@[node init[True] %a =@ %a != %a@last@]"
-      gen_identifier ctx.switch_node
-      gen_identifier ctx.state_node
-      gen_identifier ctx.state_node;
+    fprintf ppf "@[<v 2>%a%@last of:@;" gen_identifier ctx.state_node;
+    (pp_print_list gen_state_branch) ppf states;
+    fprintf ppf "@]@]";
+  in
+
+  (* print switch node *)
+  let gen_switchnode ppf () =
+    let gen_state_branch ppf st =
+      let nid = (String.uncapitalize_ascii st.state_id) ^ "_state" in
+      fprintf ppf "%a -> " gen_state_cons_pattern st;
+      fprintf ppf "@[<v 2>%a of:@;" gen_identifier ctx.state_node;
+      fprintf ppf "%a -> False@;" gen_state_cons_pattern st;
+      fprintf ppf "_ -> True@]"
+    in
+    fprintf ppf "@[<2>node init[True] %a =@ " gen_identifier ctx.switch_node;
+    fprintf ppf "@[<v 2>%a%@last of:@;" gen_identifier ctx.state_node;
+    (pp_print_list gen_state_branch) ppf states;
+    fprintf ppf "@]@]"
   in
 
   (* body for switch module definition *)
@@ -387,6 +402,8 @@ let gen_switchmodule ppf {module_id; in_nodes; out_nodes; use; init; definitions
   (pp_list_break2 gen_onode_def) ppf out_nodes;
   fprintf ppf "@;@;";
   gen_statenode ppf ();
+  fprintf ppf "@;@;";
+  gen_switchnode ppf ();
   pp_close_box ppf ()
 
 let codegen ochan prog =
