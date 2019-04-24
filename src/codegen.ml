@@ -392,4 +392,4 @@ let gen_switchmodule ppf {module_id; in_nodes; out_nodes; use; init; definitions
 let codegen ochan prog =
   let ppf = (formatter_of_out_channel ochan) in
   gen_switchmodule ppf prog;
-  pp_print_flush ppf ()
+  pp_print_newline ppf ()
