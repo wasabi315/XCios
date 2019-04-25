@@ -21,7 +21,7 @@ BANG EQUAL
 
 %token <string> ID
 %token <string> INT
-%token <string> FLOAT
+%token <string> DOUBLE
 
 %token EOF
 
@@ -218,7 +218,7 @@ literal:
   | TRUE { LTrue }
   | FALSE { LFalse }
   | n = INT { LInt(n) }
-  | n = FLOAT { LFloat(n) }
+  | n = DOUBLE { LDouble(n) }
 
 typespec:
   | id = ID
@@ -226,7 +226,7 @@ typespec:
       match id with
       | "Bool" -> TBool
       | "Int" -> TInt
-      | "Float" -> TFloat
+      | "Double" -> TDouble
       | _ -> TID(id)
     }
   | ts = paren(separated_nonempty_list(COMMA, typespec))

@@ -19,7 +19,7 @@ let gen_id_and_args gen_args =
 let rec gen_typespec ppf = function
   | TBool -> pp_print_string ppf "Bool"
   | TInt -> pp_print_string ppf "Int"
-  | TFloat -> pp_print_string ppf "Float"
+  | TDouble -> pp_print_string ppf "Double"
   | TID(t) -> fprintf ppf "%a" gen_identifier t
   | TTuple(ts) -> fprintf ppf "(@[%a@])" (pp_list_comma gen_typespec) ts
 
@@ -36,7 +36,7 @@ let gen_literal ppf = function
   | LTrue -> pp_print_string ppf "True"
   | LFalse -> pp_print_string ppf "False"
   | LInt(n) -> pp_print_string ppf n
-  | LFloat(n) -> pp_print_string ppf n
+  | LDouble(n) -> pp_print_string ppf n
 
 (* Operators *)
 let gen_uni_op ppf op =

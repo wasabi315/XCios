@@ -88,7 +88,7 @@ rule read = parse
           ID s
     }
   | digits   { INT (Lexing.lexeme lexbuf)}
-  | dliteral { FLOAT (Lexing.lexeme lexbuf)}
+  | dliteral { DOUBLE (Lexing.lexeme lexbuf)}
   | eof      { EOF }
   | _        { assert false }
 and read_comment = parse

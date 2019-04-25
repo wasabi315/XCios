@@ -1,6 +1,6 @@
 switchmodule FanState
 in   clock(0) : Int,
-     di       : Float
+     di       : Double
 out  ctime : Int,
      otime : Int,
      fan   : Bool

@@ -10,13 +10,13 @@ let pp_id_and_args pp_args =
 
 (* Type specification *)
 type typespec =
-  | TBool | TInt | TFloat
+  | TBool | TInt | TDouble
   | TID of identifier
   | TTuple of typespec list
 let rec pp_typespec ppf = function
   | TBool -> pp_print_string ppf "<type Bool>"
   | TInt -> pp_print_string ppf "<type Int>"
-  | TFloat -> pp_print_string ppf "<type Float>"
+  | TDouble -> pp_print_string ppf "<type Double>"
   | TID(t) -> fprintf ppf "<type %a>" pp_identifier t
   | TTuple(ts) -> fprintf ppf "<type (@[%a@])>"
                     (pp_list_comma pp_typespec) ts
@@ -37,12 +37,12 @@ type literal =
   | LTrue
   | LFalse
   | LInt of string
-  | LFloat of string
+  | LDouble of string
 let pp_literal ppf = function
   | LTrue -> fprintf ppf "<literal True>"
   | LFalse -> fprintf ppf "<literal False>"
   | LInt(n) -> fprintf ppf "<literal int %a>" pp_print_string n
-  | LFloat(n) -> fprintf ppf "<literal float %a>" pp_print_string n
+  | LDouble(n) -> fprintf ppf "<literal float %a>" pp_print_string n
 
 (* Operators *)
 type uni_op = UPos| UNeg | UNot | UInv
