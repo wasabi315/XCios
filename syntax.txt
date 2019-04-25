@@ -19,8 +19,9 @@ progModule ::=
   ['in'  inNode {',' inNode}*]
   ['out' idAndType {',' idAndType}*]
   ['use' identifier {',' identifier}*]
-  'init' identifier '(' [{literal}*]')'
+  'init' identifier ['(' literal (',' literal)* ')']
   { definition }+
+outNode ::= identifier '(' literal ')' : typeSpec
 inNode ::= identifier ['(' literal ')'] ':' typeSpec
 
 
@@ -34,17 +35,18 @@ definition ::=
 consDefinition ::= identifier ['(' typeSpec {',' typeSpec}*')']
 
 stateDefinition ::=
-  'state' identifier sprms '{'
+  'state' identifier [sprms] '{'
   {nodeDefinition}+
   'switch:' expression
   '}'
 
 nodeDefinition ::= 'node' ['init' '[' expression ']'] idAndTypeOpt '=' expression
-sprms ::= '(' [idAndType {',' idAndType}* ] ')'
+sprms ::= '(' idAndType {',' idAndType}*  ')'
 fargs ::= '(' [idAndTypeOpt {',' idAndTypeOpt}* ] ')'
 
 ### expression ###
-# note : pattern match syntax with indent is not supported 
+# note : pattern match syntax with indent is not supported
+# note : let syntax is not supported
 expression ::=
     uniOp expression
   | expression binOp expression
@@ -55,7 +57,6 @@ expression ::=
   | identifier '@' annotation                            # node with annotation
   | identifier args                                      # funcall or AGT constructor
   | 'if' expression 'then' expression 'else' expression  # if-expr
-  | '{' { binder }+  expression '}'                      # let-expr
   | expression 'of' matchBranch {',' matchBranch}*       # pattern match
 args ::= '(' [expression {',' expression}*] ')'
 binder ::= idAndTypeOpt '=' expression
@@ -68,6 +69,7 @@ binOp ::=
   | '*.' | '/.' | '+.' | '-.'
   | '%'| '<<' | '>>'
   | '<' | '<=' | '>=' | '>'
+  | '<.' | '<=.' | '>=.' | '>.'
   | '==' | '!='
   | '&'
   | '^'
@@ -96,17 +98,18 @@ literal ::=
   | number
 # todo :
 #  | '()'
-#  | charLiteral       
+#  | charLiteral
 
 number ::=
-    decimalNumber
+     decimalNumber
+   | floatNumber
 # todo :
 #  | octalNumber
 #  | hexadecimalNumber
-#  | floatNumber
+
 
 typeSpec ::=
-    'Bool' | 'Int' | 'Float' | identifier
+    'Bool' | 'Int' | 'Double' | identifier
   | '(' typeSpec {',' typeSpec}* ')'
 # todo :
 'Unit' | 'Char'
