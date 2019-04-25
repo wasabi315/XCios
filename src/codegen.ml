@@ -79,7 +79,6 @@ type genctx = {
     names_in : S.t;
     names_out : S.t;
     names_local : S.t;
-    names_param : S.t;
     names_var : S.t;
     state_node : identifier;
     switch_node : identifier;
@@ -124,9 +123,7 @@ let rec gen_expression ctx ppf = function
        (gen_expression ctx) e
        (pp_print_list (gen_branch ctx)) branchs
 and gen_id_expr ctx ppf id =
-  if (S.mem id ctx.names_out
-      || S.mem id ctx.names_local
-      || S.mem id ctx.names_param)
+  if (S.mem id ctx.names_out || S.mem id ctx.names_local)
   then
     let state_id =
            match ctx.scope with
@@ -189,22 +186,11 @@ let gen_statedef ctx ppf {state_id; state_params; nodes; switch} =
   let state_ctx =
     let node_ids = List.map (fun n -> n.node_id) nodes in
     let names_local = S.diff (S.of_list node_ids) ctx.names_out in
-    let names_param =
+    let names_var =
       List.map (fun (id, _) -> id) state_params
       |> S.of_list
     in
-    { ctx with names_local = names_local; names_param = names_param }
-  in
-
-  (* parameter *)
-  let param_len = List.length state_params in
-  let gen_state_param pos ppf (param_id, t) =
-    let nid = uc_state_id ^ "_" ^ param_id in
-    let pat = List.init param_len (fun i -> if i == pos then "x" else "_") in
-    fprintf ppf "@[<2>node %a =@ " gen_id_and_type (nid, t);
-    fprintf ppf "@[<v 2>%a%@last of:@;" gen_identifier state_ctx.state_node;
-    fprintf ppf "%a -> x@;" (gen_id_and_args pp_print_string) (state_id, pat);
-    fprintf ppf "_ -> %s@last@]@]" nid
+    { ctx with names_local = names_local; names_var = names_var }
   in
 
   (* node(body) *)
@@ -213,11 +199,19 @@ let gen_statedef ctx ppf {state_id; state_params; nodes; switch} =
     let gen_init_some ppf e =
       fprintf ppf " init[%a]" (gen_expression ctx) e
     in
+    let gen_state_pat ppf () = 
+      let param_ids = List.map (fun (id, _) -> id) state_params in
+      match param_ids with
+      | [] -> gen_identifier ppf state_id
+      | _ -> (gen_id_and_args gen_identifier) ppf (state_id, param_ids)
+    in
     fprintf ppf "@[<2>node%a %a =@ "
       (pp_opt gen_init_some pp_none) init
       gen_id_and_typeopt (local_id, node_type);
-    (gen_expression ctx) ppf node_body;
-    fprintf ppf "@]";
+    fprintf ppf "@[<v 2>%a%@last of:@;" gen_identifier state_ctx.state_node;
+    fprintf ppf "%a -> %a@;"
+      gen_state_pat () (gen_expression ctx) node_body;
+    fprintf ppf "_ -> %a_atlast@]@]" gen_identifier local_id
   in
 
   (* node(@last) *)
@@ -257,14 +251,10 @@ let gen_statedef ctx ppf {state_id; state_params; nodes; switch} =
 
   (* body for state definition *)
   fprintf ppf "@[<v>##### begin state %s #####@;" state_id;
-  List.iteri
-    (fun i param -> gen_state_param i ppf param; fprintf ppf "@;@;")
-    state_params;
   (pp_list_break2 gen_state_node) ppf nodes;
   fprintf ppf "@;@;";
   gen_state_swich ppf switch;
-  fprintf ppf "@;";
-  fprintf ppf "##### end state %s #####@]" state_id
+  fprintf ppf "@;##### end state %s #####@]" state_id
 
 (* toplevel definition *)
 let gen_definition ctx ppf = function
@@ -282,7 +272,6 @@ let gen_switchmodule ppf {module_id; in_nodes; out_nodes; use; init; definitions
       names_in = S.of_list (List.map (fun (id, _, _) -> id) in_nodes);
       names_out = S.of_list (List.map (fun (id, _, _) -> id) out_nodes);
       names_local = S.empty;
-      names_param = S.empty;
       names_var = S.empty;
       state_node = "state";
       switch_node = "switch";

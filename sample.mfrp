@@ -20,7 +20,7 @@ state FanOff {
 }
 
 state FanOn(begin : Int) {
-  node dt = clock - clock@last
+  node init[0] dt = clock - clock@last
   node ctime = ctime@last + dt
 
   node otime = clock - begin
@@ -40,7 +40,7 @@ state FanSleep {
 
   node fan = False
 
-  node dt = clock - clock@last
+  node init[0] dt = clock - clock@last
   node init[1800] timer = timer@last - dt
 
   switch :
