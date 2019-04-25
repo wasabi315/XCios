@@ -134,7 +134,8 @@ and gen_id_expr ctx ppf id =
            | SSwitch(sid) -> sid
            | SOther -> assert(false) (* never happened *)
     in
-    fprintf ppf "%a_%a" gen_identifier state_id gen_identifier id
+    fprintf ppf "%a_%a"
+      gen_identifier (String.uncapitalize_ascii state_id) gen_identifier id
   else
     gen_identifier ppf id
 and gen_atlast ctx ppf id =
@@ -145,11 +146,11 @@ and gen_atlast ctx ppf id =
     | SOther -> assert(false) (* scope error *)
     in
     match id with
-    | x when (S.mem x ctx.names_in || S.mem x ctx.names_out)
+    | x when S.mem x ctx.names_in
       -> fprintf ppf "%a%@last" gen_identifier id
-    | x when S.mem x ctx.names_local
+    | x when (S.mem x ctx.names_out || S.mem x ctx.names_local)
       -> fprintf ppf "%a_%a_atlast"
-           gen_identifier state_id gen_identifier id
+           gen_identifier (String.uncapitalize_ascii state_id) gen_identifier id
     | _ -> assert(false) (* unbound node *)
 and gen_branch ctx ppf {branch_pat; branch_expr} =
   fprintf ppf "%a -> %a"
@@ -206,30 +207,43 @@ let gen_statedef ctx ppf {state_id; state_params; nodes; switch} =
     fprintf ppf "_ -> %s@last@]@]" nid
   in
 
-  (* node *)
-  let gen_state_node ppf {init; node_id; node_type; node_body} =
-    let nid = uc_state_id ^ "_" ^ node_id in
-    let node_ctx = { state_ctx with scope = SNode(uc_state_id, nid) } in
+  (* node(body) *)
+  let gen_state_node_now ctx ppf {init; node_id; node_type; node_body} =
+    let local_id = uc_state_id ^ "_" ^ node_id in
     let gen_init_some ppf e =
-      fprintf ppf " init[%a]" (gen_expression state_ctx) e
+      fprintf ppf " init[%a]" (gen_expression ctx) e
     in
     fprintf ppf "@[<2>node%a %a =@ "
       (pp_opt gen_init_some pp_none) init
-      gen_id_and_typeopt (nid, node_type);
-    (gen_expression node_ctx) ppf node_body;
+      gen_id_and_typeopt (local_id, node_type);
+    (gen_expression ctx) ppf node_body;
     fprintf ppf "@]";
-    if S.mem node_id node_ctx.names_out then ()
-    else
-      begin
-        match init with
-        | None -> ()
-        | Some(l) ->
-           fprintf ppf "@;@;";
-           fprintf ppf "@[<2>node %a_atlast =@ " gen_identifier nid;
-           fprintf ppf "@[if %a%@last@ " gen_identifier node_ctx.switch_node;
-           fprintf ppf "then %a@ " (gen_expression node_ctx) l;
-           fprintf ppf "else %s%@last@]@]" nid
-      end
+  in
+
+  (* node(@last) *)
+  let gen_state_node_atlast ctx ppf {init; node_id; _} =
+    let local_id = uc_state_id ^ "_" ^ node_id in
+    let atlast_id =
+      if S.mem node_id ctx.names_out then node_id else local_id
+    in
+    match init with
+    | None ->
+       fprintf ppf "@[<2>node %a_atlast =@ %a%@last@]"
+         gen_identifier local_id gen_identifier atlast_id
+    | Some(exp) ->
+       fprintf ppf "@[<2>node %a_atlast =@ " gen_identifier local_id;
+       fprintf ppf "@[if %a%@last@ " gen_identifier ctx.switch_node;
+       fprintf ppf "then %a@ " (gen_expression ctx) exp;
+       fprintf ppf "else %a%@last@]@]" gen_identifier atlast_id
+  in
+
+  let gen_state_node ppf node =
+    let node_ctx =
+      { state_ctx with scope = SNode(state_id, node.node_id) }
+    in
+    (gen_state_node_now node_ctx) ppf node;
+    fprintf ppf "@;";
+    (gen_state_node_atlast node_ctx) ppf node
   in
 
   (* switch *)
@@ -266,7 +280,7 @@ let gen_switchmodule ppf {module_id; in_nodes; out_nodes; use; init; definitions
   let ctx =
     {
       names_in = S.of_list (List.map (fun (id, _, _) -> id) in_nodes);
-      names_out = S.of_list (List.map (fun (id, _) -> id) out_nodes);
+      names_out = S.of_list (List.map (fun (id, _, _) -> id) out_nodes);
       names_local = S.empty;
       names_param = S.empty;
       names_var = S.empty;
@@ -295,6 +309,36 @@ let gen_switchmodule ppf {module_id; in_nodes; out_nodes; use; init; definitions
       gen_typespec t
   in
 
+  let gen_out_node ppf (id, _, t) =
+    fprintf ppf "%a : %a"
+      gen_identifier id gen_typespec t
+  in
+
+
+  (* generate header *)
+  let gen_header ppf () =
+    fprintf ppf "@[<v>module %a" gen_identifier module_id;
+    begin
+      match in_nodes with
+      | [] -> ()
+      | _ -> fprintf ppf "@;in @[<v>%a@]"
+               (pp_list_comma gen_in_node) in_nodes
+    end;
+    begin
+      match out_nodes with
+      | [] -> ()
+      | _ -> fprintf ppf "@;out @[<v>%a@]"
+               (pp_list_comma gen_out_node) out_nodes
+    end;
+    begin
+      match use with
+      | [] -> ()
+      | _ -> fprintf ppf "@;use @[%a@]"
+               (pp_list_comma gen_identifier) use
+    end;
+    fprintf ppf "@]"
+  in
+
   (* generate state type definition *)
   let gen_statetype ppf () =
     let get_constructor state_def =
@@ -311,30 +355,6 @@ let gen_switchmodule ppf {module_id; in_nodes; out_nodes; use; init; definitions
       (pp_print_list gen_constructor ~pp_sep:separator) constructors
   in
 
-  (* generate header *)
-  let gen_header ppf () =
-    fprintf ppf "@[<v>module %a" gen_identifier module_id;
-    begin
-      match in_nodes with
-      | [] -> ()
-      | _ -> fprintf ppf "@;in @[<v>%a@]"
-               (pp_list_comma gen_in_node) in_nodes
-    end;
-    begin
-      match out_nodes with
-      | [] -> ()
-      | _ -> fprintf ppf "@;out @[<v>%a@]"
-               (pp_list_comma gen_id_and_type) out_nodes
-    end;
-    begin
-      match use with
-      | [] -> ()
-      | _ -> fprintf ppf "@;use @[%a@]"
-               (pp_list_comma gen_identifier) use
-    end;
-    fprintf ppf "@]"
-  in
-
   (* print branch's pattern for matching state ADT constructor *)
   let gen_state_cons_pattern ppf st =
     let param_len = List.length st.state_params  in
@@ -345,13 +365,14 @@ let gen_switchmodule ppf {module_id; in_nodes; out_nodes; use; init; definitions
   in
 
   (* print actual onode *)
-  let gen_onode_def ppf (onode_id, t) =
+  let gen_onode_def ppf (onode_id, init, t) =
     let gen_state_branch ppf st =
       let nid = (String.uncapitalize_ascii st.state_id) ^ "_" ^ onode_id in
         fprintf ppf "%a -> %a"
           gen_state_cons_pattern st gen_identifier nid
     in
-    fprintf ppf "@[<2>node %a =@ " gen_id_and_type (onode_id, t);
+    fprintf ppf "@[<2>node init[%a] %a =@ "
+      gen_literal init gen_id_and_type (onode_id, t);
     fprintf ppf "@[<v 2>%a%@last of:@;" gen_identifier ctx.state_node;
     (pp_print_list gen_state_branch) ppf states;
     fprintf ppf "@]@]"

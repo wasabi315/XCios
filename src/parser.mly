@@ -72,8 +72,10 @@ in_node:
     { (id, init, t) }
 
 out_node_decl:
-  | OUT out_nodes = separated_list(COMMA, id_and_type)
-    { out_nodes }
+  | OUT onodes = separated_list(COMMA, out_node) { onodes }
+out_node:
+  | id = ID init = paren(literal) COLON t = typespec
+    { (id, init, t) }
 
 use_decl:
   | USE use = separated_list(COMMA, ID)

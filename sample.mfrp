@@ -1,15 +1,15 @@
 switchmodule FanState
-in   clock(0) : Int,
-     di       : Double
-out  ctime : Int,
-     otime : Int,
-     fan   : Bool
+in   clock(0)   : Int,
+     di         : Double
+out  ctime(0)   : Int,
+     otime(0)   : Int,
+     fan(False) : Bool
 use Std
 init FanOff
 
 state FanOff {
   node ctime = ctime@last
-  
+
   node otime = 0
 
   node fan = False
@@ -22,7 +22,7 @@ state FanOff {
 state FanOn(begin : Int) {
   node dt = clock - clock@last
   node ctime = ctime@last + dt
-  
+
   node otime = clock - begin
 
   node fan = True

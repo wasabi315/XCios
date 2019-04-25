@@ -224,7 +224,7 @@ type switchmodule =
     module_id   : identifier;
     (* (identifier / init value) list *)
     in_nodes    : (identifier * (literal option) * typespec) list;
-    out_nodes   : (identifier * typespec) list;
+    out_nodes   : (identifier * literal * typespec) list;
     use         : identifier list;
     (* state id / state parameters *)
     init        : identifier * (literal list);
@@ -238,12 +238,16 @@ let pp_switchmodule ppf {module_id; in_nodes; out_nodes; use; init; definitions}
       (pp_opt pp_literal pp_init_none) init
       pp_typespec t
   in
+  let pp_out_node ppf (id, init, t) =
+    fprintf ppf "%a(%a) : %a"
+      pp_identifier id pp_literal init pp_typespec t
+  in
   fprintf ppf "<@[<v 1>SwitchModule:@;";
   fprintf ppf "id: %a@;" pp_identifier module_id;
   fprintf ppf "in_nodes: (@[%a@])@;"
     (pp_list_comma pp_in_node) in_nodes;
   fprintf ppf "out_nodes: (@[%a@])@;"
-    (pp_list_comma pp_id_and_type) out_nodes;
+    (pp_list_comma pp_out_node) out_nodes;
   fprintf ppf "use: (@[%a@])@;"
     (pp_list_comma pp_identifier) use;
   fprintf ppf "init: %a@;"
