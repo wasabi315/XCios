@@ -35,8 +35,8 @@ let gen_id_and_typeopt ppf (id, topt) =
 let gen_literal ppf = function
   | LTrue -> pp_print_string ppf "True"
   | LFalse -> pp_print_string ppf "False"
-  | LInt(n) -> pp_print_int ppf n
-  | LFloat(n) -> pp_print_float ppf n
+  | LInt(n) -> pp_print_string ppf n
+  | LFloat(n) -> pp_print_string ppf n
 
 (* Operators *)
 let gen_uni_op ppf op =
@@ -379,7 +379,6 @@ let gen_switchmodule ppf {module_id; in_nodes; out_nodes; use; init; definitions
   (* print switch node *)
   let gen_switchnode ppf () =
     let gen_state_branch ppf st =
-      let nid = (String.uncapitalize_ascii st.state_id) ^ "_state" in
       fprintf ppf "%a -> " gen_state_cons_pattern st;
       fprintf ppf "@[<v 2>%a of:@;" gen_identifier ctx.state_node;
       fprintf ppf "%a -> False@;" gen_state_cons_pattern st;

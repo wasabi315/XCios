@@ -34,8 +34,7 @@ let space = [' ' '\r' '\t']+
 let newline = '\r' | '\n' | "\r\n"
 let id = ['A'-'Z' 'a'-'z' '_']['A'-'Z' 'a'-'z' '0'-'9' '_']*
 let digits = ['0'-'9']+
-let fdigits = (['0'-'9']+ '.' ['0'-'9']* | '.' ['0'-'9']+)
-              (['e' 'E'] ['+' '-']? ['0'-'9']+)?
+let dliteral = (['0'-'9']+ '.' ['0'-'9']* | '.' ['0'-'9']+)
 
 (* longest match -> earlier rule *)
 rule read = parse
@@ -88,10 +87,10 @@ rule read = parse
         with Not_found ->
           ID s
     }
-  | digits  { INT (int_of_string (Lexing.lexeme lexbuf))}
-  | fdigits { FLOAT (float_of_string (Lexing.lexeme lexbuf))}
-  | eof     { EOF }
-  | _       { assert false }
+  | digits   { INT (Lexing.lexeme lexbuf)}
+  | dliteral { FLOAT (Lexing.lexeme lexbuf)}
+  | eof      { EOF }
+  | _        { assert false }
 and read_comment = parse
   | '\n'    { Lexing.new_line lexbuf } (* comment end *)
   | eof     { () }                     (* comment end *)

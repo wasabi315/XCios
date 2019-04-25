@@ -20,8 +20,8 @@ LEQDOT LTDOT GEQDOT GTDOT
 BANG EQUAL
 
 %token <string> ID
-%token <int> INT
-%token <float> FLOAT
+%token <string> INT
+%token <string> FLOAT
 
 %token EOF
 

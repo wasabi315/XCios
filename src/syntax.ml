@@ -36,13 +36,13 @@ let pp_id_and_typeopt ppf (id, topt)=
 type literal =
   | LTrue
   | LFalse
-  | LInt of int
-  | LFloat of float
+  | LInt of string
+  | LFloat of string
 let pp_literal ppf = function
   | LTrue -> fprintf ppf "<literal True>"
   | LFalse -> fprintf ppf "<literal False>"
-  | LInt(n) -> fprintf ppf "<literal int %a>" pp_print_int n
-  | LFloat(n) -> fprintf ppf "<literal float %a>" pp_print_float n
+  | LInt(n) -> fprintf ppf "<literal int %a>" pp_print_string n
+  | LFloat(n) -> fprintf ppf "<literal float %a>" pp_print_string n
 
 (* Operators *)
 type uni_op = UPos| UNeg | UNot | UInv
