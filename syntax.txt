@@ -14,53 +14,72 @@
 
 
 ### whole module ###
-progModule ::=
-   'switchmodule' identifier
-  ['in'  inNode {',' inNode}*]
-  ['out' idAndType {',' idAndType}*]
-  ['use' identifier {',' identifier}*]
-  'init' identifier ['(' literal (',' literal)* ')']
-  { definition }+
-outNode ::= identifier '(' literal ')' : typeSpec
-inNode ::= identifier ['(' literal ')'] ':' typeSpec
+program ::= xfrpModule | xfrpSModule
 
+xfrpModule ::=
+  'module' uidentifier
+  ['in'  nodeDecl {',' nodeDecl}*]
+  ['out' nodeDecl {',' nodeDecl}*]
+  ['use' uidentifier {',' uidentifier}*]
+  { definitionM }+
+
+xfrpSModule ::=
+   'switchmodule' uidentifier
+  ['in'  nodeDecl {',' nodeDecl}*]
+  ['out' nodeDecl {',' nodeDecl}*]
+  ['use' uidentifier {',' uidentifier}*]
+  'init' identifier literal
+  { definitionSM }+
+
+nodeDecl ::= identifier ['(' literal ')'] : typeSpec
 
 ### toplevel definitions ###
-definition ::=
-    'data' idAndTypeOpt '=' expression
-  | 'type' identifier '=' consDefinition {'|' consDefinition}*
-  | 'func' identifier fargs [':' typeSpec] '=' expression
+definitionM ::=
+  | constDefinition
+  | typeDefinition
+  | funDefinition
+  | nodeDefinition
+
+definitionSM ::=
+  | constDefinition
+  | typeDefinition
+  | funDefinition
   | stateDefinition
 
-consDefinition ::= identifier ['(' typeSpec {',' typeSpec}*')']
+constDefinition ::= 'const' idAndTypeOpt '=' expression
+
+typeDefinition ::= 'type' identifier '='
+                   variantDefinition {'|' variantDefinition}*
+variantDefinition ::= identifier ['of' typeSpec]
+
+funDefinition ::=
+  'fun' identifier '(' [idAndTypeOpt {',' idAndTypeOpt}* ] ')' [':' typeSpec]
+  '=' expression
+
+nodeDefinition ::= 'node' ['init' '[' expression ']'] idAndTypeOpt '=' expression
 
 stateDefinition ::=
-  'state' identifier [sprms] '{'
+  'state' identifier ['(' idAndType {',' idAndType}*  ')'] '{'
   {nodeDefinition}+
   'switch:' expression
   '}'
 
-nodeDefinition ::= 'node' ['init' '[' expression ']'] idAndTypeOpt '=' expression
-sprms ::= '(' idAndType {',' idAndType}*  ')'
-fargs ::= '(' [idAndTypeOpt {',' idAndTypeOpt}* ] ')'
-
 ### expression ###
-# note : pattern match syntax with indent is not supported
-# note : let syntax is not supported
 expression ::=
     uniOp expression
   | expression binOp expression
   | '(' expression {',' expression}* ')'                 # tuple or paren
+  | uidentifier [expression]                             # variant
   | literal                                              # constant
   | 'Retain'                                             # Retain
-  | identifier                                           # node or data
+  | identifier                                           # identifier
   | identifier '@' annotation                            # node with annotation
-  | identifier args                                      # funcall or AGT constructor
+  | identifier '(' [expression {',' expression}*] ')'    # funcall
   | 'if' expression 'then' expression 'else' expression  # if-expr
-  | expression 'of' matchBranch {',' matchBranch}*       # pattern match
-args ::= '(' [expression {',' expression}*] ')'
+  | 'let' {binder}+ 'in' expression                      # let-expr
+  | 'case' expression 'of' {branch}+                     # pattern match
 binder ::= idAndTypeOpt '=' expression
-matchBranch :: = pattern '->' expression
+branch :: = pattern '->' expression ';'
 
 uniOp ::= '+' | '-' | '!' | '~'
 
@@ -84,10 +103,11 @@ pattern ::=
   | identifier
   | literal
   | '(' pattern {',' pattern}* ')' # tuple
-  | identifier '(' pattern {',' pattern}* ')' # ADT
+  | uidentifier pattern            # ADT
 
 ### primitives ###
-identifier = [A-Za-z][A-Za-z0-9_]*
+identifier = [a-z][A-Za-z0-9_]*
+uidentifier = [A-Z][A-Za-z0-9_]*
 
 idAndType ::= identifier ':' typeSpec
 idAndTypeOpt ::= identifier [':' typeSpec]
@@ -96,21 +116,20 @@ literal ::=
     'True'
   | 'False'
   | number
-# todo :
-#  | '()'
-#  | charLiteral
+  | variantLiteral
+  | '(' [literal {',' literal}*] ')'
+# | charLiteral
+
+variantLiteral ::= uidentifier [literal]
 
 number ::=
      decimalNumber
    | floatNumber
-# todo :
 #  | octalNumber
 #  | hexadecimalNumber
 
-
 typeSpec ::=
-    'Bool' | 'Int' | 'Double' | identifier
+    'Bool' | 'Int' | 'Float' | 'Unit'
+  | identifier
   | '(' typeSpec {',' typeSpec}* ')'
-# todo :
-'Unit' | 'Char'
-
+# | 'Char'

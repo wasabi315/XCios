@@ -1,6 +1,6 @@
 switchmodule FanState
 in   clock(0)   : Int,
-     di         : Double
+     di         : Float
 out  ctime(0)   : Int,
      otime(0)   : Int,
      fan(False) : Bool
@@ -20,8 +20,9 @@ state FanOff {
 }
 
 state FanOn(begin : Int) {
-  node init[0] dt = clock - clock@last
-  node ctime = ctime@last + dt
+  node ctime =
+    let dt = clock - clock@last in
+    ctime@last + dt
 
   node otime = clock - begin
 
@@ -40,8 +41,9 @@ state FanSleep {
 
   node fan = False
 
-  node init[0] dt = clock - clock@last
-  node init[1800] timer = timer@last - dt
+  node init[1800] timer =
+    let dt = clock - clock@last in
+    timer@last - dt
 
   switch :
     if timer <= 0 then FanOff else Retain
