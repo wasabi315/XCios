@@ -1,3 +1,3 @@
 (lang dune 1.8)
-(name emfrp-switch)
+(name xfrp-switch)
 (using menhir 2.0)

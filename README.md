@@ -1,2 +1,2 @@
-# emfrp-switch
-A switch extension for Emfrp
+# xfrp-switch
+A switch implementation based on xfrp syntax.
