@@ -8,22 +8,25 @@
   let () =
     List.iter (fun (id, tok) -> Hashtbl.add lex_context id tok)
       [
+        "module",       MODULE;
         "switchmodule", SWITCHMODULE;
         "in",           IN;
         "out",          OUT;
         "use",          USE;
         "init",         INIT;
-        "data",         DATA;
+        "const",        CONST;
         "type",         TYPE;
-        "func",         FUNC;
+        "fun",          FUN;
+        "node",         NODE;
         "state",        STATE;
         "switch",       SWITCH;
-        "node",         NODE;
         "Retain",       RETAIN;
         "last",         LAST;
         "if",           IF;
         "then",         THEN;
         "else",         ELSE;
+        "let",          LET;
+        "case",         CASE;
         "of",           OF;
         "True",         TRUE;
         "False",        FALSE;
@@ -34,7 +37,7 @@ let space = [' ' '\r' '\t']+
 let newline = '\r' | '\n' | "\r\n"
 let id = ['A'-'Z' 'a'-'z' '_']['A'-'Z' 'a'-'z' '0'-'9' '_']*
 let digits = ['0'-'9']+
-let dliteral = (['0'-'9']+ '.' ['0'-'9']* | '.' ['0'-'9']+)
+let fliteral = (['0'-'9']+ '.' ['0'-'9']* | '.' ['0'-'9']+)
 
 (* longest match -> earlier rule *)
 rule read = parse
@@ -80,15 +83,17 @@ rule read = parse
   | ">>"    { RSHIFT }
   | '!'     { BANG }
   | '='     { EQUAL }
-  | id {
+  | id
+    {
       let s = Lexing.lexeme lexbuf in
         try
           Hashtbl.find lex_context s
         with Not_found ->
-          ID s
+          if 'A' <= s.[0] && s.[0] <= 'Z' then UID s else ID s
     }
+  | "()"     { UNIT }
   | digits   { INT (Lexing.lexeme lexbuf)}
-  | dliteral { DOUBLE (Lexing.lexeme lexbuf)}
+  | fliteral { FLOAT (Lexing.lexeme lexbuf)}
   | eof      { EOF }
   | _        { assert false }
 and read_comment = parse

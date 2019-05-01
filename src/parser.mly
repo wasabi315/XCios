@@ -3,14 +3,14 @@ open Syntax
 %}
 
 %token
-SWITCHMODULE IN OUT USE INIT
-DATA TYPE FUNC STATE SWITCH NODE
-RETAIN LAST IF THEN ELSE OF
+MODULE SWITCHMODULE IN OUT USE INIT
+CONST TYPE FUN NODE STATE SWITCH 
+RETAIN LAST IF THEN ELSE LET CASE OF
 TRUE FALSE
 
 %token
 LBRACKET RBRACKET LBRACE RBRACE LPAREN RPAREN
-COMMA COLON AT ARROW
+COMMA COLON SEMICOLON AT ARROW
 PLUS MINUS ASTERISK SLASH
 PLUSDOT MINUSDOT ASTERISKDOT SLASHDOT
 TILDE PERCENT XOR OR2 AND2 OR AND
@@ -20,12 +20,15 @@ LEQDOT LTDOT GEQDOT GTDOT
 BANG EQUAL
 
 %token <string> ID
+%token <string> UID
+
 %token <string> INT
-%token <string> DOUBLE
+%token <string> FLOAT
+%token UNIT
 
 %token EOF
 
-%start <Syntax.switchmodule> switchmodule
+%start <Syntax.program> program
 
 %right prec_if
 %left OR2
@@ -44,101 +47,128 @@ BANG EQUAL
 paren(rule):
   | ret = delimited(LPAREN, rule, RPAREN) { ret }
 
+
+program:
+  | m = xfrp_module { XfrpModule(m) }
+  | m = xfrp_smodule { XfrpSModule(m) }
+
 (* whole module *)
-switchmodule:
-  | SWITCHMODULE id = ID
+xfrp_module:
+  | MODULE id = UID
     in_nodes = loption(in_node_decl)
     out_nodes = loption(out_node_decl)
     use = loption(use_decl)
-    init = init_state_decl
-    definitions = nonempty_list(definition)
+    definitions = nonempty_list(definitionM)
     EOF
     {
       {
         module_id = id;
-	in_nodes = in_nodes;
-	out_nodes = out_nodes;
-	use = use;
-	init = init;
-	definitions = definitions;
+	module_in = in_nodes;
+	module_out = out_nodes;
+	module_use = use;
+	module_defs = definitions;
+      }
+    }
+
+xfrp_smodule:
+  | SWITCHMODULE id = UID
+    in_nodes = loption(in_node_decl)
+    out_nodes = loption(out_node_decl)
+    use = loption(use_decl)
+    init = init_decl
+    definitions = nonempty_list(definitionSM)
+    EOF
+    {
+      {
+        smodule_id = id;
+	smodule_in = in_nodes;
+	smodule_out = out_nodes;
+	smodule_use = use;
+	smodule_init = init;
+	smodule_defs = definitions;
       }
     }
 
 in_node_decl:
-  | IN inodes = separated_list(COMMA, in_node) { inodes }
+  | IN inodes = separated_list(COMMA, node_decl) { inodes }
 
-in_node:
+out_node_decl:
+  | OUT onodes = separated_list(COMMA, node_decl) { onodes }
+
+node_decl:
   | id = ID init = paren(literal)? COLON t = typespec
     { (id, init, t) }
 
-out_node_decl:
-  | OUT onodes = separated_list(COMMA, out_node) { onodes }
-out_node:
-  | id = ID init = paren(literal) COLON t = typespec
-    { (id, init, t) }
-
 use_decl:
-  | USE use = separated_list(COMMA, ID)
+  | USE use = separated_list(COMMA, UID)
     { use }
 
-init_state_decl:
-  | INIT id = ID params = loption(paren(separated_nonempty_list(COMMA, literal)))
-    { (id, params) }
-
+init_decl:
+  | INIT id = UID param = literal?
+    {
+      match param with
+      | Some x -> (id, x)
+      | None -> (id, LUnit)
+    }
 
 (* toplevel definitions *)
-definition:
-  | DATA signature = id_and_type_opt EQUAL body = expression
+definitionM:
+  | d = const_definition { MConstDef(d) }
+  | d = type_definition { MTypeDef(d) }
+  | d = fun_definition { MFunDef(d) }
+  | d = node_definition { MNodeDef(d) }
+
+definitionSM:
+  | d = const_definition { SMConstDef(d) }
+  | d = type_definition { SMTypeDef(d) }
+  | d = fun_definition { SMFunDef(d) }
+  | d = state_definition { SMStateDef(d) }
+
+const_definition:
+  | CONST id = id_and_type_opt EQUAL body = expression
     {
-      let (id, topt) = signature in
-      let def = { data_id = id; data_type = topt; data_body = body } in
-      DataDef def
+      { const_id = id; const_body = body }
     }
-  | TYPE id = ID EQUAL constructors = separated_nonempty_list(OR, cons_definition)
+
+type_definition:
+  | TYPE id = UID EQUAL defs = separated_nonempty_list(OR, variant_definition)
     {
-      let def = { type_id = id; constructors = constructors } in
-      TypeDef def
+      { type_id = id; variant_defs = defs }
     }
-  | FUNC id = ID params = fparams
-    t = preceded(COLON, typespec)? EQUAL body = expression
+variant_definition:
+  | c = ID v = preceded(OF, typespec)?
     {
-      let def =
-	{ func_id = id; func_type = t; func_params = params; func_body = body } in
-      FuncDef def
+      match v with
+      | Some x -> (c, x)
+      | None -> (c, TUnit)
     }
-  | STATE id = ID params = loption(sparams) LBRACE
+
+fun_definition:
+  | FUN id = ID params = paren(separated_list(COMMA, id_and_type_opt))
+    topt = preceded(COLON, typespec)? EQUAL body = expression
+    {
+      { fun_id = (id,topt); fun_params = params; fun_body = body }
+    }
+
+node_definition:
+  | NODE init = node_init? id = id_and_type_opt EQUAL body = expression
+    {
+      { init = init; node_id = id; node_body = body }
+    }
+node_init:
+  | INIT init = delimited(LBRACKET, literal, RBRACKET)
+    { init }
+
+state_definition:
+  | STATE id = UID
+    params = loption(paren(separated_nonempty_list(COMMA, id_and_type)))
+    LBRACE
     nodes = node_definition+
     SWITCH COLON switch = expression
     RBRACE
     {
-      let def =
-	{ state_id = id; state_params = params; nodes = nodes; switch = switch } in
-      StateDef def
+      { state_id = id; state_params = params; nodes = nodes; switch = switch }
     }
-
-cons_definition:
-  | id = ID
-    ts = loption(paren(separated_nonempty_list(COMMA, typespec)))
-    { (id, ts) }
-
-fparams:
-  | params = paren(separated_list(COMMA, id_and_type_opt))
-    { params }
-sparams:
-  | params = paren(separated_nonempty_list(COMMA, id_and_type))
-    { params }
-
-node_definition:
-  | NODE init = node_init? signature = id_and_type_opt EQUAL body = expression
-    {
-      let (id, topt) = signature in
-      { init = init; node_id = id; node_type = topt; node_body = body }
-    }
-
-node_init:
-  | INIT init = delimited(LBRACKET, expression, RBRACKET)
-    { init }
-
 
 (* expressions *)
 expression:
@@ -147,14 +177,20 @@ expression:
     { EUniOp(op, expr) }
   | expr1 = expression op = bin_op expr2 = expression
     { EBinOp(op, expr1, expr2) }
+  | c = UID v = expression?
+    {
+      match v with
+      | Some x -> EVariant(c, x)
+      | None -> EVariant(c, EConst(LUnit))
+    }
   | expr = paren(separated_nonempty_list(COMMA, expression))
     {
       match expr with
       | [] -> assert false
       | [x] -> x
-      | _ -> ETuple expr
+      | _ -> ETuple(expr)
     }
-  | expr = literal
+  | expr = prim_literal
     { EConst(expr) }
   | RETAIN
     { ERetain }
@@ -167,26 +203,42 @@ expression:
   | IF etest = expression THEN ethen = expression ELSE eelse = expression
     %prec prec_if
     { EIf(etest, ethen, eelse) }
-  | expr = expression OF branchs = separated_nonempty_list(COMMA, match_branch)
-    { EPat(expr, branchs) }
+  | LET binders = separated_nonempty_list(SEMICOLON, binder) IN
+    body = expression
+    { ELet(binders, body) }
+  | CASE expr = expression OF branchs = branch+
+    { ECase(expr, branchs) }
 
-match_branch:
-  | pat = pattern ARROW expr = expression
-    { {branch_pat = pat; branch_expr = expr } }
+binder:
+  | id = id_and_type_opt EQUAL body = expression
+    { { binder_id = id; binder_body = body } }
+
+branch:
+  | pat = pattern ARROW body = expression SEMICOLON
+    { { branch_pat = pat; branch_body = body } }
 
 pattern:
   | id = ID
     {
       match id with
       | "_" -> PWild
-      | _ -> PId id
+      | _ -> PId(id)
     }
-  | c = literal
+  | c = prim_literal
     { PConst(c) }
   | ps = paren(separated_nonempty_list(COMMA, pattern))
-    { PTuple(ps) }
-  | id = ID ps = paren(separated_nonempty_list(COMMA, pattern))
-    { PADT(id, ps) }
+    {
+      match ps with
+      | [] -> assert false
+      | [x] -> x
+      | _ -> PTuple(ps)
+    }
+  | c = UID v = pattern?
+    {
+      match v with
+      | Some(x) -> PADT(c,x)
+      | _ -> PADT(c, PConst(LUnit))
+    }
 
 %inline
 uni_op:
@@ -208,7 +260,6 @@ bin_op:
 annotation:
   | LAST { ALast }
 
-
 (* primitives *)
 id_and_type:
   | p = separated_pair(ID, COLON, typespec) { p }
@@ -217,19 +268,35 @@ id_and_type_opt:
   | id = ID topt = preceded(COLON, typespec)? { (id, topt) }
 
 literal:
+  | l = prim_literal { l }
+  | l = paren(separated_nonempty_list(COMMA, literal))
+    {
+      match l with
+      | [] -> assert false
+      | [x] -> x
+      | _ -> LTuple(l) }
+  | c = UID v = literal?
+    {
+      match v with
+      | Some x -> LVariant(c, x)
+      | None -> LVariant(c, LUnit)
+    }
+
+prim_literal:
   | TRUE { LTrue }
   | FALSE { LFalse }
+  | UNIT { LUnit }
   | n = INT { LInt(n) }
-  | n = DOUBLE { LDouble(n) }
+  | n = FLOAT { LFloat(n) }
 
 typespec:
-  | id = ID
+  | id = UID
     {
       match id with
       | "Bool" -> TBool
       | "Int" -> TInt
-      | "Double" -> TDouble
-      | _ -> TID(id)
+      | "Float" -> TFloat
+      | _ -> TId(id)
     }
   | ts = paren(separated_nonempty_list(COMMA, typespec))
     { TTuple(ts) }

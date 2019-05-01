@@ -28,7 +28,7 @@ xfrpSModule ::=
   ['in'  nodeDecl {',' nodeDecl}*]
   ['out' nodeDecl {',' nodeDecl}*]
   ['use' uidentifier {',' uidentifier}*]
-  'init' identifier literal
+  'init' uidentifier [literal]
   { definitionSM }+
 
 nodeDecl ::= identifier ['(' literal ')'] : typeSpec
@@ -48,7 +48,7 @@ definitionSM ::=
 
 constDefinition ::= 'const' idAndTypeOpt '=' expression
 
-typeDefinition ::= 'type' identifier '='
+typeDefinition ::= 'type' uidentifier '='
                    variantDefinition {'|' variantDefinition}*
 variantDefinition ::= identifier ['of' typeSpec]
 
@@ -56,7 +56,7 @@ funDefinition ::=
   'fun' identifier '(' [idAndTypeOpt {',' idAndTypeOpt}* ] ')' [':' typeSpec]
   '=' expression
 
-nodeDefinition ::= 'node' ['init' '[' expression ']'] idAndTypeOpt '=' expression
+nodeDefinition ::= 'node' ['init' '[' literal ']'] idAndTypeOpt '=' expression
 
 stateDefinition ::=
   'state' identifier ['(' idAndType {',' idAndType}*  ')'] '{'
@@ -70,13 +70,13 @@ expression ::=
   | expression binOp expression
   | '(' expression {',' expression}* ')'                 # tuple or paren
   | uidentifier [expression]                             # variant
-  | literal                                              # constant
+  | prim_literal                                         # constant
   | 'Retain'                                             # Retain
   | identifier                                           # identifier
   | identifier '@' annotation                            # node with annotation
   | identifier '(' [expression {',' expression}*] ')'    # funcall
   | 'if' expression 'then' expression 'else' expression  # if-expr
-  | 'let' {binder}+ 'in' expression                      # let-expr
+  | 'let' binder {';' binder}* 'in' expression           # let-expr
   | 'case' expression 'of' {branch}+                     # pattern match
 binder ::= idAndTypeOpt '=' expression
 branch :: = pattern '->' expression ';'
@@ -101,7 +101,7 @@ annotation ::= 'last'
 pattern ::=
     '_'
   | identifier
-  | literal
+  | prim_literal
   | '(' pattern {',' pattern}* ')' # tuple
   | uidentifier pattern            # ADT
 
@@ -113,14 +113,16 @@ idAndType ::= identifier ':' typeSpec
 idAndTypeOpt ::= identifier [':' typeSpec]
 
 literal ::=
+    primLiteral
+  | '(' [literal {',' literal}*] ')'
+  | uidentifier [literal]
+
+primLiteral ::=
     'True'
   | 'False'
+  | '()'
   | number
-  | variantLiteral
-  | '(' [literal {',' literal}*] ')'
 # | charLiteral
-
-variantLiteral ::= uidentifier [literal]
 
 number ::=
      decimalNumber
