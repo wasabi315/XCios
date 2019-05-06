@@ -1,10 +1,11 @@
 %{
 open Syntax
+open Type
 %}
 
 %token
 MODULE SWITCHMODULE IN OUT USE INIT
-CONST TYPE FUN NODE STATE SWITCH 
+CONST TYPE FUN NODE STATE SWITCH
 RETAIN LAST IF THEN ELSE LET CASE OF
 TRUE FALSE
 
@@ -147,7 +148,9 @@ fun_definition:
   | FUN id = ID params = paren(separated_list(COMMA, id_and_type_opt))
     topt = preceded(COLON, typespec)? EQUAL body = expression
     {
-      { fun_id = (id,topt); fun_params = params; fun_body = body }
+      let t_params = List.map (fun (_, tvar) -> tvar) params in
+      let fun_type = TFun(t_params, TVar(ref topt)) in
+      { fun_id = (id, fun_type); fun_params = params; fun_body = body }
     }
 
 node_definition:
@@ -265,7 +268,7 @@ id_and_type:
   | p = separated_pair(ID, COLON, typespec) { p }
 
 id_and_type_opt:
-  | id = ID topt = preceded(COLON, typespec)? { (id, topt) }
+  | id = ID topt = preceded(COLON, typespec)? { (id, TVar(ref topt)) }
 
 literal:
   | l = prim_literal { l }
