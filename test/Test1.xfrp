@@ -1,0 +1,16 @@
+module Test1  # module name
+in  tmp : Double,     # temperature sensor
+    hmd : Double      # humidity sensor
+out di  : Double,     # discomfort index
+    fan : Bool        # fan switch
+use Std
+
+# discomfort (temperature-humidity) index
+node di = 0.81 *. tmp +. 0.01 *. hmd *. (0.99 *. tmp -. 14.3) +. 46.3
+
+# fan switch
+node init[False] fan = di >=. 75.0 +. ho
+
+# hysteresis offset
+node ho = if fan@last then -0.5 else 0.5
+
