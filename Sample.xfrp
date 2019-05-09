@@ -1,4 +1,4 @@
-switchmodule FanState
+switchmodule Sample
 in   clock(0)   : Int,
      di         : Float
 out  ctime(0)   : Int,

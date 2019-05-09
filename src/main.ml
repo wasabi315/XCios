@@ -6,7 +6,8 @@ let compile filename =
   let lexbuf = Lexing.from_channel ichan in
   (try
      let prog = Parser.program Lexer.read lexbuf in
-     Syntax.pp_program Format.std_formatter prog;
+     let pdata = Data.of_progdata prog in 
+     Data.pp_progdata Format.std_formatter pdata;
      Format.pp_print_newline Format.std_formatter ()
    with
    | Parser.Error ->
