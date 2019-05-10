@@ -1,8 +1,6 @@
 (* A formatted program data *)
 open Syntax
 open Extension.Format
-   
-module Idmap = Map.Make(Identifier)
 
 let pp_idmap pp_contents ppf idmap =
   fprintf ppf "@[<v>";
@@ -38,11 +36,11 @@ let pp_progdata ppf data =
   fprintf ppf "sdef: %a@;" (pp_idmap pp_statedef) data.sdef;
   fprintf ppf "@]"
 
-(* convert list to Idmap.t *)  
+(* convert list to Idmap.t *)
 let list_to_idmap (lst : 'a list) (id_f : 'a -> identifier) =
   List.fold_left (fun m x -> Idmap.add (id_f x) x m) Idmap.empty lst
-  
-(* separate module_defs *)  
+
+(* separate module_defs *)
 let separate_mdef defs =
   List.fold_left (fun (cs, ts, fs, ns) def ->
       match def with
@@ -52,7 +50,7 @@ let separate_mdef defs =
       | MNodeDef(d) -> (cs, ts, fs, d::ns)
     ) ([], [], [], []) defs
 
-(* convert XfrpModule to progdata *)  
+(* convert XfrpModule to progdata *)
 let module_to_data m =
   let (cdef, tdef, fdef, ndef) = separate_mdef m.module_defs in
   let state =
@@ -72,7 +70,7 @@ let module_to_data m =
     sdef = list_to_idmap [state] (fun x -> x.state_id);
   }
 
-(* separate smodule_defs *)  
+(* separate smodule_defs *)
 let separate_smdef defs =
   List.fold_left (fun (cs, ts, fs, ss) def ->
       match def with
@@ -82,7 +80,7 @@ let separate_smdef defs =
       | SMStateDef(d) -> (cs, ts, fs, d::ss)
     ) ([], [], [], []) defs
 
-(* convert XfrpSModule to progdata *)  
+(* convert XfrpSModule to progdata *)
 let smodule_to_data m =
   let (cdef, tdef, fdef, sdef) = separate_smdef m.smodule_defs in
   {
@@ -97,7 +95,7 @@ let smodule_to_data m =
     sdef = list_to_idmap sdef (fun x -> x.state_id);
   }
 
-(* convert AST to progdata *)  
+(* convert AST to progdata *)
 let of_progdata = function
   | XfrpModule(d) -> module_to_data d
   | XfrpSModule(d) -> smodule_to_data d

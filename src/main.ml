@@ -2,17 +2,8 @@ open Syntax
 open Extension.Format
 
 let test_tsort ppf (progdata : Data.progdata) =
-  let tsort_node sdef =
-    let id_and_exprs =
-      List.fold_left (fun acc ndef ->
-          let (id, _) = ndef.node_id in
-          (id, ndef.node_body) :: acc
-        ) [] sdef.nodes
-    in
-    Dependency.tsort_dependency id_and_exprs
-  in
-  Data.Idmap.iter (fun _ sdef ->
-      (pp_list_comma pp_identifier) ppf (tsort_node sdef);
+  Idmap.iter (fun _ sdef ->
+      (pp_list_comma pp_identifier) ppf (Dependency.tsort_statenode sdef);
       pp_print_newline ppf ()
     ) progdata.sdef
 

@@ -1,23 +1,20 @@
 (* dependency analysis *)
 open Syntax
 
-module Graph = Map.Make(Identifier)
-module Nodes = Set.Make(Identifier)
-
-(* collect all dependencies on nodes in expr *)             
-let collect_dependencies nodes expr = 
-  let rec visit_expr expr (acc : Nodes.t) =
+(* collect all dependencies on `targets` in `expr` *)
+let collect_dependencies targets expr =
+  let rec visit_expr expr (acc : Idset.t) =
     match expr with
     | EUniOp(_, e1) -> visit_expr e1 acc
-    | EBinOp(_, e1, e2) -> visit_expr e1 acc |> visit_expr e2 
+    | EBinOp(_, e1, e2) -> visit_expr e1 acc |> visit_expr e2
     | EVariant(_, e1) -> visit_expr e1 acc
     | ETuple(es) -> List.fold_right visit_expr es acc
     | EConst(_) | ERetain -> acc
     | EAnnot(_, ALast) -> acc (* ignore @last *)
     | EId(id) | EAnnot(id, _) ->
-       if Nodes.mem id nodes then Nodes.add id acc else acc
+       if Idset.mem id targets then Idset.add id acc else acc
     | EFuncall(fid, args) ->
-       (if Nodes.mem fid nodes then Nodes.add fid acc else acc)
+       (if Idset.mem fid targets then Idset.add fid acc else acc)
        |> List.fold_right visit_expr args
     | EIf(etest, ethen, eelse) ->
        visit_expr etest acc
@@ -34,57 +31,104 @@ let collect_dependencies nodes expr =
               visit_expr e a
             ) branchs
   in
-  visit_expr expr Nodes.empty
+  visit_expr expr Idset.empty
 
-(* make dependency graph from identifier * expr list *)  
-let make_graph id_and_exprs =
-  let add_edge dst srcs graph =
+(* make dependency graph *)
+let make_graph (dependencies : (identifier * Idset.t) list) =
+  let add_edge (dst, srcs) graph =
     let add_edge1 src_adjs =
       match src_adjs with
       | None -> assert false
-      | Some(dsts) -> Some(Nodes.add dst dsts)
+      | Some(dsts) -> Some(Idset.add dst dsts)
     in
-    Nodes.fold (fun src g ->
-        Graph.update src add_edge1 g
+    Idset.fold (fun src g ->
+        Idmap.update src add_edge1 g
       ) srcs graph
   in
   let nodes =
-    List.map (fun (id, _) -> id) id_and_exprs
-    |> Nodes.of_list
+    List.map (fun (id, _) -> id) dependencies
+    |> Idset.of_list
   in
-  Nodes.fold (fun n g->
-      Graph.add n Nodes.empty g
-    ) nodes Graph.empty
-  |> List.fold_right (fun (dst, e) g ->
-         add_edge dst (collect_dependencies nodes e) g
-       ) id_and_exprs
-  
-type nodestate = Unvisited | Visiting |Visited 
-module TSortState = Map.Make(Identifier)
+  let empty_graph =
+    Idset.fold (fun n g->
+        Idmap.add n Idset.empty g
+      ) nodes Idmap.empty
+  in
+  List.fold_right add_edge dependencies empty_graph
+
+type nodestate = Unvisited | Visiting |Visited
 exception Cycle
 
-(* topological sort on dependency graph of expression *)        
-let tsort_dependency id_and_exprs =
-  let graph = make_graph id_and_exprs in
+(* topological sort *)
+let tsort graph =
   let nodes =
-    List.map (fun (id, _) -> id) (Graph.bindings graph)
-    |> Nodes.of_list
+    List.map (fun (id, _) -> id) (Idmap.bindings graph)
+    |> Idset.of_list
   in
-  let init_state = 
-    Nodes.fold (fun id s ->
-        TSortState.add id Unvisited s
-      )  nodes TSortState.empty
+  let init_state =
+    Idset.fold (fun id s ->
+        Idmap.add id Unvisited s
+      )  nodes Idmap.empty
   in
   let rec visit node (st, res)=
-    match TSortState.find node st with
+    match Idmap.find node st with
     | Unvisited ->
-       let st_enter = TSortState.add node Visiting st in
-       let adj = Graph.find node graph in
-       let (st', res') = Nodes.fold visit adj (st_enter, res) in
-       let st_exit = TSortState.add node Visited st' in 
+       let st_enter = Idmap.add node Visiting st in
+       let adj = Idmap.find node graph in
+       let (st', res') = Idset.fold visit adj (st_enter, res) in
+       let st_exit = Idmap.add node Visited st' in
        (st_exit, node::res')
     | Visiting -> raise Cycle
     | Visited -> (st, res)
   in
-  let (_, res) = Nodes.fold visit nodes (init_state, []) in
+  let (_, res) = Idset.fold visit nodes (init_state, []) in
   res
+
+(* dependencies of the function definition *)
+let dependencies_of_fun targets def =
+  let param_ids =
+    List.map (fun (id, _) -> id) def.fun_params |> Idset.of_list
+  in
+  collect_dependencies (Idset.diff targets param_ids) def.fun_body
+
+(* dependencies of the constant definition *)
+let dependencies_of_const targets def =
+  collect_dependencies targets def.const_body
+
+
+(* topological sort on function / constant definitions *)
+let tsort_fun_const fdef cdef =
+  let targets =
+    Idmap.fold (fun id _ s -> Idset.add id s) fdef Idset.empty
+    |> Idmap.fold (fun id _ s -> Idset.add id s) cdef
+  in
+  let fun_deps =
+    Idmap.fold (fun id def deps ->
+        (id, (dependencies_of_fun targets def)) :: deps
+      ) fdef []
+  in
+  let fun_and_const_deps =
+    Idmap.fold (fun id def deps ->
+        (id, (dependencies_of_const targets def)) :: deps
+      ) cdef fun_deps
+  in
+  make_graph fun_and_const_deps |> tsort
+
+(* dependencies of the node definition *)
+let dependencies_of_node targets def =
+  collect_dependencies targets def.node_body
+
+(* dependencies of the node definition *)
+let tsort_statenode sdef =
+  let targets =
+    List.fold_right (fun def s ->
+        let (id, _) = def.node_id in Idset.add id s
+      ) sdef.nodes Idset.empty
+  in
+  let deps =
+    List.map (fun def ->
+        let (id, _) = def.node_id in
+        (id, (dependencies_of_node targets def))
+      ) sdef.nodes
+  in
+  make_graph deps |> tsort

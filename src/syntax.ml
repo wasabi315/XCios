@@ -21,6 +21,9 @@ module Identifier =
     let compare = String.compare
   end
 
+module Idmap = Map.Make(Identifier)
+module Idset = Set.Make(Identifier)
+
 (* Literal *)
 type literal =
   | LTrue
