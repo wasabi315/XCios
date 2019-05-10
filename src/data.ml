@@ -101,5 +101,3 @@ let smodule_to_data m =
 let of_progdata = function
   | XfrpModule(d) -> module_to_data d
   | XfrpSModule(d) -> smodule_to_data d
-                        
-                        
