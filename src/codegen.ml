@@ -1,6 +1,7 @@
 (* Emfrp code generation *)
 open Extension.Format
 open Syntax
+open Type
 
 module S = Set.Make(struct
                type t = identifier
@@ -16,15 +17,15 @@ let gen_id_and_args gen_args =
   pp_funcall gen_identifier gen_args
 
 (* Type specification *)
-let rec gen_typespec ppf = function
+let rec gen_t ppf = function
   | TBool -> pp_print_string ppf "Bool"
   | TInt -> pp_print_string ppf "Int"
   | TDouble -> pp_print_string ppf "Double"
   | TID(t) -> fprintf ppf "%a" gen_identifier t
-  | TTuple(ts) -> fprintf ppf "(@[%a@])" (pp_list_comma gen_typespec) ts
+  | TTuple(ts) -> fprintf ppf "(@[%a@])" (pp_list_comma gen_t) ts
 
 let gen_id_and_type ppf (id, t) =
-  fprintf ppf "%a : %a" gen_identifier id gen_typespec t
+  fprintf ppf "%a : %a" gen_identifier id gen_t t
 
 let gen_id_and_typeopt ppf (id, topt) =
   match topt with
@@ -161,7 +162,7 @@ let gen_datadef ctx ppf {data_id; data_type; data_body} =
 
 (* type definition *)
 let gen_typedef _ctx ppf {type_id; constructors} =
-  let gen_constructor = gen_id_and_args gen_typespec in
+  let gen_constructor = gen_id_and_args gen_t in
   let separator ppf () = fprintf ppf "@ | "  in
   fprintf ppf "@[<2>type %a =@ @[%a@]@]"
     gen_identifier type_id
@@ -171,7 +172,7 @@ let gen_typedef _ctx ppf {type_id; constructors} =
 let gen_funcdef ctx ppf {func_id;func_type;func_params;func_body} =
   let param_ids = List.map (fun (id, _) -> id) func_params in
   let func_ctx = { ctx with names_var = S.of_list param_ids } in
-  let gen_ftype_some ppf t = fprintf ppf " : %a" gen_typespec t in
+  let gen_ftype_some ppf t = fprintf ppf " : %a" gen_t t in
   fprintf ppf "@[<2>func (@[%a@])%a =@ %a@]"
     (gen_id_and_args gen_id_and_typeopt) (func_id, func_params)
     (pp_opt gen_ftype_some pp_none) func_type
@@ -295,12 +296,12 @@ let gen_switchmodule ppf {module_id; in_nodes; out_nodes; use; init; definitions
     fprintf ppf "%a%a : %a"
       gen_identifier id
       (pp_opt gen_init_some pp_none) init
-      gen_typespec t
+      gen_t t
   in
 
   let gen_out_node ppf (id, _, t) =
     fprintf ppf "%a : %a"
-      gen_identifier id gen_typespec t
+      gen_identifier id gen_t t
   in
 
 
@@ -337,7 +338,7 @@ let gen_switchmodule ppf {module_id; in_nodes; out_nodes; use; init; definitions
     let gen_constructor ppf (c, params) =
       match params with
       | [] -> gen_identifier ppf c
-      | _ -> (gen_id_and_args gen_typespec) ppf (c,params)
+      | _ -> (gen_id_and_args gen_t) ppf (c,params)
     in
     let separator ppf () = fprintf ppf "@ | "  in
     fprintf ppf "@[<2>type State =@ @[%a@]@]"

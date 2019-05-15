@@ -1,6 +1,5 @@
 (* AST type definitions *)
 open Extension.Format
-open Type
 
 (* Identifier *)
 type identifier = string
@@ -10,10 +9,10 @@ let pp_identifier = pp_print_string
 let pp_id_and_args pp_args =
   pp_funcall pp_identifier pp_args
 
-type id_and_type = identifier * typespec
+type id_and_type = identifier * Type.t
 let pp_id_and_type ppf (id, t) =
   fprintf ppf "%a : %a"
-    pp_identifier id pp_typespec t
+    pp_identifier id Type.pp_t t
 
 module Identifier =
   struct
@@ -171,12 +170,12 @@ let pp_constdef ppf {const_id; const_body} =
 type typedef =
   {
     type_id : identifier;
-    variant_defs : (identifier * typespec) list;
+    variant_defs : (identifier * Type.t) list;
   }
 
 let pp_typedef ppf {type_id;variant_defs} =
   let pp_variant_def ppf (id, t) =
-    fprintf ppf "%a of %a" pp_identifier id pp_typespec t
+    fprintf ppf "%a of %a" pp_identifier id Type.pp_t t
   in
   fprintf ppf "<@[<v 1>TypeDef:@;";
   fprintf ppf "id: %a@;" pp_identifier type_id;
@@ -262,8 +261,8 @@ let pp_definitionSM ppf = function
 type xfrp_module =
   {
     module_id   : identifier;
-    module_in   : (identifier * (literal option) * typespec) list;
-    module_out  : (identifier * (literal option) * typespec) list;
+    module_in   : (identifier * (literal option) * Type.t) list;
+    module_out  : (identifier * (literal option) * Type.t) list;
     module_use  : identifier list;
     module_defs : definitionM list;
   }
@@ -271,8 +270,8 @@ type xfrp_module =
 type xfrp_smodule =
   {
     smodule_id   : identifier;
-    smodule_in   : (identifier * (literal option) * typespec) list;
-    smodule_out  : (identifier * (literal option) * typespec) list;
+    smodule_in   : (identifier * (literal option) * Type.t) list;
+    smodule_out  : (identifier * (literal option) * Type.t) list;
     smodule_use  : identifier list;
     smodule_init : identifier * literal;
     smodule_defs : definitionSM list;
@@ -283,7 +282,7 @@ let pp_nodedecl ppf (id, init, t) =
   fprintf ppf "%a(%a) : %a"
     pp_identifier id
     (pp_opt pp_literal pp_init_none) init
-    pp_typespec t
+    Type.pp_t t
 
 let pp_xfrp_module ppf def =
   fprintf ppf "<@[<v 1>module:@;";

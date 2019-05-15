@@ -149,7 +149,12 @@ fun_definition:
     topt = preceded(COLON, typespec)? EQUAL body = expression
     {
       let t_params = List.map (fun (_, tvar) -> tvar) params in
-      let fun_type = TFun(t_params, TVar(ref topt)) in
+      let t_ret =
+        match topt with
+        | Some(x) -> x
+        | None -> gen_tvar_dummy ()
+      in
+      let fun_type = TFun(t_params, t_ret) in
       { fun_id = (id, fun_type); fun_params = params; fun_body = body }
     }
 
@@ -268,7 +273,15 @@ id_and_type:
   | p = separated_pair(ID, COLON, typespec) { p }
 
 id_and_type_opt:
-  | id = ID topt = preceded(COLON, typespec)? { (id, TVar(ref topt)) }
+  | id = ID topt = preceded(COLON, typespec)?
+    {
+      let t =
+        match topt with
+        | Some(x) -> x
+        | None -> gen_tvar_dummy ()
+      in
+      (id, t)
+    }
 
 literal:
   | l = prim_literal { l }

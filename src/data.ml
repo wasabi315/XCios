@@ -12,8 +12,8 @@ let pp_idmap pp_contents ppf idmap =
 type progdata =
   {
     module_id : identifier;
-    module_in : (identifier * (literal option) * Type.typespec) Idmap.t;
-    module_out : (identifier * (literal option) * Type.typespec) Idmap.t;
+    module_in : (identifier * (literal option) * Type.t) Idmap.t;
+    module_out : (identifier * (literal option) * Type.t) Idmap.t;
     module_use : identifier list;
     module_init : identifier * literal;
     cdef : constdef Idmap.t;
