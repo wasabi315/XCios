@@ -1,6 +1,8 @@
 %{
 open Syntax
 open Type
+
+let const_unit = (LUnit, TEmpty)
 %}
 
 %token
@@ -109,7 +111,7 @@ init_decl:
     {
       match param with
       | Some x -> (id, x)
-      | None -> (id, LUnit)
+      | None -> (id, const_unit)
     }
 
 (* toplevel definitions *)
@@ -152,7 +154,7 @@ fun_definition:
       let t_ret =
         match topt with
         | Some(x) -> x
-        | None -> gen_tvar_dummy ()
+        | None -> TEmpty
       in
       let fun_type = TFun(t_params, t_ret) in
       { fun_id = (id, fun_type); fun_params = params; fun_body = body }
@@ -182,40 +184,42 @@ state_definition:
 expression:
   | op = uni_op expr = expression
     %prec prec_uni
-    { EUniOp(op, expr) }
+    { (EUniOp(op, expr), TEmpty) }
   | expr1 = expression op = bin_op expr2 = expression
-    { EBinOp(op, expr1, expr2) }
+    { (EBinOp(op, expr1, expr2), TEmpty) }
   | c = UID v = expression?
     {
       match v with
-      | Some x -> EVariant(c, x)
-      | None -> EVariant(c, EConst(LUnit))
+      | Some x -> (EVariant(c, x), TEmpty)
+      | None ->
+        let expr_unit = (EConst(const_unit), TEmpty) in
+        (EVariant(c, expr_unit), TEmpty)
     }
   | expr = paren(separated_nonempty_list(COMMA, expression))
     {
       match expr with
       | [] -> assert false
       | [x] -> x
-      | _ -> ETuple(expr)
+      | _ -> (ETuple(expr), TEmpty)
     }
   | expr = prim_literal
-    { EConst(expr) }
+    { (EConst(expr), TEmpty) }
   | RETAIN
-    { ERetain }
+    { (ERetain, TEmpty) }
   | expr = ID
-    { EId(expr) }
+    { (EId(expr), TEmpty) }
   | id = ID AT annot = annotation
-    { EAnnot(id, annot) }
+    { (EAnnot(id, annot), TEmpty) }
   | id = ID args = paren(separated_list(COMMA, expression))
-    { EFuncall(id, args) }
+    { (EFuncall(id, args), TEmpty) }
   | IF etest = expression THEN ethen = expression ELSE eelse = expression
     %prec prec_if
-    { EIf(etest, ethen, eelse) }
+    { (EIf(etest, ethen, eelse), TEmpty) }
   | LET binders = separated_nonempty_list(SEMICOLON, binder) IN
     body = expression
-    { ELet(binders, body) }
+    { (ELet(binders, body), TEmpty) }
   | CASE expr = expression OF branchs = branch+
-    { ECase(expr, branchs) }
+    { (ECase(expr, branchs), TEmpty) }
 
 binder:
   | id = id_and_type_opt EQUAL body = expression
@@ -229,23 +233,25 @@ pattern:
   | id = ID
     {
       match id with
-      | "_" -> PWild
-      | _ -> PId(id)
+      | "_" -> (PWild, TEmpty)
+      | _ -> (PId(id), TEmpty)
     }
   | c = prim_literal
-    { PConst(c) }
+    { (PConst(c), TEmpty) }
   | ps = paren(separated_nonempty_list(COMMA, pattern))
     {
       match ps with
       | [] -> assert false
       | [x] -> x
-      | _ -> PTuple(ps)
+      | _ -> (PTuple(ps), TEmpty)
     }
   | c = UID v = pattern?
     {
       match v with
-      | Some(x) -> PADT(c,x)
-      | _ -> PADT(c, PConst(LUnit))
+      | Some(x) -> (PVariant(c,x), TEmpty)
+      | _ ->
+        let pat_unit = (PConst(const_unit), TEmpty) in
+        (PVariant(c, pat_unit), TEmpty)
     }
 
 %inline
@@ -278,7 +284,7 @@ id_and_type_opt:
       let t =
         match topt with
         | Some(x) -> x
-        | None -> gen_tvar_dummy ()
+        | None -> TEmpty
       in
       (id, t)
     }
@@ -290,20 +296,21 @@ literal:
       match l with
       | [] -> assert false
       | [x] -> x
-      | _ -> LTuple(l) }
+      | _ -> (LTuple(l), TEmpty)
+    }
   | c = UID v = literal?
     {
       match v with
-      | Some x -> LVariant(c, x)
-      | None -> LVariant(c, LUnit)
+      | Some x -> (LVariant(c, x), TEmpty)
+      | None -> (LVariant(c, const_unit), TEmpty)
     }
 
 prim_literal:
-  | TRUE { LTrue }
-  | FALSE { LFalse }
-  | UNIT { LUnit }
-  | n = INT { LInt(n) }
-  | n = FLOAT { LFloat(n) }
+  | TRUE { (LTrue, TEmpty) }
+  | FALSE { (LFalse, TEmpty) }
+  | UNIT { (LUnit, TEmpty) }
+  | n = INT { (LInt(n), TEmpty) }
+  | n = FLOAT { (LFloat(n), TEmpty) }
 
 typespec:
   | id = UID

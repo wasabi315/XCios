@@ -14,6 +14,12 @@ let pp_id_and_type ppf (id, t) =
   fprintf ppf "%a : %a"
     pp_identifier id Type.pp_t t
 
+let get_id (id : id_and_type) =
+  let (i, _) = id in i
+
+let get_type (id : id_and_type) =
+  let (_, t) = id in t
+
 module Identifier =
   struct
     type t = identifier
@@ -24,7 +30,7 @@ module Idmap = Map.Make(Identifier)
 module Idset = Set.Make(Identifier)
 
 (* Literal *)
-type literal =
+type literal_ast =
   | LTrue
   | LFalse
   | LInt of string
@@ -32,15 +38,21 @@ type literal =
   | LUnit
   | LTuple of literal list
   | LVariant of identifier * literal
+and literal = literal_ast * Type.t
 
-let rec pp_literal ppf = function
-  | LTrue -> fprintf ppf "<literal True>"
-  | LFalse -> fprintf ppf "<literal False>"
-  | LInt(n) -> fprintf ppf "<literal int %a>" pp_print_string n
-  | LFloat(n) -> fprintf ppf "<literal float %a>" pp_print_string n
-  | LUnit -> fprintf ppf "<literal Unit>"
-  | LTuple(ls)-> fprintf ppf "(@[%a])" (pp_list_comma pp_literal) ls
-  | LVariant(c,v) -> fprintf ppf "%a@ %a" pp_identifier c pp_literal v
+let rec pp_literal_ast ppf =
+  begin
+    function
+    | LTrue -> fprintf ppf "<literal True>"
+    | LFalse -> fprintf ppf "<literal False>"
+    | LInt(n) -> fprintf ppf "<literal int %a>" pp_print_string n
+    | LFloat(n) -> fprintf ppf "<literal float %a>" pp_print_string n
+    | LUnit -> fprintf ppf "<literal Unit>"
+    | LTuple(ls)-> fprintf ppf "(@[%a])" (pp_list_comma pp_literal) ls
+    | LVariant(c,v) -> fprintf ppf "%a@ %a" pp_identifier c pp_literal v
+  end
+and pp_literal ppf (ast, t) =
+  fprintf ppf "%a : %a" pp_literal_ast ast Type.pp_t t
 
 (* Operators *)
 type uni_op = UPos| UNeg | UNot | UInv
@@ -81,22 +93,28 @@ let pp_annotation ppf annot =
      | ALast -> "last")
 
 (* Pattern match *)
-type pattern =
+type pattern_ast =
   | PWild
   | PId of identifier
   | PConst of literal
   | PTuple of (pattern list)
-  | PADT of identifier * pattern
+  | PVariant of identifier * pattern
+and pattern = pattern_ast * Type.t
 
-let rec pp_pattern ppf = function
-  | PWild -> pp_print_string ppf "_"
-  | PId(id) -> pp_identifier ppf id
-  | PConst(c) -> pp_literal ppf c
-  | PTuple(ps) -> fprintf ppf "(@[%a@])" (pp_list_comma pp_pattern) ps
-  | PADT(c, p) -> fprintf ppf "%a@ %a" pp_identifier c pp_pattern p
+let rec pp_pattern_ast ppf =
+  begin
+    function
+    | PWild -> pp_print_string ppf "_"
+    | PId(id) -> pp_identifier ppf id
+    | PConst(c) -> pp_literal ppf c
+    | PTuple(ps) -> fprintf ppf "(@[%a@])" (pp_list_comma pp_pattern) ps
+    | PVariant(c, p) -> fprintf ppf "%a@ %a" pp_identifier c pp_pattern p
+  end
+and pp_pattern ppf (ast, t) =
+  fprintf ppf "%a : %a" pp_pattern_ast ast Type.pp_t t
 
 (* Expression *)
-type expression =
+type expression_ast =
   | EUniOp of uni_op * expression
   | EBinOp of bin_op * expression * expression
   | EVariant of identifier * expression
@@ -121,8 +139,9 @@ and branch =
     branch_pat : pattern;
     branch_body : expression;
   }
+and expression = expression_ast * Type.t
 
-let rec pp_expression ppf = function
+let rec pp_expression_ast ppf = function
   | EUniOp(op, e) -> fprintf ppf "<uniop @[%a@ %a@]>"
                      pp_uni_op op pp_expression e
   | EBinOp(op, e1, e2) -> fprintf ppf "<binop @[%a@ @[%a@ %a@]@]>"
@@ -153,6 +172,9 @@ and pp_binder ppf {binder_id; binder_body} =
 and pp_branch ppf {branch_pat; branch_body} =
   fprintf ppf "@[<2>%a ->@ %a@]"
     pp_pattern branch_pat pp_expression branch_body
+
+and pp_expression ppf (ast, t) =
+  fprintf ppf "%a : %a" pp_expression_ast ast Type.pp_t t
 
 (* Const definition *)
 type constdef =
