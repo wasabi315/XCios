@@ -5,7 +5,7 @@ let test_tsort ppf (progdata : Data.progdata) =
   Idmap.iter (fun _ sdef ->
       (pp_list_comma pp_identifier) ppf (Dependency.tsort_statenode sdef);
       pp_print_newline ppf ()
-    ) progdata.sdef
+    ) progdata.sdefs
 
 let compile filename =
   let ichan = open_in filename in
@@ -13,6 +13,7 @@ let compile filename =
   (try
      let prog = Parser.program Lexer.read lexbuf in
      let pdata = Data.of_progdata prog in
+     let pdata = Typing.infer_progdata pdata in
      Data.pp_progdata std_formatter pdata;
      pp_print_newline std_formatter ();
      test_tsort std_formatter pdata
