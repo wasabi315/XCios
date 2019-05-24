@@ -16,10 +16,10 @@ type progdata =
     module_out : (identifier * (literal option) * Type.t) Idmap.t;
     module_use : identifier list;
     module_init : identifier * literal;
-    cdef : constdef Idmap.t;
-    tdef : typedef Idmap.t;
-    fdef : fundef Idmap.t;
-    sdef : statedef Idmap.t;
+    cdefs : constdef Idmap.t;
+    tdefs : typedef Idmap.t;
+    fdefs : fundef Idmap.t;
+    sdefs : statedef Idmap.t;
   }
 
 let pp_progdata ppf data =
@@ -30,10 +30,10 @@ let pp_progdata ppf data =
   fprintf ppf "use: @[<v>%a@]@;" (pp_list_comma pp_identifier) data.module_use;
   let (c, v) = data.module_init in
   fprintf ppf "init %a %a@;" pp_identifier c pp_literal v;
-  fprintf ppf "cdef: %a@;" (pp_idmap pp_constdef) data.cdef;
-  fprintf ppf "tdef: %a@;" (pp_idmap pp_typedef) data.tdef;
-  fprintf ppf "fdef: %a@;" (pp_idmap pp_fundef) data.fdef;
-  fprintf ppf "sdef: %a@;" (pp_idmap pp_statedef) data.sdef;
+  fprintf ppf "cdefs: %a@;" (pp_idmap pp_constdef) data.cdefs;
+  fprintf ppf "tdefs: %a@;" (pp_idmap pp_typedef) data.tdefs;
+  fprintf ppf "fdefs: %a@;" (pp_idmap pp_fundef) data.fdefs;
+  fprintf ppf "sdefs: %a@;" (pp_idmap pp_statedef) data.sdefs;
   fprintf ppf "@]"
 
 (* convert list to Idmap.t *)
@@ -52,10 +52,13 @@ let separate_mdef defs =
 
 (* convert XfrpModule to progdata *)
 let module_to_data m =
-  let (cdef, tdef, fdef, ndef) = separate_mdef m.module_defs in
+  let (cdefs, tdefs, fdefs, ndefs) = separate_mdef m.module_defs in
   let state =
     {
-      state_id = m.module_id; state_params = []; nodes = ndef; switch = ERetain
+      state_id = m.module_id;
+      state_params = [];
+      nodes = ndefs;
+      switch = (ERetain, TEmpty)
     }
   in
   {
@@ -63,11 +66,11 @@ let module_to_data m =
     module_in = list_to_idmap m.module_in (fun (id, _,  _) -> id);
     module_out = list_to_idmap m.module_out (fun (id, _, _) -> id);
     module_use = m.module_use;
-    module_init = (m.module_id, LUnit);
-    cdef = list_to_idmap cdef (fun x -> let (id, _) = x.const_id in id);
-    tdef = list_to_idmap tdef (fun x -> x.type_id);
-    fdef = list_to_idmap fdef (fun x -> let (id, _) = x.fun_id in id);
-    sdef = list_to_idmap [state] (fun x -> x.state_id);
+    module_init = (m.module_id, (LUnit, TEmpty));
+    cdefs = list_to_idmap cdefs (fun x -> get_id x.const_id);
+    tdefs = list_to_idmap tdefs (fun x -> x.type_id);
+    fdefs = list_to_idmap fdefs (fun x -> get_id x.fun_id);
+    sdefs = list_to_idmap [state] (fun x -> x.state_id);
   }
 
 (* separate smodule_defs *)
@@ -82,17 +85,17 @@ let separate_smdef defs =
 
 (* convert XfrpSModule to progdata *)
 let smodule_to_data m =
-  let (cdef, tdef, fdef, sdef) = separate_smdef m.smodule_defs in
+  let (cdefs, tdefs, fdefs, sdefs) = separate_smdef m.smodule_defs in
   {
     module_id = m.smodule_id;
     module_in = list_to_idmap m.smodule_in (fun (id, _,  _) -> id);
     module_out = list_to_idmap m.smodule_out (fun (id, _, _) -> id);
     module_use = m.smodule_use;
     module_init = m.smodule_init;
-    cdef = list_to_idmap cdef (fun x -> let (id, _) = x.const_id in id);
-    tdef = list_to_idmap tdef (fun x -> x.type_id);
-    fdef = list_to_idmap fdef (fun x -> let (id, _) = x.fun_id in id);
-    sdef = list_to_idmap sdef (fun x -> x.state_id);
+    cdefs = list_to_idmap cdefs (fun x -> get_id x.const_id);
+    tdefs = list_to_idmap tdefs (fun x -> x.type_id);
+    fdefs = list_to_idmap fdefs (fun x -> get_id x.fun_id);
+    sdefs = list_to_idmap sdefs (fun x -> x.state_id);
   }
 
 (* convert AST to progdata *)

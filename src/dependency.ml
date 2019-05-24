@@ -3,8 +3,8 @@ open Syntax
 
 (* collect all dependencies on `targets` in `expr` *)
 let collect_dependencies targets expr =
-  let rec visit_expr expr (acc : Idset.t) =
-    match expr with
+  let rec visit_expr (ast, _) (acc : Idset.t) =
+    match ast with
     | EUniOp(_, e1) -> visit_expr e1 acc
     | EBinOp(_, e1, e2) -> visit_expr e1 acc |> visit_expr e2
     | EVariant(_, e1) -> visit_expr e1 acc
@@ -97,22 +97,22 @@ let dependencies_of_const targets def =
 
 
 (* topological sort on function / constant definitions *)
-let tsort_fun_const fdef cdef =
+let tsort_const_fun cdefs fdefs =
   let targets =
-    Idmap.fold (fun id _ s -> Idset.add id s) fdef Idset.empty
-    |> Idmap.fold (fun id _ s -> Idset.add id s) cdef
+    Idmap.fold (fun id _ s -> Idset.add id s) fdefs Idset.empty
+    |> Idmap.fold (fun id _ s -> Idset.add id s) cdefs
   in
-  let fun_deps =
-    Idmap.fold (fun id def deps ->
-        (id, (dependencies_of_fun targets def)) :: deps
-      ) fdef []
-  in
-  let fun_and_const_deps =
+  let const_deps =
     Idmap.fold (fun id def deps ->
         (id, (dependencies_of_const targets def)) :: deps
-      ) cdef fun_deps
+      ) cdefs []
   in
-  make_graph fun_and_const_deps |> tsort
+  let const_and_fun_deps =
+    Idmap.fold (fun id def deps ->
+        (id, (dependencies_of_fun targets def)) :: deps
+      ) fdefs const_deps
+  in
+  make_graph const_and_fun_deps |> tsort
 
 (* dependencies of the node definition *)
 let dependencies_of_node targets def =
@@ -122,13 +122,12 @@ let dependencies_of_node targets def =
 let tsort_statenode sdef =
   let targets =
     List.fold_right (fun def s ->
-        let (id, _) = def.node_id in Idset.add id s
+        Idset.add (get_id def.node_id) s
       ) sdef.nodes Idset.empty
   in
   let deps =
     List.map (fun def ->
-        let (id, _) = def.node_id in
-        (id, (dependencies_of_node targets def))
+        ((get_id def.node_id), (dependencies_of_node targets def))
       ) sdef.nodes
   in
   make_graph deps |> tsort
