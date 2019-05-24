@@ -36,8 +36,8 @@
 let space = [' ' '\r' '\t']+
 let newline = '\r' | '\n' | "\r\n"
 let id = ['A'-'Z' 'a'-'z' '_']['A'-'Z' 'a'-'z' '0'-'9' '_']*
-let digits = ['0'-'9']+
-let fliteral = (['0'-'9']+ '.' ['0'-'9']* | '.' ['0'-'9']+)
+let digits = ['+''-']?['0'-'9']+
+let fliteral = ['+''-']?(['0'-'9']+ '.' ['0'-'9']* | '.' ['0'-'9']+)
 
 (* longest match -> earlier rule *)
 rule read = parse

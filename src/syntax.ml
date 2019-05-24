@@ -55,12 +55,12 @@ and pp_literal ppf (ast, t) =
   fprintf ppf "%a : %a" pp_literal_ast ast Type.pp_t t
 
 (* Operators *)
-type uni_op = UPos| UNeg | UNot | UInv
+type uni_op = UNot | UInv
 
 let pp_uni_op ppf op =
   pp_print_string ppf
     (match op with
-     | UPos -> "+" | UNeg -> "-" | UNot -> "!" | UInv -> "~")
+     | UNot -> "!" | UInv -> "~")
 
 type bin_op =
   | BMul | BDiv | BAdd | BSub

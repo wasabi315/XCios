@@ -256,7 +256,7 @@ pattern:
 
 %inline
 uni_op:
-  | PLUS { UPos } | MINUS { UNeg } | BANG { UNot } | TILDE { UInv }
+  | BANG { UNot } | TILDE { UInv }
 
 %inline
 bin_op:

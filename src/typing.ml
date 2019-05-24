@@ -191,7 +191,7 @@ let rec infer_expression env level (ast, _) =
     let (_, te1) as e1' = infer_expression env level e1 in
     let ast' = EUniOp(op, e1') in
     match op with
-    | UPos | UNeg | UInv
+    | UInv
       -> unify TInt te1; (ast', TInt)
     | UNot
       -> unify TBool te1; (ast', TBool)
