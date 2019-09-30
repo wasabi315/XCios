@@ -4,26 +4,26 @@ open Type
 open Data
 open Extension.Format
 
-exception UnifyError of t * t   
+exception UnifyError of t * t
 exception TypeError of string
 
-(* raise type error with given message `msg` *)                     
+(* raise type error with given message `msg` *)
 let raise_err msg =
   raise (TypeError msg)
-                     
-(* raise type error with message printed by `f_pp` *)                     
+
+(* raise type error with message printed by `f_pp` *)
 let raise_err_pp (f_pp : formatter -> unit) =
   let msg = f_pp str_formatter; flush_str_formatter () in
   raise (TypeError msg)
 
-(* raise type imcompatible error with `t1` and `t2` *)  
+(* raise type imcompatible error with `t1` and `t2` *)
 let raise_imcompatible t1 t2 =
   raise_err_pp (fun ppf ->
       fprintf ppf "%a and %a is not compatible" pp_t t1 pp_t t2
     )
-  
-(* adjusting level of unification target pointed by another free variable 
-   with `id` and `level` *)   
+
+(* adjusting level of unification target pointed by another free variable
+   with `id` and `level` *)
 let rec adjust_level id level = function
   | TVar({contents} as r) ->
      begin
@@ -40,7 +40,7 @@ let rec adjust_level id level = function
   | TTuple(ts) -> List.iter (adjust_level id level) ts
   | _ -> ()
 
-(* unify type `t1` and `t2` *)       
+(* unify type `t1` and `t2` *)
 let rec unify t1 t2 =
   if t1 == t2 then ()
   else
@@ -68,7 +68,7 @@ and unify_list ts1 ts2 =
     raise (UnifyError (TTuple(ts1), TTuple(ts2)))
   else List.iter2 unify ts1 ts2
 
-(* generalize free variables *)  
+(* generalize free variables *)
 let rec generalize level = function
   | TTuple(ts) -> List.iter (generalize level) ts
   | TFun(params, t) ->
@@ -78,7 +78,7 @@ let rec generalize level = function
   | TVar({contents = TVBound(t)}) -> generalize level t
   | _ -> ()
 
-(* instantiate generic variables *)            
+(* instantiate generic variables *)
 let instantiate level t =
     let general_to_free = Hashtbl.create 10 in
     let rec visit = function
@@ -101,7 +101,7 @@ let instantiate level t =
     in
     visit t
 
-(* replace TEmpty with a fresh free variable *)            
+(* replace TEmpty with a fresh free variable *)
 let rec replace_tempty level = function
   | TEmpty -> gen_tvar_free level
   | TTuple(ts) ->
@@ -113,8 +113,8 @@ let rec replace_tempty level = function
      TFun(tparams', tret')
   | TVar({contents = TVBound(t)}) -> replace_tempty level t
   | _ as t -> t
-            
-(* return if given type is not polymorphic type *)            
+
+(* return if given type is not polymorphic type *)
 let rec is_concrete = function
   | TBool | TInt | TFloat | TUnit | TId(_) | TState
     -> true
@@ -123,7 +123,7 @@ let rec is_concrete = function
   | TVar({contents = TVBound(t)}) -> is_concrete t
   | TVar(_) -> false
   | TEmpty -> assert false
-            
+
 (* inference functions*)
 let infer_identifier env level id =
   match Idmap.find_opt id env with
@@ -133,25 +133,12 @@ let infer_identifier env level id =
          fprintf ppf "Unbound id : %a" pp_identifier id
        )
 
-let rec infer_literal env level (ast, _) =
+let infer_literal _env _level ast =
   match ast with
-  | LTrue | LFalse
-    -> (ast, TBool)
-  | LInt(_) -> (ast, TInt)
-  | LFloat(_) -> (ast, TFloat)
-  | LUnit -> (ast, TUnit)
-  | LTuple ls ->
-     let ls' = List.map (infer_literal env level) ls in
-     let (_, tls) = List.split ls' in
-     (LTuple(ls'), TTuple(tls))
-  | LVariant(c,v) ->
-     let tc = infer_identifier env level c in
-       let (_, tv) as v' = infer_literal env level v in
-       match tc with
-       | TFun([tv2], tret) ->
-          let () = unify tv tv2 in
-          (LVariant(c, v'), tret)
-       | _ -> assert false
+  | LTrue | LFalse -> TBool
+  | LInt(_) -> TInt
+  | LFloat(_) -> TFloat
+  | LUnit -> TUnit
 
 let rec infer_pattern env level (ast, _) =
   (* return result + id-type bind *)
@@ -165,8 +152,8 @@ let rec infer_pattern env level (ast, _) =
      let res = (ast, var) in
      (res, [(id, var)])
   | PConst(l) ->
-     let (_, tl) as l' = infer_literal env level l in
-     let res = (PConst(l'), tl) in 
+     let tl = infer_literal env level l in
+     let res = (PConst(l), tl) in
      (res, [])
   | PTuple(ps) ->
      let (ps', binds) = List.map (infer_pattern env level) ps |> List.split in
@@ -184,7 +171,7 @@ let rec infer_pattern env level (ast, _) =
           (res, binds)
        | _ -> assert false
      end
-        
+
 let rec infer_expression env level (ast, _) =
 
   let infer_uniop op e1 =
@@ -196,8 +183,8 @@ let rec infer_expression env level (ast, _) =
     | UNot
       -> unify TBool te1; (ast', TBool)
   in
-  
-  let infer_binop op e1 e2 = 
+
+  let infer_binop op e1 e2 =
     let (_, te1) as e1' = infer_expression env level e1 in
     let (_, te2) as e2' = infer_expression env level e2 in
     let ast' = EBinOp(op, e1', e2') in
@@ -213,8 +200,7 @@ let rec infer_expression env level (ast, _) =
     | BLt | BLeq | BGt | BGeq
     | BFLt | BFLeq | BFGt | BFGeq
     | BEq | BNeq
-      -> let () = printf "%a %a" pp_t te1 pp_t te2; print_newline ()  in
-         let tvar = gen_tvar_free level in
+      -> let tvar = gen_tvar_free level in
          unify tvar te1;unify tvar te2; (ast', TBool)
   in
 
@@ -233,7 +219,7 @@ let rec infer_expression env level (ast, _) =
     let ast' = ETuple(es') in
     (ast', TTuple(tes))
   in
-    
+
   let infer_funcall f args =
     let tf = infer_identifier env level f in
     let args' = List.map (infer_expression env level) args in
@@ -245,7 +231,7 @@ let rec infer_expression env level (ast, _) =
                fprintf ppf "expected a function : %a" pp_identifier f
              )
   in
-  
+
   let infer_let binds body =
     let infer_binder (acc, nowenv) {binder_id = (id, tid); binder_body = body} =
       let tid = replace_tempty level tid in
@@ -256,7 +242,7 @@ let rec infer_expression env level (ast, _) =
       let res = { binder_id = (id, tbody); binder_body = body'} in
       (res :: acc, newenv)
     in
-    
+
     let (binds', newenv) = List.fold_left infer_binder ([], env) binds in
     let (_, tbody) as body' = infer_expression newenv level body in
     let ast' = ELet(List.rev binds', body') in
@@ -270,7 +256,7 @@ let rec infer_expression env level (ast, _) =
     let ast' = EIf(etest', ethen', eelse') in
     unify ttest TBool; unify tthen telse; (ast', tthen)
   in
-  
+
   let infer_case expr branchs =
 
     let infer_branch texpr {branch_pat; branch_body} =
@@ -299,8 +285,8 @@ let rec infer_expression env level (ast, _) =
     | EVariant(c,v) -> infer_variant c v
     | ETuple(es) -> infer_tuple es
     | EConst(l) ->
-       let (_, tl) as l' = infer_literal env level l in
-       (EConst(l'), tl)
+       let tl = infer_literal env level l in
+       (EConst(l), tl)
     | ERetain ->
        let t = infer_identifier env level "Retain" in
        (ast, t)
@@ -313,10 +299,8 @@ let rec infer_expression env level (ast, _) =
     | ECase(e, branchs) -> infer_case e branchs
   with
   | TypeError(msg) ->
-     printf "%a" pp_expression_ast ast;
-     print_newline ();
      raise_err msg
-                       
+
 let infer_constdef env def =
   let (_, t) = def.const_id in
   let t = replace_tempty 1 t in
@@ -329,7 +313,7 @@ let infer_constdef env def =
         fprintf ppf "type of constant is not concrete : %a"
           pp_identifier (get_id def.const_id)
       )
-  
+
 let infer_fundef env def =
   let (id, t) = def.fun_id in
   let t = replace_tempty 1 t in
@@ -339,7 +323,7 @@ let infer_fundef env def =
       ) def.fun_params env
   in
   let (_, tbody) as body' = infer_expression newenv 1 def.fun_body in
-  let params' = 
+  let params' =
     List.map (fun (id, _) ->
         let t = Idmap.find id newenv in (id, t)
       ) def.fun_params
@@ -347,10 +331,6 @@ let infer_fundef env def =
   let (_, tparams) = List.split params' in
   let () = unify (TFun(tparams, tbody)) t in
   let () = generalize 0 t in
-  let () =
-    printf "(%a) -> %a" (pp_list_comma pp_t) tparams pp_t tbody;
-    print_newline ()
-  in
   { fun_id = (id, t); fun_params = params'; fun_body = body' }
 
 let infer_const_fun env cdefs fdefs =
@@ -370,7 +350,7 @@ let infer_const_fun env cdefs fdefs =
   in
   let id_order = Dependency.tsort_const_fun cdefs fdefs in
   List.fold_right update_with_id id_order (env, Idmap.empty, Idmap.empty)
-  
+
 let infer_state env sdef =
   let infer_node env def =
     let (id, _) = def.node_id in
@@ -381,9 +361,9 @@ let infer_state env sdef =
     let init' =
       match def.init with
       | None -> None
-      | Some(l) ->
-         let (_, tl) as l' = infer_literal env 1 l in
-         unify t tl; Some(l')
+      | Some(e) ->
+         let (_, te) as e' = infer_expression env 1 e in
+         unify t te; Some(e')
     in
     if is_concrete t then
       { init = init'; node_id = (id, t); node_body = body' }
@@ -407,17 +387,17 @@ let infer_state env sdef =
     | Some(t2) -> unify t t2; Idmap.add id t env (* case of output node *)
     | None -> Idmap.add id t env;
   in
-  
+
   let env =
     List.fold_right (fun (id, t) e ->
-        Idmap.add id t e 
+        Idmap.add id t e
       ) sdef.state_params env
     |> List.fold_right add_node sdef.nodes
   in
   let nodes' = List.map (infer_node env) sdef.nodes in
   let switch' = infer_switch env sdef.switch in
   { sdef with nodes = nodes'; switch = switch' }
-  
+
 let make_base_env data =
   let add_type_con tdef env =
     List.fold_right (fun (c, v) env ->
@@ -427,7 +407,7 @@ let make_base_env data =
   in
   let add_state_con sdef env =
     let (_, ts) = List.split sdef.state_params in
-    let tv = 
+    let tv =
       match ts with
       | [] -> TUnit
       | [x] -> x
@@ -438,26 +418,27 @@ let make_base_env data =
   in
   Idmap.empty
   |> Idmap.fold (fun _ def env -> add_type_con def env) data.tdefs
-  |> Idmap.fold (fun _ def env -> add_state_con def env) data.sdefs  
-  
+  |> Idmap.fold (fun _ def env -> add_state_con def env) data.sdefs
+
 let infer_progdata data =
   let infer_ionode env node =
     let (id, lopt, t) = node in
     match lopt with
     | None -> node
-    | Some(l) ->
-       let (_, tl) as l' = infer_literal env 0 l in
-       unify t tl; (id, Some(l'), t)
+    | Some(e) ->
+       let (_, te) as e' = infer_expression env 0 e in
+       unify t te; (id, Some(e'), t)
   in
   let infer_init env (c,v) =
     let tc = infer_identifier env 0 c in
-    let (_, tv) as v' = infer_literal env 0 v in
+    let (_, tv) as v' = infer_expression env 0 v in
     match tc with
     | TFun([tv2], tret) -> unify tv tv2; unify TState tret; (c, v')
     | _ -> assert false;
   in
 
   let env = make_base_env data in
+  let (env, cdefs', fdefs') = infer_const_fun env data.cdefs data.fdefs in
   let module_in' = Idmap.map (infer_ionode env) data.module_in in
   let module_out' = Idmap.map (infer_ionode env) data.module_out in
   let module_init' = infer_init env data.module_init in
@@ -469,7 +450,6 @@ let infer_progdata data =
            Idmap.add id t e
          ) data.module_out
   in
-  let (env, cdefs', fdefs') = infer_const_fun env data.cdefs data.fdefs in
   let sdefs' = Idmap.map (infer_state env) data.sdefs in
   {
     data with

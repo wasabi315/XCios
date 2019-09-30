@@ -30,29 +30,19 @@ module Idmap = Map.Make(Identifier)
 module Idset = Set.Make(Identifier)
 
 (* Literal *)
-type literal_ast =
+type literal =
   | LTrue
   | LFalse
   | LInt of string
   | LFloat of string
   | LUnit
-  | LTuple of literal list
-  | LVariant of identifier * literal
-and literal = literal_ast * Type.t
 
-let rec pp_literal_ast ppf =
-  begin
-    function
-    | LTrue -> fprintf ppf "<literal True>"
-    | LFalse -> fprintf ppf "<literal False>"
-    | LInt(n) -> fprintf ppf "<literal int %a>" pp_print_string n
-    | LFloat(n) -> fprintf ppf "<literal float %a>" pp_print_string n
-    | LUnit -> fprintf ppf "<literal Unit>"
-    | LTuple(ls)-> fprintf ppf "(@[%a])" (pp_list_comma pp_literal) ls
-    | LVariant(c,v) -> fprintf ppf "%a@ %a" pp_identifier c pp_literal v
-  end
-and pp_literal ppf (ast, t) =
-  fprintf ppf "%a : %a" pp_literal_ast ast Type.pp_t t
+let pp_literal ppf = function
+  | LTrue -> fprintf ppf "<literal True>"
+  | LFalse -> fprintf ppf "<literal False>"
+  | LInt(n) -> fprintf ppf "<literal int %a>" pp_print_string n
+  | LFloat(n) -> fprintf ppf "<literal float %a>" pp_print_string n
+  | LUnit -> fprintf ppf "<literal Unit>"
 
 (* Operators *)
 type uni_op = UNot | UInv
@@ -221,7 +211,7 @@ let pp_fundef ppf {fun_id;fun_params;fun_body} =
 (* Node definitions *)
 type nodedef =
   {
-    init : literal option;
+    init : expression option;
     node_id : id_and_type;
     node_body : expression;
   }
@@ -230,7 +220,7 @@ let pp_nodedef ppf {init; node_id; node_body} =
   let pp_init_none ppf () = pp_print_string ppf "_" in
   fprintf ppf "<@[<v 1>NodeDef:@;";
   fprintf ppf "init: %a@;"
-    (pp_opt pp_literal pp_init_none) init;
+    (pp_opt pp_expression pp_init_none) init;
   fprintf ppf "id: %a@;" pp_id_and_type node_id;
   fprintf ppf "body: %a@]>" pp_expression node_body
 
@@ -283,8 +273,8 @@ let pp_definitionSM ppf = function
 type xfrp_module =
   {
     module_id   : identifier;
-    module_in   : (identifier * (literal option) * Type.t) list;
-    module_out  : (identifier * (literal option) * Type.t) list;
+    module_in   : (identifier * (expression option) * Type.t) list;
+    module_out  : (identifier * (expression option) * Type.t) list;
     module_use  : identifier list;
     module_defs : definitionM list;
   }
@@ -292,10 +282,10 @@ type xfrp_module =
 type xfrp_smodule =
   {
     smodule_id   : identifier;
-    smodule_in   : (identifier * (literal option) * Type.t) list;
-    smodule_out  : (identifier * (literal option) * Type.t) list;
+    smodule_in   : (identifier * (expression option) * Type.t) list;
+    smodule_out  : (identifier * (expression option) * Type.t) list;
     smodule_use  : identifier list;
-    smodule_init : identifier * literal;
+    smodule_init : identifier * expression;
     smodule_defs : definitionSM list;
   }
 
@@ -303,7 +293,7 @@ let pp_nodedecl ppf (id, init, t) =
   let pp_init_none ppf () = pp_print_string ppf "_" in
   fprintf ppf "%a(%a) : %a"
     pp_identifier id
-    (pp_opt pp_literal pp_init_none) init
+    (pp_opt pp_expression pp_init_none) init
     Type.pp_t t
 
 let pp_xfrp_module ppf def =
@@ -320,7 +310,7 @@ let pp_xfrp_module ppf def =
 
 let pp_xfrp_smodule ppf def =
   let pp_init ppf (c, v) =
-    fprintf ppf "%a %a" pp_identifier c pp_literal v
+    fprintf ppf "%a %a" pp_identifier c pp_expression v
   in
   fprintf ppf "<@[<v 1>switchmodule:@;";
   fprintf ppf "id: %a@;" pp_identifier def.smodule_id;

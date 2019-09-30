@@ -1,8 +1,6 @@
 %{
 open Syntax
 open Type
-
-let const_unit = (LUnit, TEmpty)
 %}
 
 %token
@@ -99,7 +97,7 @@ out_node_decl:
   | OUT onodes = separated_list(COMMA, node_decl) { onodes }
 
 node_decl:
-  | id = ID init = paren(literal)? COLON t = typespec
+  | id = ID init = paren(expression)? COLON t = typespec
     { (id, init, t) }
 
 use_decl:
@@ -107,11 +105,11 @@ use_decl:
     { use }
 
 init_decl:
-  | INIT id = UID param = literal?
+  | INIT id = UID param = expression?
     {
       match param with
       | Some x -> (id, x)
-      | None -> (id, const_unit)
+      | None -> (id, (EConst(LUnit), TEmpty))
     }
 
 (* toplevel definitions *)
@@ -166,7 +164,7 @@ node_definition:
       { init = init; node_id = id; node_body = body }
     }
 node_init:
-  | INIT init = delimited(LBRACKET, literal, RBRACKET)
+  | INIT init = delimited(LBRACKET, expression, RBRACKET)
     { init }
 
 state_definition:
@@ -192,7 +190,7 @@ expression:
       match v with
       | Some x -> (EVariant(c, x), TEmpty)
       | None ->
-        let expr_unit = (EConst(const_unit), TEmpty) in
+        let expr_unit = (EConst(LUnit), TEmpty) in
         (EVariant(c, expr_unit), TEmpty)
     }
   | expr = paren(separated_nonempty_list(COMMA, expression))
@@ -202,7 +200,7 @@ expression:
       | [x] -> x
       | _ -> (ETuple(expr), TEmpty)
     }
-  | expr = prim_literal
+  | expr = literal
     { (EConst(expr), TEmpty) }
   | RETAIN
     { (ERetain, TEmpty) }
@@ -236,7 +234,7 @@ pattern:
       | "_" -> (PWild, TEmpty)
       | _ -> (PId(id), TEmpty)
     }
-  | c = prim_literal
+  | c = literal
     { (PConst(c), TEmpty) }
   | ps = paren(separated_nonempty_list(COMMA, pattern))
     {
@@ -250,7 +248,7 @@ pattern:
       match v with
       | Some(x) -> (PVariant(c,x), TEmpty)
       | _ ->
-        let pat_unit = (PConst(const_unit), TEmpty) in
+        let pat_unit = (PConst(LUnit), TEmpty) in
         (PVariant(c, pat_unit), TEmpty)
     }
 
@@ -290,27 +288,11 @@ id_and_type_opt:
     }
 
 literal:
-  | l = prim_literal { l }
-  | l = paren(separated_nonempty_list(COMMA, literal))
-    {
-      match l with
-      | [] -> assert false
-      | [x] -> x
-      | _ -> (LTuple(l), TEmpty)
-    }
-  | c = UID v = literal?
-    {
-      match v with
-      | Some x -> (LVariant(c, x), TEmpty)
-      | None -> (LVariant(c, const_unit), TEmpty)
-    }
-
-prim_literal:
-  | TRUE { (LTrue, TEmpty) }
-  | FALSE { (LFalse, TEmpty) }
-  | UNIT { (LUnit, TEmpty) }
-  | n = INT { (LInt(n), TEmpty) }
-  | n = FLOAT { (LFloat(n), TEmpty) }
+  | TRUE { LTrue }
+  | FALSE { LFalse }
+  | UNIT { LUnit }
+  | n = INT { LInt(n) }
+  | n = FLOAT { LFloat(n) }
 
 typespec:
   | id = UID

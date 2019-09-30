@@ -12,10 +12,10 @@ let pp_idmap pp_contents ppf idmap =
 type progdata =
   {
     module_id : identifier;
-    module_in : (identifier * (literal option) * Type.t) Idmap.t;
-    module_out : (identifier * (literal option) * Type.t) Idmap.t;
+    module_in : (identifier * (expression option) * Type.t) Idmap.t;
+    module_out : (identifier * (expression option) * Type.t) Idmap.t;
     module_use : identifier list;
-    module_init : identifier * literal;
+    module_init : identifier * expression;
     cdefs : constdef Idmap.t;
     tdefs : typedef Idmap.t;
     fdefs : fundef Idmap.t;
@@ -29,7 +29,7 @@ let pp_progdata ppf data =
   fprintf ppf "out: %a@;" (pp_idmap pp_nodedecl) data.module_out;
   fprintf ppf "use: @[<v>%a@]@;" (pp_list_comma pp_identifier) data.module_use;
   let (c, v) = data.module_init in
-  fprintf ppf "init %a %a@;" pp_identifier c pp_literal v;
+  fprintf ppf "init %a %a@;" pp_identifier c pp_expression v;
   fprintf ppf "cdefs: %a@;" (pp_idmap pp_constdef) data.cdefs;
   fprintf ppf "tdefs: %a@;" (pp_idmap pp_typedef) data.tdefs;
   fprintf ppf "fdefs: %a@;" (pp_idmap pp_fundef) data.fdefs;
@@ -66,7 +66,7 @@ let module_to_data m =
     module_in = list_to_idmap m.module_in (fun (id, _,  _) -> id);
     module_out = list_to_idmap m.module_out (fun (id, _, _) -> id);
     module_use = m.module_use;
-    module_init = (m.module_id, (LUnit, TEmpty));
+    module_init = (m.module_id, (EConst(LUnit),TEmpty));
     cdefs = list_to_idmap cdefs (fun x -> get_id x.const_id);
     tdefs = list_to_idmap tdefs (fun x -> x.type_id);
     fdefs = list_to_idmap fdefs (fun x -> get_id x.fun_id);
