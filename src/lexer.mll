@@ -14,9 +14,11 @@
         "out",          OUT;
         "use",          USE;
         "init",         INIT;
+        "public",       PUBLIC;
         "const",        CONST;
         "type",         TYPE;
         "fun",          FUN;
+        "newnode",      NEWNODE;
         "node",         NODE;
         "state",        STATE;
         "switch",       SWITCH;
@@ -44,16 +46,16 @@ rule read = parse
   | space   { read lexbuf }
   | newline { Lexing.new_line lexbuf; read lexbuf }
   | '#'     { read_comment lexbuf; read lexbuf }
-  | '['     { LBRACKET }
-  | ']'     { RBRACKET }
   | '{'     { LBRACE }
   | '}'     { RBRACE }
   | '('     { LPAREN }
   | ')'     { RPAREN }
   | ','     { COMMA }
   | ':'     { COLON }
+  | ';'     { SEMICOLON }
   | '@'     { AT }
-  | "->"    { ARROW }
+  | "->"    { RARROW }
+  | "<-"    { LARROW }
   | '+'     { PLUS }
   | '-'     { MINUS }
   | '*'     { ASTERISK }

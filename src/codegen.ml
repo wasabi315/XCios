@@ -200,7 +200,7 @@ let gen_statedef ctx ppf {state_id; state_params; nodes; switch} =
     let gen_init_some ppf e =
       fprintf ppf " init[%a]" (gen_expression ctx) e
     in
-    let gen_state_pat ppf () = 
+    let gen_state_pat ppf () =
       let param_ids = List.map (fun (id, _) -> id) state_params in
       match param_ids with
       | [] -> gen_identifier ppf state_id

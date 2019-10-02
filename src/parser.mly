@@ -5,13 +5,13 @@ open Type
 
 %token
 MODULE SWITCHMODULE IN OUT USE INIT
-CONST TYPE FUN NODE STATE SWITCH
+PUBLIC CONST TYPE FUN STATE NODE NEWNODE SWITCH
 RETAIN LAST IF THEN ELSE LET CASE OF
 TRUE FALSE
 
 %token
-LBRACKET RBRACKET LBRACE RBRACE LPAREN RPAREN
-COMMA COLON SEMICOLON AT ARROW
+LBRACE RBRACE LPAREN RPAREN
+COMMA COLON SEMICOLON AT LARROW RARROW
 PLUS MINUS ASTERISK SLASH
 PLUSDOT MINUSDOT ASTERISKDOT SLASHDOT
 TILDE PERCENT XOR OR2 AND2 OR AND
@@ -29,7 +29,7 @@ BANG EQUAL
 
 %token EOF
 
-%start <Syntax.program> program
+%start <Syntax.xfrp> xfrp
 
 %right prec_if
 %left OR2
@@ -48,103 +48,70 @@ BANG EQUAL
 paren(rule):
   | ret = delimited(LPAREN, rule, RPAREN) { ret }
 
-
-program:
-  | m = xfrp_module { XfrpModule(m) }
-  | m = xfrp_smodule { XfrpSModule(m) }
-
-(* whole module *)
-xfrp_module:
-  | MODULE id = UID
-    in_nodes = loption(in_node_decl)
-    out_nodes = loption(out_node_decl)
-    use = loption(use_decl)
-    definitions = nonempty_list(definitionM)
+(* whole program *)
+xfrp:
+  | use = loption(use_clause)
+    elems = nonempty_list(xfrp_elem)
     EOF
     {
-      {
-        module_id = id;
-	module_in = in_nodes;
-	module_out = out_nodes;
-	module_use = use;
-	module_defs = definitions;
-      }
+      { xfrp_use = use; xfrp_elems = elems }
     }
 
-xfrp_smodule:
-  | SWITCHMODULE id = UID
-    in_nodes = loption(in_node_decl)
-    out_nodes = loption(out_node_decl)
-    use = loption(use_decl)
-    init = init_decl
-    definitions = nonempty_list(definitionSM)
-    EOF
-    {
-      {
-        smodule_id = id;
-	smodule_in = in_nodes;
-	smodule_out = out_nodes;
-	smodule_use = use;
-	smodule_init = init;
-	smodule_defs = definitions;
-      }
-    }
-
-in_node_decl:
-  | IN inodes = separated_list(COMMA, node_decl) { inodes }
-
-out_node_decl:
-  | OUT onodes = separated_list(COMMA, node_decl) { onodes }
-
-node_decl:
-  | id = ID init = paren(expression)? COLON t = typespec
-    { (id, init, t) }
-
-use_decl:
-  | USE use = separated_list(COMMA, UID)
+use_clause:
+  | USE use = separated_nonempty_list(COMMA, UID)
     { use }
 
-init_decl:
-  | INIT id = UID param = expression?
+xfrp_elem:
+  | pub = boption(PUBLIC) def = typedef
     {
-      match param with
-      | Some x -> (id, x)
-      | None -> (id, (EConst(LUnit), TEmpty))
+      XFRPType({ def with type_pub = pub})
+    }
+  | pub = boption(PUBLIC) def = constdef
+    {
+      XFRPConst({ def with const_pub = pub})
+    }
+  | pub = boption(PUBLIC) def = fundef
+    {
+      XFRPFun({def with fun_pub = pub})
+    }
+  | pub = boption(PUBLIC) def = xfrp_module
+    {
+      XFRPModule({def with module_pub = pub})
+    }
+  | pub = boption(PUBLIC) def = xfrp_smodule
+    {
+      XFRPSModule({def with smodule_pub = pub})
     }
 
-(* toplevel definitions *)
-definitionM:
-  | d = const_definition { MConstDef(d) }
-  | d = type_definition { MTypeDef(d) }
-  | d = fun_definition { MFunDef(d) }
-  | d = node_definition { MNodeDef(d) }
-
-definitionSM:
-  | d = const_definition { SMConstDef(d) }
-  | d = type_definition { SMTypeDef(d) }
-  | d = fun_definition { SMFunDef(d) }
-  | d = state_definition { SMStateDef(d) }
-
-const_definition:
-  | CONST id = id_and_type_opt EQUAL body = expression
+(* const *)
+constdef:
+  | CONST decl = id_and_type_opt EQUAL body = expression
     {
-      { const_id = id; const_body = body }
+      let (id, t) = decl in
+      {
+        const_pub = false;
+        const_id = id;
+        const_type = t;
+        const_body = body;
+      }
     }
 
-type_definition:
-  | TYPE id = UID EQUAL defs = separated_nonempty_list(OR, variant_definition)
+(* type *)
+typedef:
+  | TYPE id = UID EQUAL defs = separated_nonempty_list(OR, variant_def)
     {
-      { type_id = id; variant_defs = defs }
+      { type_pub = false; type_id = id; variant_defs = defs }
     }
-variant_definition:
-  | c = ID v = preceded(OF, typespec)?
+variant_def:
+  | c = UID v = preceded(OF, typespec)?
     {
       match v with
       | Some x -> (c, x)
       | None -> (c, TUnit)
     }
 
-fun_definition:
+(* function *)
+fundef:
   | FUN id = ID params = paren(separated_list(COMMA, id_and_type_opt))
     topt = preceded(COLON, typespec)? EQUAL body = expression
     {
@@ -154,28 +121,132 @@ fun_definition:
         | Some(x) -> x
         | None -> TEmpty
       in
-      let fun_type = TFun(t_params, t_ret) in
-      { fun_id = (id, fun_type); fun_params = params; fun_body = body }
+      let t_fun = TFun(t_params, t_ret) in
+      {
+        fun_pub = false;
+        fun_id = id;
+        fun_params = params;
+        fun_type = t_fun;
+        fun_body = body;
+      }
     }
 
-node_definition:
-  | NODE init = node_init? id = id_and_type_opt EQUAL body = expression
+(* module *)
+xfrp_module:
+  | MODULE id = UID
+    params = loption(paren(separated_list(COMMA, id_and_type)))
+    LBRACE
+    IN in_nodes = separated_nonempty_list(COMMA, node_decl)
+    OUT out_nodes = separated_nonempty_list(COMMA, node_decl)
+    elems = nonempty_list(module_elem)
+    RBRACE
     {
-      { init = init; node_id = id; node_body = body }
+      {
+        module_pub = false;
+        module_id = id;
+        module_params = params;
+	module_in = in_nodes;
+	module_out = out_nodes;
+	module_elems = elems;
+      }
     }
-node_init:
-  | INIT init = delimited(LBRACKET, expression, RBRACKET)
-    { init }
 
-state_definition:
+module_elem:
+  | def = node { MNode(def) }
+  | def = outnode { MOutNode(def) }
+  | def = newnode { MNewNode(def) }
+  | def = constdef { MConst(def) }
+
+(* switch module *)
+xfrp_smodule:
+  | SWITCHMODULE id = UID
+    params = loption(paren(separated_list(COMMA, id_and_type)))
+    LBRACE
+    IN in_nodes = separated_nonempty_list(COMMA, node_decl)
+    OUT out_nodes = separated_nonempty_list(COMMA, node_decl)
+    INIT init = expression
+    elems = nonempty_list(smodule_elem)
+    RBRACE
+    {
+      {
+        smodule_pub = false;
+        smodule_id = id;
+        smodule_params = params;
+	smodule_in = in_nodes;
+	smodule_out = out_nodes;
+        smodule_init = init;
+	smodule_elems = elems;
+      }
+    }
+
+smodule_elem:
+  | def = state { SMState(def) }
+  | def = constdef { SMConst(def) }
+
+state:
   | STATE id = UID
     params = loption(paren(separated_nonempty_list(COMMA, id_and_type)))
     LBRACE
-    nodes = node_definition+
+    elems = nonempty_list(state_elem)
     SWITCH COLON switch = expression
     RBRACE
     {
-      { state_id = id; state_params = params; nodes = nodes; switch = switch }
+      {
+        state_id = id;
+        state_params = params;
+        state_elems = elems;
+        state_switch = switch
+      }
+    }
+
+state_elem:
+  | def = node { SNode(def) }
+  | def = outnode { SOutNode(def) }
+  | def = newnode { SNewNode(def) }
+  | def = constdef { SConst(def) }
+
+(* node *)
+node:
+  | NODE id = ID
+    init = paren(expression)?
+    topt = preceded(COLON, typespec)?
+    EQUAL body = expression
+    {
+      let t =
+        match topt with
+        | Some(x) -> x
+        | None -> TEmpty
+      in
+      {
+        node_id = id;
+        node_init = init;
+        node_type = t;
+        node_body = body;
+      }
+    }
+
+outnode:
+  | OUT decl = id_and_type_opt EQUAL body = expression
+  {
+    let (id, t) = decl in
+    {
+      outnode_id = id;
+      outnode_type = t;
+      outnode_body = body;
+    }
+  }
+
+newnode:
+  | NEWNODE binds = separated_nonempty_list(COMMA, id_and_type_opt) EQUAL
+    id = UID margs = loption(paren(separated_list(COMMA, expression)))
+    LARROW inputs = separated_nonempty_list(COMMA, expression)
+    {
+      {
+        newnode_binds = binds;
+        newnode_module = id;
+        newnode_margs = margs;
+        newnode_inputs = inputs;
+      }
     }
 
 (* expressions *)
@@ -224,7 +295,7 @@ binder:
     { { binder_id = id; binder_body = body } }
 
 branch:
-  | pat = pattern ARROW body = expression SEMICOLON
+  | pat = pattern RARROW body = expression SEMICOLON
     { { branch_pat = pat; branch_body = body } }
 
 pattern:
@@ -286,6 +357,10 @@ id_and_type_opt:
       in
       (id, t)
     }
+
+node_decl:
+  | id = ID init = paren(expression)? COLON t = typespec
+    { (id, init, t) }
 
 literal:
   | TRUE { LTrue }
