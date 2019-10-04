@@ -326,6 +326,8 @@ pattern:
 %inline
 uni_op:
   | BANG { UNot } | TILDE { UInv }
+  | PLUS { UPlus } | MINUS { UMinus }
+  | PLUSDOT { UFPlus } | MINUSDOT { UFMinus }
 
 %inline
 bin_op:

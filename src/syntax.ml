@@ -38,12 +38,17 @@ let pp_literal ppf = function
   | LUnit -> fprintf ppf "<literal Unit>"
 
 (* operators *)
-type uni_op = UNot | UInv
+type uni_op =
+  | UNot | UInv
+  | UPlus | UMinus
+  | UFPlus | UFMinus
 
 let pp_uni_op ppf op =
   pp_print_string ppf
     (match op with
-     | UNot -> "!" | UInv -> "~")
+     | UNot -> "!" | UInv -> "~"
+     | UPlus -> "+" | UMinus -> "-"
+     | UFPlus -> "+." | UFMinus -> "-.")
 
 type bin_op =
   | BMul | BDiv | BAdd | BSub

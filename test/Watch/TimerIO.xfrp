@@ -26,9 +26,9 @@ public fun incrementTime(d) =
 public fun decrementTime(d) =
   case d of
     Display(0, 0, 0) -> Display(0,0,0);
-    Display(h, 0, 0) -> Display(h - 1,59,59);
-    Display(h, m, 0) -> Display(h,m - 1,59);
-    Display(h, m, s) -> Display(h,m,s - 1);
+    Display(h, 0, 0) -> Display(h-1,59,59);
+    Display(h, m, 0) -> Display(h,m-1,59);
+    Display(h, m, s) -> Display(h,m,s-1);
 
 public fun roundingTime(d, dh, dm, ds) =
   case d of

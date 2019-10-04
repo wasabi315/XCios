@@ -32,8 +32,7 @@ public switchmodule CountDown {
       if ofA(button) then
         roundingTime(display@last, dh, dm, ds)
       else if ofC(button) then
-        # roundingTime(display@last, -dh, -dm, -ds)
-        roundingTime(display@last, dh, dm, ds)
+        roundingTime(display@last, -dh, -dm, -ds)
       else
         display@last
 
