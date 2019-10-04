@@ -1,0 +1,41 @@
+# (button A pressed?, button B pressed?, button C pressed?)
+public type ButtonPressed = ButtonPressed of (Bool,Bool,Bool)
+
+# seven-segment display (00:00:00)
+public type Display = Display of (Int,Int,Int)
+
+public type Mode = Up | Down
+
+public fun ofA(button : ButtonPressed) =
+  case button of ButtonPressed(x, _, _) -> x;
+
+public fun ofB(button : ButtonPressed) =
+  case button of ButtonPressed(_, x, _) -> x;
+
+public fun ofC(button : ButtonPressed) =
+  case button of ButtonPressed(_, _, x) -> x;
+
+public fun incrementTime(d) =
+  case d of
+    Display(h, m, s) ->
+      let newS = s + 1;
+          newM = m + (newS / 60);
+          newH = h + (newM / 60) in
+      Display(newH % 24, newM % 60, newS % 60);
+
+public fun decrementTime(d) =
+  case d of
+    Display(0, 0, 0) -> Display(0,0,0);
+    Display(h, 0, 0) -> Display(h - 1,59,59);
+    Display(h, m, 0) -> Display(h,m - 1,59);
+    Display(h, m, s) -> Display(h,m,s - 1);
+
+public fun roundingTime(d, dh, dm, ds) =
+  case d of
+    Display(h,m,s) ->
+      Display((h + dh + 24) % 24, (m + dm + 60) % 60, (s + ds + 60) % 60);
+
+public fun isZero(d) =
+  case d of
+    Display(0,0,0) -> True;
+    _ -> False;

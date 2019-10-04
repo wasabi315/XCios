@@ -1,5 +1,3 @@
-use Std
-
 fun hoge(x,y) = x == y
 
 switchmodule Main {

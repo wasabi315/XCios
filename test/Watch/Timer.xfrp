@@ -1,0 +1,31 @@
+use TimerIO, CountUp, CountDown
+
+switchmodule Timer {
+  in   button(ButtonPressed(False,False,False)) : ButtonPressed,
+       pulse1s(False) : Bool
+  out  mode(Up)    : Mode,
+       display(Display(0,0,0)) : Display
+  init CountUp
+
+  state CountUp {
+    newnode count, next = CountUp <- button, pulse1s
+
+    out mode = Up
+
+    out display = count
+
+    switch :
+      if next then CountDown else Retain
+  }
+
+  state CountDown {
+    newnode count, next = CountDown <- button, pulse1s
+
+    out mode = Down
+
+    out display = count
+
+    switch :
+      if next then CountUp else Retain
+  }
+}

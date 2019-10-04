@@ -1,5 +1,3 @@
-use Std
-
 module Main {  
   in  tmp : Float,      # temperature sensor
       hmd : Float       # humidity sensor

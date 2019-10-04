@@ -1,0 +1,66 @@
+use TimerIO
+
+type DisplayPos = Hour | Min | Sec
+
+public switchmodule CountDown {
+  in button(ButtonPressed(False,False,False)) : ButtonPressed,
+     pulse1s(False) : Bool
+  out display(Display(0,0,0)) : Display,
+      next(False) : Bool
+  init Stop
+
+  state Stop {
+    out display = display@last
+
+    out next = ofC(button)
+  
+    switch :
+      if ofA(button) then
+        Set(Hour)
+      else if ofB(button) then
+        Run
+      else
+        Retain
+  }
+
+  state Set(pos : DisplayPos) {
+    const dh = case pos of Hour -> 1; _ -> 0;
+    const dm = case pos of Min  -> 1; _ -> 0;
+    const ds = case pos of Sec  -> 1; _ -> 0;
+
+    out display =
+      if ofA(button) then
+        roundingTime(display@last, dh, dm, ds)
+      else if ofC(button) then
+        # roundingTime(display@last, -dh, -dm, -ds)
+        roundingTime(display@last, dh, dm, ds)
+      else
+        display@last
+
+    out next = False
+
+    switch:
+      if ofB(button) then
+        case pos of
+          Hour -> Set(Min);
+          Min -> Set(Sec);
+          Sec -> Stop;
+      else
+        Retain
+  }
+
+  state Run {
+    out display =
+      if pulse1s then
+        decrementTime(display@last)
+      else display@last
+
+    out next = False
+
+    switch :
+      if ofB(button) || isZero(display) then
+        Stop
+      else
+        Retain
+  }
+}

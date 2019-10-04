@@ -1,0 +1,21 @@
+use TimerIO, Timer
+
+public module Timer {
+  in buttonA : Bool,
+     buttonB : Bool,
+     buttonC : Bool,
+     pulse1s : Bool
+  out mode : Int,
+      hour : Int,
+      min  : Int,
+      sec  : Int
+
+  newnode m, d =
+    TimerCore <- ButtonPressed(buttonA,buttonB,buttonC), pulse1s
+
+  out mode = case m of Up -> 0; Down -> 1;
+
+  out hour = case d of Display(h, _, _) -> h;
+  out min = case d of Display(_, m, _) -> m;
+  out sec = case d of Display(_, _, s) -> s;
+}
