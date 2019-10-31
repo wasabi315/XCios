@@ -5,7 +5,8 @@ open Type
 
 %token
 MODULE SWITCHMODULE IN OUT USE INIT
-PUBLIC CONST TYPE FUN STATE NODE NEWNODE SWITCH
+PUBLIC SHARED OUTPUT
+CONST TYPE FUN STATE NODE NEWNODE SWITCH
 RETAIN LAST IF THEN ELSE LET CASE OF
 TRUE FALSE
 
@@ -152,10 +153,20 @@ xfrp_module:
     }
 
 module_elem:
-  | def = node { MNode(def) }
-  | def = outnode { MOutNode(def) }
+  | attr = nattr_normal? def = node
+    {
+      let def =
+        match attr with
+        | Some(x) -> { def with node_attr = x }
+        | None -> def
+      in
+      MNode(def)
+    }
   | def = newnode { MNewNode(def) }
   | def = constdef { MConst(def) }
+
+nattr_normal:
+  | OUTPUT { OutputNode }
 
 (* switch module *)
 xfrp_smodule:
@@ -200,10 +211,20 @@ state:
     }
 
 state_elem:
-  | def = node { SNode(def) }
-  | def = outnode { SOutNode(def) }
+  | attr = nattr_switch? def = node
+    {
+      let def =
+        match attr with
+        | Some(x) -> { def with node_attr = x }
+        | None -> def
+      in
+      SNode(def)
+    }
   | def = newnode { SNewNode(def) }
   | def = constdef { SConst(def) }
+
+nattr_switch:
+  | SHARED { SharedNode } | OUTPUT { OutputNode }
 
 (* node *)
 node:
@@ -218,6 +239,7 @@ node:
         | None -> TEmpty
       in
       {
+        node_attr = NormalNode;
         node_id = id;
         node_init = init;
         node_type = t;

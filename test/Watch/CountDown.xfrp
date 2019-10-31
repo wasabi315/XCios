@@ -10,9 +10,9 @@ public switchmodule CountDown {
   init Stop
 
   state Stop {
-    out display = display@last
+    output node display = display@last
 
-    out next = ofC(button)
+    output node next = ofC(button)
   
     switch :
       if ofA(button) then
@@ -28,7 +28,7 @@ public switchmodule CountDown {
     const dm = case pos of Min  -> 1; _ -> 0;
     const ds = case pos of Sec  -> 1; _ -> 0;
 
-    out display =
+    output node display =
       if ofA(button) then
         roundingTime(display@last, dh, dm, ds)
       else if ofC(button) then
@@ -36,7 +36,7 @@ public switchmodule CountDown {
       else
         display@last
 
-    out next = False
+    output node next = False
 
     switch:
       if ofB(button) then
@@ -49,12 +49,12 @@ public switchmodule CountDown {
   }
 
   state Run {
-    out display =
+    output node display =
       if pulse1s then
         decrementTime(display@last)
       else display@last
 
-    out next = False
+    output node next = False
 
     switch :
       if ofB(button) || isZero(display) then

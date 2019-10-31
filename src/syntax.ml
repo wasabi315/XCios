@@ -223,30 +223,24 @@ let pp_node_decl ppf (id, init, t) =
     (pp_opt pp_expression pp_init_none) init
     Type.pp_t t
 
+type nattr = NormalNode | OutputNode | SharedNode
+let pp_nattr ppf = function
+  | NormalNode -> fprintf ppf "normal"
+  | OutputNode -> fprintf ppf "output"
+  | SharedNode -> fprintf ppf "shared"
+
 type node =
   {
+    node_attr : nattr;
     node_id : identifier;
     node_init : expression option;
     node_type : Type.t;
     node_body : expression;
   }
-
-let pp_node ppf {node_id;node_init;node_type;node_body} =
-  fprintf ppf "<@[<v 1>node:@;";
+let pp_node ppf {node_attr;node_id;node_init;node_type;node_body} =
+  fprintf ppf "<@[<v 1>node(%a):@;" pp_nattr node_attr;
   fprintf ppf "id: %a@;" pp_node_decl (node_id, node_init, node_type);
   fprintf ppf "body: %a@]>" pp_expression node_body
-
-(* output node *)
-type outnode =
-  {
-    outnode_id : identifier;
-    outnode_type : Type.t;
-    outnode_body : expression;
-  }
-let pp_outnode ppf {outnode_id;outnode_type;outnode_body} =
-  fprintf ppf "<@[<v 1>outnode:@;";
-  fprintf ppf "id: %a@;" pp_id_and_type (outnode_id, outnode_type);
-  fprintf ppf "body: %a@]>" pp_expression outnode_body
 
 (* newnode *)
 type newnode =
@@ -266,12 +260,10 @@ let pp_newnode ppf def =
 (* module *)
 type module_elem =
   | MNode of node
-  | MOutNode of outnode
   | MNewNode of newnode
   | MConst of constdef
 let pp_module_elem ppf = function
   | MNode(d) -> pp_node ppf d
-  | MOutNode(d) -> pp_outnode ppf d
   | MNewNode(d) -> pp_newnode ppf d
   | MConst(d) -> pp_constdef ppf d
 
@@ -298,12 +290,10 @@ let pp_xfrp_module ppf def =
 (* state *)
 type state_elem =
   | SNode of node
-  | SOutNode of outnode
   | SNewNode of newnode
   | SConst of constdef
 let pp_state_elem ppf = function
   | SNode(d) -> pp_node ppf d
-  | SOutNode(d) -> pp_outnode ppf d
   | SNewNode(d) -> pp_newnode ppf d
   | SConst(d) -> pp_constdef ppf d
 
