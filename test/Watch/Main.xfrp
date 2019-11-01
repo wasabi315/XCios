@@ -10,12 +10,13 @@ public module Timer {
       min  : Int,
       sec  : Int
 
-  newnode m, d =
-    TimerCore <- ButtonPressed(buttonA,buttonB,buttonC), pulse1s
+  node button = ButtonPressed(buttonA,buttonB,buttonC)
 
-  output node mode = case m of Up -> 0; Down -> 1;
+  new core = TimerCore <- button, pulse1s
 
-  output node hour = case d of Display(h, _, _) -> h;
-  output node min = case d of Display(_, m, _) -> m;
-  output node sec = case d of Display(_, _, s) -> s;
+  output node mode = case core.mode of Up -> 0; Down -> 1;
+
+  output node hour = case core.display of Display(h, _, _) -> h;
+  output node min = case core.display of Display(_, m, _) -> m;
+  output node sec = case core.display of Display(_, _, s) -> s;
 }

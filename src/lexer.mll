@@ -20,7 +20,7 @@
         "const",        CONST;
         "type",         TYPE;
         "fun",          FUN;
-        "newnode",      NEWNODE;
+        "new",          NEW;
         "node",         NODE;
         "state",        STATE;
         "switch",       SWITCH;
@@ -58,6 +58,7 @@ rule read = parse
   | '@'     { AT }
   | "->"    { RARROW }
   | "<-"    { LARROW }
+  | '.'     { DOT }
   | '+'     { PLUS }
   | '-'     { MINUS }
   | '*'     { ASTERISK }

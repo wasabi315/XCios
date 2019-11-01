@@ -111,6 +111,7 @@ type expression_ast =
   | ERetain
   | EId of identifier
   | EAnnot of identifier * annotation
+  | EDot of identifier * identifier
   | EFuncall of identifier * (expression list)
   | EIf of expression * expression * expression
   | ELet of (binder list) * expression
@@ -141,7 +142,9 @@ let rec pp_expression_ast ppf = function
   | ERetain -> fprintf ppf "<Retain>"
   | EId(id) -> fprintf ppf "<id %a>" pp_identifier id
   | EAnnot(id, annot) -> fprintf ppf "<annot @[%a@ %@@ %a@]>"
-                         pp_identifier id pp_annotation annot
+                           pp_identifier id pp_annotation annot
+  | EDot(id, out) -> fprintf ppf "<dot %a %a>"
+                       pp_identifier id pp_identifier out
   | EFuncall(id, es) -> fprintf ppf "<funcall %a>"
                         (pp_id_and_args pp_expression) (id, es)
   | EIf(etest, ethen, eelse) -> fprintf ppf "<if @[<v>%a@ %a@ %a@]>"
@@ -242,29 +245,29 @@ let pp_node ppf {node_attr;node_id;node_init;node_type;node_body} =
   fprintf ppf "id: %a@;" pp_node_decl (node_id, node_init, node_type);
   fprintf ppf "body: %a@]>" pp_expression node_body
 
-(* newnode *)
-type newnode =
+(* submodule *)
+type submodule =
   {
-    newnode_binds : (identifier * Type.t) list;
-    newnode_module : identifier;
-    newnode_margs : expression list;
-    newnode_inputs : expression list;
+    submodule_id : identifier;
+    submodule_module : identifier;
+    submodule_margs : expression list;
+    submodule_inputs : expression list;
   }
-let pp_newnode ppf def =
-  fprintf ppf "<@[<v 1>newnode:@;";
-  fprintf ppf "bind: %a@;" (pp_list_comma pp_id_and_type) def.newnode_binds;
-  fprintf ppf "module: %a@;" pp_identifier def.newnode_module;
-  fprintf ppf "args: %a@]>" (pp_list_comma pp_expression) def.newnode_margs;
-  fprintf ppf "input: %a@]>" (pp_list_comma pp_expression) def.newnode_inputs
+let pp_submodule ppf def =
+  fprintf ppf "<@[<v 1>submodule:@;";
+  fprintf ppf "id: %a@;" pp_identifier def.submodule_id;
+  fprintf ppf "module: %a@;" pp_identifier def.submodule_module;
+  fprintf ppf "args: %a@;" (pp_list_comma pp_expression) def.submodule_margs;
+  fprintf ppf "input: @[%a@]@]>" (pp_list_comma pp_expression) def.submodule_inputs
 
 (* module *)
 type module_elem =
   | MNode of node
-  | MNewNode of newnode
+  | MSubmodule of submodule
   | MConst of constdef
 let pp_module_elem ppf = function
   | MNode(d) -> pp_node ppf d
-  | MNewNode(d) -> pp_newnode ppf d
+  | MSubmodule(d) -> pp_submodule ppf d
   | MConst(d) -> pp_constdef ppf d
 
 type xfrp_module =
@@ -290,11 +293,11 @@ let pp_xfrp_module ppf def =
 (* state *)
 type state_elem =
   | SNode of node
-  | SNewNode of newnode
+  | SSubmodule of submodule
   | SConst of constdef
 let pp_state_elem ppf = function
   | SNode(d) -> pp_node ppf d
-  | SNewNode(d) -> pp_newnode ppf d
+  | SSubmodule(d) -> pp_submodule ppf d
   | SConst(d) -> pp_constdef ppf d
 
 type state =

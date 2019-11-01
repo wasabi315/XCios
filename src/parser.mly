@@ -6,13 +6,13 @@ open Type
 %token
 MODULE SWITCHMODULE IN OUT USE INIT
 PUBLIC SHARED OUTPUT
-CONST TYPE FUN STATE NODE NEWNODE SWITCH
+CONST TYPE FUN STATE NODE NEW SWITCH
 RETAIN LAST IF THEN ELSE LET CASE OF
 TRUE FALSE
 
 %token
 LBRACE RBRACE LPAREN RPAREN
-COMMA COLON SEMICOLON AT LARROW RARROW
+COMMA COLON SEMICOLON AT LARROW RARROW DOT
 PLUS MINUS ASTERISK SLASH
 PLUSDOT MINUSDOT ASTERISKDOT SLASHDOT
 TILDE PERCENT XOR OR2 AND2 OR AND
@@ -162,7 +162,7 @@ module_elem:
       in
       MNode(def)
     }
-  | def = newnode { MNewNode(def) }
+  | def = submodule { MSubmodule(def) }
   | def = constdef { MConst(def) }
 
 nattr_normal:
@@ -220,7 +220,7 @@ state_elem:
       in
       SNode(def)
     }
-  | def = newnode { SNewNode(def) }
+  | def = submodule { SSubmodule(def) }
   | def = constdef { SConst(def) }
 
 nattr_switch:
@@ -247,27 +247,16 @@ node:
       }
     }
 
-outnode:
-  | OUT decl = id_and_type_opt EQUAL body = expression
-  {
-    let (id, t) = decl in
-    {
-      outnode_id = id;
-      outnode_type = t;
-      outnode_body = body;
-    }
-  }
-
-newnode:
-  | NEWNODE binds = separated_nonempty_list(COMMA, id_and_type_opt) EQUAL
-    id = UID margs = loption(paren(separated_list(COMMA, expression)))
+submodule:
+  | NEW bind_id = ID EQUAL
+    module_id = UID margs = loption(paren(separated_list(COMMA, expression)))
     LARROW inputs = separated_nonempty_list(COMMA, expression)
     {
       {
-        newnode_binds = binds;
-        newnode_module = id;
-        newnode_margs = margs;
-        newnode_inputs = inputs;
+        submodule_id = bind_id;
+        submodule_module = module_id;
+        submodule_margs = margs;
+        submodule_inputs = inputs;
       }
     }
 
@@ -301,6 +290,8 @@ expression:
     { (EId(expr), TEmpty) }
   | id = ID AT annot = annotation
     { (EAnnot(id, annot), TEmpty) }
+  | id = ID DOT out = ID
+    { (EDot(id, out), TEmpty) }
   | id = ID args = paren(separated_list(COMMA, expression))
     { (EFuncall(id, args), TEmpty) }
   | IF etest = expression THEN ethen = expression ELSE eelse = expression
