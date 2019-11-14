@@ -9,11 +9,11 @@ switchmodule Main {
   init FanOff
 
   state FanOff {
-    output node ctime = ctime@last
+    out node ctime = ctime@last
 
-    output node otime = 0
+    out node otime = 0
 
-    output node fan = False
+    out node fan = False
 
     switch :
       if di >=. 75.5 then FanOn(clock)
@@ -21,13 +21,13 @@ switchmodule Main {
   }
 
   state FanOn(begin : Int) {
-    output node ctime =
+    out node ctime =
       let dt = clock - clock@last in
       ctime@last + dt
 
-    output node otime = clock - begin
+    out node otime = clock - begin
 
-    output node fan = True
+    out node fan = True
 
     switch :
       if di <=. 74.5 then FanOff
@@ -36,11 +36,11 @@ switchmodule Main {
   }
 
   state FanSleep {
-    output node ctime = ctime@last
+    out node ctime = ctime@last
 
-    output node otime = 0
+    out node otime = 0
 
-    output node fan = False
+    out node fan = False
 
     node timer(1800) =
       let dt = clock - clock@last in

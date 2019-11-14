@@ -8,6 +8,10 @@ module Format = struct
   let pp_list_comma  pp_element =
       pp_list_sep "," pp_element
 
+  let pp_list_break pp_element =
+    let separator ppf () = fprintf ppf "@;" in
+    pp_print_list pp_element ~pp_sep:separator
+    
   let pp_list_break2 pp_element =
     let separator ppf () = fprintf ppf "@;@;" in
     pp_print_list pp_element ~pp_sep:separator

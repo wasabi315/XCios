@@ -22,6 +22,12 @@ module Identifier =
 module Idmap = Map.Make(Identifier)
 module Idset = Set.Make(Identifier)
 
+let pp_idmap pp_contents ppf idmap =
+  let pp_binds ppf (id, x) =
+    fprintf ppf "%a -> %a" pp_identifier id pp_contents x
+  in
+  fprintf ppf "@[<v>%a@]" (pp_list_break pp_binds) (Idmap.bindings idmap);
+
 (* literal *)
 type literal =
   | LTrue
@@ -131,17 +137,17 @@ and branch =
 and expression = expression_ast * Type.t
 
 let rec pp_expression_ast ppf = function
-  | EUniOp(op, e) -> fprintf ppf "<uniop @[%a@ %a@]>"
+  | EUniOp(op, e) -> fprintf ppf "@[<2><uniop %a@ %a>@]"
                      pp_uni_op op pp_expression e
-  | EBinOp(op, e1, e2) -> fprintf ppf "<binop @[%a@ @[%a@ %a@]@]>"
+  | EBinOp(op, e1, e2) -> fprintf ppf "@[<2><binop %a@ @[%a@ %a@]>@]"
                             pp_bin_op op pp_expression e1 pp_expression e2
-  | EVariant(c,v) -> fprintf ppf "<variant %a %a>"
+  | EVariant(c,v) -> fprintf ppf "@[<2><variant %a %a>@]"
                        pp_identifier c pp_expression v
-  | ETuple(es) -> fprintf ppf "<tuple (@[%a@])>" (pp_list_comma pp_expression) es
+  | ETuple(es) -> fprintf ppf "@[<2><tuple (@[%a@])>@]" (pp_list_comma pp_expression) es
   | EConst(l) -> fprintf ppf "<const %a>" pp_literal l
   | ERetain -> fprintf ppf "<Retain>"
   | EId(id) -> fprintf ppf "<id %a>" pp_identifier id
-  | EAnnot(id, annot) -> fprintf ppf "<annot @[%a@ %@@ %a@]>"
+  | EAnnot(id, annot) -> fprintf ppf "@[<2><annot @[%a %@@ %a@]>@]"
                            pp_identifier id pp_annotation annot
   | EDot(id, out) -> fprintf ppf "<dot %a %a>"
                        pp_identifier id pp_identifier out
@@ -151,17 +157,17 @@ let rec pp_expression_ast ppf = function
                                   pp_expression etest
                                   pp_expression ethen
                                   pp_expression eelse
-  | ELet(binders, body) -> fprintf ppf "<@[<v 2>let (@[<v>%a@])@;%a@]>"
+  | ELet(binders, body) -> fprintf ppf "<let @[(%a)@;%a@]>"
                         (pp_list_comma pp_binder) binders pp_expression body
-  | ECase(e, branchs) -> fprintf ppf "<@[<v 2>case %a@;@[<v>%a@]>"
+  | ECase(e, branchs) -> fprintf ppf "<@[<v 2>case %a@;@[<v>%a@]@]>"
                            pp_expression e (pp_list_comma pp_branch) branchs
 
 and pp_binder ppf {binder_id; binder_body} =
-  fprintf ppf "@[<2>%a =@ %a@]"
+  fprintf ppf "%a = @[%a@]"
     pp_id_and_type binder_id pp_expression binder_body
 
 and pp_branch ppf {branch_pat; branch_body} =
-  fprintf ppf "@[<2>%a ->@ %a@]"
+  fprintf ppf "%a -> @[%a@]"
     pp_pattern branch_pat pp_expression branch_body
 
 and pp_expression ppf (ast, t) =
@@ -177,28 +183,27 @@ type constdef =
   }
 
 let pp_constdef ppf {const_pub;const_id;const_type;const_body} =
-  fprintf ppf "<@[<v 1>ConstDef:@;";
-  fprintf ppf "id: %a@;" pp_id_and_type (const_id, const_type);
+  fprintf ppf "@[<v>ConstDef: {@;<0 2>";
+  fprintf ppf "@[<v>id: %a@;" pp_id_and_type (const_id, const_type);
   fprintf ppf "public: %a@;" pp_print_bool const_pub;
-  fprintf ppf "body: %a@]>" pp_expression const_body
+  fprintf ppf "body: %a@]@;" pp_expression const_body;
+  fprintf ppf "}@]"
 
 (* type *)
 type typedef =
   {
     type_pub : bool;
     type_id : identifier;
-    variant_defs : (identifier * Type.t) list;
+    type_conses : Type.t Idmap.t;
   }
 
-let pp_typedef ppf {type_pub;type_id;variant_defs} =
-  let pp_variant_def ppf (id, t) =
-    fprintf ppf "%a of %a" pp_identifier id Type.pp_t t
-  in
-  fprintf ppf "<@[<v 1>TypeDef:@;";
-  fprintf ppf "id: %a@;" pp_identifier type_id;
+let pp_typedef ppf {type_pub;type_id;type_conses} =
+  fprintf ppf "@[<v>TypeDef: {@;<0 2>";
+  fprintf ppf "@[<v>id: %a@;" pp_identifier type_id;
   fprintf ppf "public: %a@;" pp_print_bool type_pub;
-  fprintf ppf "variants: (@[%a@])@]>"
-    (pp_list_comma pp_variant_def) variant_defs
+  fprintf ppf "constructors: @[%a@]@]@;"
+    (pp_idmap Type.pp_t) type_conses;
+  fprintf ppf "}@]"
 
 (* function *)
 type fundef =
@@ -211,14 +216,15 @@ type fundef =
   }
 
 let pp_fundef ppf {fun_pub;fun_id;fun_type;fun_params;fun_body} =
-  fprintf ppf "<@[<v 1>FunDef:@;";
-  fprintf ppf "id: %a@;" pp_id_and_type (fun_id, fun_type);
+  fprintf ppf "@[<v>FunDef: {@;<0 2>";
+  fprintf ppf "@[<v>id: %a@;" pp_id_and_type (fun_id, fun_type);
   fprintf ppf "public: %a@;" pp_print_bool fun_pub;
-  fprintf ppf "params: (@[%a@])@;"
+  fprintf ppf "params: @[%a@]@;"
     (pp_list_comma pp_id_and_type) fun_params;
-  fprintf ppf "body: %a@]>" pp_expression fun_body
+  fprintf ppf "body: %a@]@;" pp_expression fun_body;
+  fprintf ppf "}@]"
 
-(* internal node *)
+(* node *)
 let pp_node_decl ppf (id, init, t) =
   let pp_init_none ppf () = pp_print_string ppf "_" in
   fprintf ppf "%a(%a) : %a"
@@ -241,9 +247,10 @@ type node =
     node_body : expression;
   }
 let pp_node ppf {node_attr;node_id;node_init;node_type;node_body} =
-  fprintf ppf "<@[<v 1>node(%a):@;" pp_nattr node_attr;
-  fprintf ppf "id: %a@;" pp_node_decl (node_id, node_init, node_type);
-  fprintf ppf "body: %a@]>" pp_expression node_body
+  fprintf ppf "@[<v>node(%a): {@;<0 2>" pp_nattr node_attr;
+  fprintf ppf "@[<v>id: %a@;" pp_node_decl (node_id, node_init, node_type);
+  fprintf ppf "body: %a@]@;" pp_expression node_body;
+  fprintf ppf "}@]"
 
 (* submodule *)
 type submodule =
@@ -254,11 +261,12 @@ type submodule =
     submodule_inputs : expression list;
   }
 let pp_submodule ppf def =
-  fprintf ppf "<@[<v 1>submodule:@;";
-  fprintf ppf "id: %a@;" pp_identifier def.submodule_id;
+  fprintf ppf "@[<v>submodule: {@;<0 2>";
+  fprintf ppf "@[<v>id: %a@;" pp_identifier def.submodule_id;
   fprintf ppf "module: %a@;" pp_identifier def.submodule_module;
   fprintf ppf "args: %a@;" (pp_list_comma pp_expression) def.submodule_margs;
-  fprintf ppf "input: @[%a@]@]>" (pp_list_comma pp_expression) def.submodule_inputs
+  fprintf ppf "input: @[%a@]@]@;" (pp_list_comma pp_expression) def.submodule_inputs;
+  fprintf ppf "}@]"
 
 (* module *)
 type module_elem =
@@ -272,23 +280,36 @@ let pp_module_elem ppf = function
 
 type xfrp_module =
   {
-    module_pub : bool;
-    module_id : identifier;
-    module_params : (identifier * Type.t) list;
-    module_in : (identifier * (expression option) * Type.t) list;
-    module_out : (identifier * (expression option) * Type.t) list;
-    module_elems : module_elem list;
+    module_pub        : bool;
+    module_id         : identifier;
+    module_params     : (identifier * Type.t) list;
+    module_in         : (identifier * (expression option) * Type.t) list;
+    module_out        : (identifier * (expression option) * Type.t) list;
+    module_consts     : constdef Idmap.t;
+    module_nodes      : node Idmap.t;
+    module_submodules : submodule Idmap.t;
+    module_consts_ord : identifier list;
+    module_update_ord : identifier list;
   }
 let pp_xfrp_module ppf def =
-  fprintf ppf "<@[<v 1>module:@;";
-  fprintf ppf "id: %a@;" pp_identifier def.module_id;
+  fprintf ppf "@[<v>module: {@;<0 2>";
+  fprintf ppf "@[<v>id: %a@;" pp_identifier def.module_id;
   fprintf ppf "public : %a@;" pp_print_bool def.module_pub;
-  fprintf ppf "in: (@[%a@])@;"
+  fprintf ppf "in: @[%a@]@;"
     (pp_list_comma pp_node_decl) def.module_in;
-  fprintf ppf "out: (@[%a@])@;"
+  fprintf ppf "out: @[%a@]@;"
     (pp_list_comma pp_node_decl) def.module_out;
-  fprintf ppf "elems: (@[%a@])@]>"
-    (pp_list_comma pp_module_elem) def.module_elems;
+  fprintf ppf "consts: @[%a@]@;"
+    (pp_idmap pp_constdef) def.module_consts;
+  fprintf ppf "nodes: @[%a@]@;"
+    (pp_idmap pp_node) def.module_nodes;
+  fprintf ppf "submodules: @[%a@]@;"
+      (pp_idmap pp_submodule) def.module_submodules;
+  fprintf ppf "consts_ord: @[%a@]@;"
+    (pp_list_comma pp_identifier) def.module_consts_ord;
+  fprintf ppf "update_ord: @[%a@]@]@;"
+    (pp_list_comma pp_identifier) def.module_update_ord;
+  fprintf ppf "}@]"
 
 (* state *)
 type state_elem =
@@ -302,19 +323,32 @@ let pp_state_elem ppf = function
 
 type state =
   {
-    state_id : identifier;
-    state_params : (identifier * Type.t) list;
-    state_elems : state_elem list;
-    state_switch : expression;
+    state_id         : identifier;
+    state_params     : (identifier * Type.t) list;
+    state_consts     : constdef Idmap.t;
+    state_nodes      : node Idmap.t;
+    state_submodules : submodule Idmap.t;
+    state_switch     : expression;
+    state_consts_ord : identifier list;
+    state_update_ord : identifier list;
   }
-let pp_state ppf {state_id; state_params; state_elems; state_switch} =
-  fprintf ppf "<@[<v 1>StateDef:@;";
-  fprintf ppf "id: %a@;" pp_identifier state_id;
-  fprintf ppf "params: (@[%a@])@;"
-    (pp_list_comma pp_id_and_type) state_params;
-  fprintf ppf "elems: (@[%a@])@;"
-    (pp_list_comma pp_state_elem) state_elems;
-  fprintf ppf "switch: %a@]>" pp_expression state_switch;
+let pp_state ppf def =
+  fprintf ppf "@[<v>StateDef: {@;<0 2>";
+  fprintf ppf "@[<v>id: %a@;" pp_identifier def.state_id;
+  fprintf ppf "params: @[%a@]@;"
+    (pp_list_comma pp_id_and_type) def.state_params;
+  fprintf ppf "consts: @[%a@]@;"
+    (pp_idmap pp_constdef) def.state_consts;
+  fprintf ppf "nodes: @[%a@]@;"
+    (pp_idmap pp_node) def.state_nodes;
+  fprintf ppf "submodules: @[%a@]@;"
+    (pp_idmap pp_submodule) def.state_submodules;
+  fprintf ppf "switch: %a@;" pp_expression def.state_switch;
+  fprintf ppf "consts_ord: @[%a@]@;"
+    (pp_list_comma pp_identifier) def.state_consts_ord;
+  fprintf ppf "update_ord: @[%a@]@]@;"
+    (pp_list_comma pp_identifier) def.state_update_ord;
+  fprintf ppf "}@]"
 
 (* switch module *)
 type smodule_elem =
@@ -326,17 +360,20 @@ let pp_smodule_elem ppf = function
 
 type xfrp_smodule =
   {
-    smodule_pub : bool;
-    smodule_id : identifier;
-    smodule_params : (identifier * Type.t) list;
-    smodule_in : (identifier * (expression option) * Type.t) list;
-    smodule_out : (identifier * (expression option) * Type.t) list;
-    smodule_init : expression;
-    smodule_elems : smodule_elem list;
+    smodule_pub        : bool;
+    smodule_id         : identifier;
+    smodule_params     : (identifier * Type.t) list;
+    smodule_in         : (identifier * (expression option) * Type.t) list;
+    smodule_out        : (identifier * (expression option) * Type.t) list;
+    smodule_shared     : (identifier * (expression option) * Type.t) list;
+    smodule_init       : expression;
+    smodule_consts     : constdef Idmap.t;
+    smodule_states     : state Idmap.t;
+    smodule_consts_ord : identifier list;
   }
 let pp_xfrp_smodule ppf def =
-  fprintf ppf "<@[<v 1>module:@;";
-  fprintf ppf "id: %a@;" pp_identifier def.smodule_id;
+  fprintf ppf "@[<v>smodule: {@;<0 2>";
+  fprintf ppf "@[<v>id: %a@;" pp_identifier def.smodule_id;
   fprintf ppf "public : %a@;" pp_print_bool def.smodule_pub;
   fprintf ppf "params: %a@;"
     (pp_list_comma pp_id_and_type) def.smodule_params;
@@ -344,8 +381,13 @@ let pp_xfrp_smodule ppf def =
     (pp_list_comma pp_node_decl) def.smodule_in;
   fprintf ppf "out: @[%a@]@;"
     (pp_list_comma pp_node_decl) def.smodule_out;
-  fprintf ppf "elems: @[%a@]@]>"
-    (pp_list_comma pp_smodule_elem) def.smodule_elems;
+  fprintf ppf "consts: @[%a@]@;"
+    (pp_idmap pp_constdef) def.smodule_consts;
+  fprintf ppf "states: @[%a@]@;"
+    (pp_idmap pp_state) def.smodule_states;
+  fprintf ppf "consts_ord: @[%a@]@]@;"
+    (pp_list_comma pp_identifier) def.smodule_consts_ord;
+  fprintf ppf "}@]"
 
 (* whole program *)
 type xfrp_elem =
@@ -364,12 +406,24 @@ let pp_xfrp_elem ppf = function
 type xfrp =
   {
     xfrp_use : identifier list;
-    xfrp_elems : xfrp_elem list;
+    xfrp_types : typedef Idmap.t;
+    xfrp_consts : constdef Idmap.t;
+    xfrp_funs : fundef Idmap.t;
+    xfrp_modules : xfrp_module Idmap.t;
+    xfrp_smodules : xfrp_smodule Idmap.t;
   }
 let pp_xfrp ppf def =
-  fprintf ppf "<@[<v 1>xfrp:@;";
-  fprintf ppf "use: %a@;"
+  fprintf ppf "@[<v>xfrp: {@;<0 2>";
+  fprintf ppf "@[<v>use: %a@;"
     (pp_list_comma pp_identifier) def.xfrp_use;
-  fprintf ppf "elems: @[%a@]@]>"
-    (pp_list_comma pp_xfrp_elem) def.xfrp_elems
-
+  fprintf ppf "types: @[%a@]@;"
+    (pp_idmap pp_typedef) def.xfrp_types;
+  fprintf ppf "consts: @[%a@]@;"
+    (pp_idmap pp_constdef) def.xfrp_consts;
+  fprintf ppf "funs: @[%a@]@;"
+    (pp_idmap pp_fundef) def.xfrp_funs;
+  fprintf ppf "modules: @[%a@]@;"
+    (pp_idmap pp_xfrp_module) def.xfrp_modules;
+  fprintf ppf "smodules: @[%a@]@]@;"
+    (pp_idmap pp_xfrp_smodule) def.xfrp_smodules;
+  fprintf ppf "}@]"

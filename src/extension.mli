@@ -10,6 +10,10 @@ module Format : sig
   val pp_list_comma : (formatter -> 'a -> unit) ->
                       formatter -> 'a list -> unit;;
 
+  (** A pretty printer for list using full break hint as a separator *)
+  val pp_list_break : (formatter -> 'a -> unit) ->
+                       formatter -> 'a list -> unit;;
+  
   (** A pretty printer for list using double full break hint as a separator *)
   val pp_list_break2 : (formatter -> 'a -> unit) ->
                        formatter -> 'a list -> unit;;

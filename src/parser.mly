@@ -1,11 +1,48 @@
 %{
 open Syntax
 open Type
+
+(* convert list to Idmap.t *)
+let list_to_idmap (id_f : 'a -> identifier) (lst : 'a list) =
+  List.fold_left (fun m x -> Idmap.add (id_f x) x m) Idmap.empty lst
+
+(* split mixed definitions *)
+let split_module_elems elems =
+  List.fold_right (fun elem (cs, ns, subms) ->
+    match elem with
+    | MConst(d) -> (d::cs, ns, subms)
+    | MNode(d) -> (cs, d::ns, subms)
+    | MSubmodule(d) -> (cs, ns, d::subms)
+  ) elems ([],[],[])
+
+let split_state_elems elems =
+  List.fold_right (fun elem (cs, ns, subms) ->
+    match elem with
+    | SConst(d) -> (d::cs, ns, subms)
+    | SNode(d) -> (cs, d::ns, subms)
+    | SSubmodule(d) -> (cs, ns, d::subms)
+  ) elems ([],[],[])
+
+let split_smodule_elems elems =
+  List.fold_right (fun elem (cs, sts) ->
+    match elem with
+    | SMConst(d) -> (d::cs, sts)
+    | SMState(d) -> (cs, d::sts)
+  ) elems ([], [])
+
+let split_file_elems elems =
+  List.fold_right (fun elem (ts, cs, fs, ms, sms) ->
+    match elem with
+    | XFRPType(d) -> (d::ts, cs, fs, ms, sms)
+    | XFRPConst(d) -> (ts, d::cs, fs, ms, sms)
+    | XFRPFun(d) -> (ts, cs, d::fs, ms, sms)
+    | XFRPModule(d) -> (ts, cs, fs, d::ms, sms)
+    | XFRPSModule(d) -> (ts, cs, fs, ms, d::sms)
+  ) elems ([],[],[],[],[])
 %}
 
 %token
-MODULE SWITCHMODULE IN OUT USE INIT
-PUBLIC SHARED OUTPUT
+MODULE SWITCHMODULE IN OUT USE INIT PUBLIC SHARED
 CONST TYPE FUN STATE NODE NEW SWITCH
 RETAIN LAST IF THEN ELSE LET CASE OF
 TRUE FALSE
@@ -55,7 +92,20 @@ xfrp:
     elems = nonempty_list(xfrp_elem)
     EOF
     {
-      { xfrp_use = use; xfrp_elems = elems }
+      let (ts, cs, fs, ms, sms) = split_file_elems elems in
+      let types = list_to_idmap (fun d -> d.type_id) ts in
+      let consts = list_to_idmap (fun d -> d.const_id) cs in
+      let funs = list_to_idmap (fun d -> d.fun_id) fs in
+      let modules = list_to_idmap (fun d -> d.module_id) ms in
+      let smodules = list_to_idmap (fun d -> d.smodule_id) sms in
+      {
+        xfrp_use = use;
+        xfrp_types = types;
+        xfrp_consts = consts;
+        xfrp_funs = funs;
+        xfrp_modules = modules;
+        xfrp_smodules = smodules;
+      }
     }
 
 use_clause:
@@ -101,7 +151,10 @@ constdef:
 typedef:
   | TYPE id = UID EQUAL defs = separated_nonempty_list(OR, variant_def)
     {
-      { type_pub = false; type_id = id; variant_defs = defs }
+      let conses =
+        List.fold_right (fun (c, v) m -> Idmap.add c v m) defs Idmap.empty
+      in
+      { type_pub = false; type_id = id; type_conses = conses }
     }
 variant_def:
   | c = UID v = preceded(OF, typespec)?
@@ -132,23 +185,42 @@ fundef:
       }
     }
 
+(* module header *)
+in_node_decl:
+  | IN in_nodes = separated_nonempty_list(COMMA, node_decl) { in_nodes }
+
+out_node_decl:
+  | OUT out_nodes = separated_nonempty_list(COMMA, node_decl) { out_nodes }
+
+shared_node_decl:
+  | SHARED shared_nodes = separated_list(COMMA, node_decl) { shared_nodes }
+
+
 (* module *)
 xfrp_module:
   | MODULE id = UID
     params = loption(paren(separated_list(COMMA, id_and_type)))
     LBRACE
-    IN in_nodes = separated_nonempty_list(COMMA, node_decl)
-    OUT out_nodes = separated_nonempty_list(COMMA, node_decl)
+    in_nodes = loption(in_node_decl)
+    out_nodes = out_node_decl
     elems = nonempty_list(module_elem)
     RBRACE
     {
+      let (cs, ns, subms) = split_module_elems elems in
+      let consts = list_to_idmap (fun d -> d.const_id) cs in
+      let nodes = list_to_idmap (fun d -> d.node_id) ns in
+      let submodules = list_to_idmap (fun d -> d.submodule_id) subms in
       {
         module_pub = false;
         module_id = id;
         module_params = params;
-	module_in = in_nodes;
-	module_out = out_nodes;
-	module_elems = elems;
+        module_in = in_nodes;
+        module_out = out_nodes;
+        module_consts = consts;
+        module_nodes = nodes;
+        module_submodules = submodules;
+        module_consts_ord = [];
+        module_update_ord = [];
       }
     }
 
@@ -166,27 +238,34 @@ module_elem:
   | def = constdef { MConst(def) }
 
 nattr_normal:
-  | OUTPUT { OutputNode }
+  | OUT { OutputNode }
 
 (* switch module *)
 xfrp_smodule:
   | SWITCHMODULE id = UID
     params = loption(paren(separated_list(COMMA, id_and_type)))
     LBRACE
-    IN in_nodes = separated_nonempty_list(COMMA, node_decl)
-    OUT out_nodes = separated_nonempty_list(COMMA, node_decl)
+    in_nodes = loption(in_node_decl)
+    out_nodes = out_node_decl
+    shared_nodes = loption(shared_node_decl)
     INIT init = expression
     elems = nonempty_list(smodule_elem)
     RBRACE
     {
+      let (cs, sts) = split_smodule_elems elems in
+      let consts = list_to_idmap (fun d -> d.const_id) cs in
+      let states = list_to_idmap (fun d -> d.state_id) sts in
       {
         smodule_pub = false;
         smodule_id = id;
         smodule_params = params;
 	smodule_in = in_nodes;
 	smodule_out = out_nodes;
+        smodule_shared = shared_nodes;
         smodule_init = init;
-	smodule_elems = elems;
+        smodule_consts = consts;
+        smodule_states = states;
+        smodule_consts_ord = [];
       }
     }
 
@@ -202,11 +281,19 @@ state:
     SWITCH COLON switch = expression
     RBRACE
     {
+      let (cs, ns, subms) = split_state_elems elems in
+      let consts = list_to_idmap (fun d -> d.const_id) cs in
+      let nodes = list_to_idmap (fun d -> d.node_id) ns in
+      let submodules = list_to_idmap (fun d -> d.submodule_id) subms in
       {
         state_id = id;
         state_params = params;
-        state_elems = elems;
-        state_switch = switch
+        state_consts = consts;
+        state_nodes = nodes;
+        state_submodules = submodules;
+        state_switch = switch;
+        state_consts_ord = [];
+        state_update_ord = [];
       }
     }
 
@@ -224,7 +311,7 @@ state_elem:
   | def = constdef { SConst(def) }
 
 nattr_switch:
-  | SHARED { SharedNode } | OUTPUT { OutputNode }
+  | SHARED { SharedNode } | OUT { OutputNode }
 
 (* node *)
 node:

@@ -14,9 +14,9 @@ public module Timer {
 
   new core = TimerCore <- button, pulse1s
 
-  output node mode = case core.mode of Up -> 0; Down -> 1;
+  out node mode = case core.mode of Up -> 0; Down -> 1;
 
-  output node hour = case core.display of Display(h, _, _) -> h;
-  output node min = case core.display of Display(_, m, _) -> m;
-  output node sec = case core.display of Display(_, _, s) -> s;
+  out node hour = case core.display of Display(h, _, _) -> h;
+  out node min = case core.display of Display(_, m, _) -> m;
+  out node sec = case core.display of Display(_, _, s) -> s;
 }

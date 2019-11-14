@@ -15,7 +15,6 @@
         "use",          USE;
         "init",         INIT;
         "public",       PUBLIC;
-        "output",       OUTPUT;
         "shared",       SHARED;
         "const",        CONST;
         "type",         TYPE;

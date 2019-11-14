@@ -10,9 +10,9 @@ switchmodule Timer {
   state CountUp {
     new countUp = CountUp <- button, pulse1s
 
-    output node mode = Up
+    out node mode = Up
 
-    output node display = countUp.count
+    out node display = countUp.count
 
     switch :
       if countUp.next then CountDown else Retain
@@ -21,9 +21,9 @@ switchmodule Timer {
   state CountDown {
     new countDown = CountDown <- button, pulse1s
 
-    output node mode = Down
+    out node mode = Down
 
-    output node display = countDown.count
+    out node display = countDown.count
 
     switch :
       if countDown.next then CountUp else Retain

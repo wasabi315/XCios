@@ -8,22 +8,22 @@ public switchmodule CountUp {
   init Stop
 
   state Stop {
-    output node display =
+    out node display =
       if ofA(button) then Display(0,0,0) else display@last
 
-    output node next = ofC(button)
+    out node next = ofC(button)
 
     switch :
       if ofB(button) then Run else Retain
   }
 
   state Run {
-    output node display =
+    out node display =
       if pulse1s then
         incrementTime(display@last)
       else display@last
 
-    output node next = False
+    out node next = False
 
     switch :
       if ofB(button) then Stop else Retain
