@@ -162,7 +162,7 @@ let tsort_types (tdefs : typedef Idmap.t) =
   make_graph tdeps |> tsort
 
 (* sort function / constant definitions *)
-let tsort_consts_funs (cdefs : constdef Idmap.t) (fdefs : fundef Idmap.t) =
+let tsort_materials (cdefs : constdef Idmap.t) (fdefs : fundef Idmap.t) =
   let targets =
     Idmap.fold (fun id _ s -> Idset.add id s) fdefs Idset.empty
     |> Idmap.fold (fun id _ s -> Idset.add id s) cdefs
@@ -178,6 +178,10 @@ let tsort_consts_funs (cdefs : constdef Idmap.t) (fdefs : fundef Idmap.t) =
       ) fdefs []
   in
   make_graph (const_deps @ fun_deps) |> tsort
+
+(* sort constant definitions *)
+let tsort_consts (cdefs : constdef Idmap.t) =
+  tsort_materials cdefs Idmap.empty
 
 (* sort module / switchmodule definitions *)
 let tsort_modules (mdefs : xfrp_module Idmap.t) (smdefs : xfrp_smodule Idmap.t) =
