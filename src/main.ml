@@ -34,6 +34,13 @@ let parse filename =
      in
      close_in_noerr ichan;
      raise (ParseError msg)
+  | Parser.NameConflict(id) ->
+     let msg =
+       Printf.sprintf "Detect name confliction in %s : %s"
+         filename id
+     in
+     close_in_noerr ichan;
+     raise (ParseError msg)
   | e ->
      close_in_noerr ichan;
      raise e

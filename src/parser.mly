@@ -2,11 +2,11 @@
 open Syntax
 open Type
 
-(* convert list to Idmap.t *)
+(* Convert list to Idmap.t. *)
 let list_to_idmap (id_f : 'a -> identifier) (lst : 'a list) =
   List.fold_left (fun m x -> Idmap.add (id_f x) x m) Idmap.empty lst
 
-(* split mixed definitions *)
+(* Split mixed definitions. *)
 let split_module_elems elems =
   List.fold_right (fun elem (cs, ns, subms) ->
     match elem with
@@ -39,6 +39,50 @@ let split_file_elems elems =
     | XFRPModule(d) -> (ts, cs, fs, d::ms, sms)
     | XFRPSModule(d) -> (ts, cs, fs, ms, d::sms)
   ) elems ([],[],[],[],[])
+
+(* Check name confliction. *)
+exception NameConflict of identifier
+let check_dupe (f_id : 'a -> identifier) (elems : 'a list) : unit =
+  List.fold_right (fun elem set ->
+    let id = fid elem in
+    if Idset.mem id set then
+      Idset.add id set
+    else raise (NameConflict id)
+  ) elems Idset.empty;()
+
+let check_dupe_module elems =
+  check_dupe (fun elem ->
+    match elem with
+    | MConst(d) -> d.const_id
+    | MNode(d) -> d.node_id
+    | MSubmodule(d) -> d.submodule_id
+  ) elems
+
+let check_dupe_state elems =
+  check_dupe (fun elem (cs, ns, subms) ->
+      match elem with
+      | SConst(d) -> d.const_id
+      | SNode(d) -> d.node_id
+      | SSubmodule(d) -> d.submodule_id
+  ) elems
+
+let check_dupe_smodule elems =
+  check_dupe (fun elem ->
+    match elem with
+    | SMConst(d) -> d.const_id
+    | SMState(d) -> d.state_id
+  ) elems
+
+let check_dupe_file elems =
+  check_dupe (fun elem ->
+    match elem with
+    | XFRPType(d) -> d.type_id
+    | XFRPConst(d) -> d.const_id
+    | XFRPFun(d) -> d.fun_id
+    | XFRPModule(d) -> d.module_id
+    | XFRPSModule(d) -> d.smodule_id
+  ) elems
+
 %}
 
 %token
@@ -92,6 +136,7 @@ xfrp:
     elems = nonempty_list(xfrp_elem)
     EOF
     {
+      let () = check_dupe_file elems in
       let (ts, cs, fs, ms, sms) = split_file_elems elems in
       let types = list_to_idmap (fun d -> d.type_id) ts in
       let consts = list_to_idmap (fun d -> d.const_id) cs in
@@ -206,6 +251,7 @@ xfrp_module:
     elems = nonempty_list(module_elem)
     RBRACE
     {
+      let () = check_dupe_module elems in
       let (cs, ns, subms) = split_module_elems elems in
       let consts = list_to_idmap (fun d -> d.const_id) cs in
       let nodes = list_to_idmap (fun d -> d.node_id) ns in
@@ -252,6 +298,7 @@ xfrp_smodule:
     elems = nonempty_list(smodule_elem)
     RBRACE
     {
+      let () = check_dupe_smodule elems in
       let (cs, sts) = split_smodule_elems elems in
       let consts = list_to_idmap (fun d -> d.const_id) cs in
       let states = list_to_idmap (fun d -> d.state_id) sts in
@@ -281,6 +328,7 @@ state:
     SWITCH COLON switch = expression
     RBRACE
     {
+      let () = check_dupe_state elems in
       let (cs, ns, subms) = split_state_elems elems in
       let consts = list_to_idmap (fun d -> d.const_id) cs in
       let nodes = list_to_idmap (fun d -> d.node_id) ns in
