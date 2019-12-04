@@ -34,17 +34,15 @@ let parse filename =
      in
      close_in_noerr ichan;
      raise (ParseError msg)
-  | Parser.NameConflict(id) ->
+  | Env.NameConflict(id) ->
      let msg =
-       Printf.sprintf "Detect name confliction in %s : %s"
-         filename id
+       Printf.sprintf "Detect name confliction in %s : %s" filename id
      in
      close_in_noerr ichan;
      raise (ParseError msg)
   | Dependency.Cycle ->
      let msg =
-       Printf.sprintf "Detect cyclic dependency in %s"
-         filename id
+       Printf.sprintf "Detect cyclic dependency in %s" filename
      in
      close_in_noerr ichan;
      raise (ParseError msg)
@@ -76,12 +74,8 @@ let gather_filedata entry_file =
   data_map
 
 let codegen data_map =
-  Idmap.iter (fun id ast ->
-      print_string id;
-      print_newline ();
-      pp_xfrp std_formatter ast;
-      print_newline ();
-    ) data_map
+  printf "%a" (pp_idmap pp_xfrp) data_map;
+  print_newline ()
 
 let compile file =
   try

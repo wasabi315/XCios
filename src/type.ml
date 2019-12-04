@@ -43,4 +43,3 @@ let gen_tvar_free level =
 let gen_tvar_generic () =
   counter := !counter + 1;
   let tvar = TVGeneric(!counter) in TVar(ref tvar)
-

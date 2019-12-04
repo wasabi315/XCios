@@ -2,6 +2,7 @@
 open Syntax
 open Type
 open Dependency
+open Check
 
 (* Convert list to Idmap.t. *)
 let list_to_idmap (id_f : 'a -> identifier) (lst : 'a list) =
@@ -40,50 +41,6 @@ let split_file_elems elems =
     | XFRPModule(d) -> (ts, cs, fs, d::ms, sms)
     | XFRPSModule(d) -> (ts, cs, fs, ms, d::sms)
   ) elems ([],[],[],[],[])
-
-(* Check name confliction. *)
-exception NameConflict of identifier
-let check_dupe (f_id : 'a -> identifier) (elems : 'a list) : unit =
-  List.fold_right (fun elem set ->
-    let id = fid elem in
-    if Idset.mem id set then
-      Idset.add id set
-    else raise (NameConflict id)
-  ) elems Idset.empty;()
-
-let check_dupe_module elems =
-  check_dupe (fun elem ->
-    match elem with
-    | MConst(d) -> d.const_id
-    | MNode(d) -> d.node_id
-    | MSubmodule(d) -> d.submodule_id
-  ) elems
-
-let check_dupe_state elems =
-  check_dupe (fun elem (cs, ns, subms) ->
-      match elem with
-      | SConst(d) -> d.const_id
-      | SNode(d) -> d.node_id
-      | SSubmodule(d) -> d.submodule_id
-  ) elems
-
-let check_dupe_smodule elems =
-  check_dupe (fun elem ->
-    match elem with
-    | SMConst(d) -> d.const_id
-    | SMState(d) -> d.state_id
-  ) elems
-
-let check_dupe_file elems =
-  check_dupe (fun elem ->
-    match elem with
-    | XFRPType(d) -> d.type_id
-    | XFRPConst(d) -> d.const_id
-    | XFRPFun(d) -> d.fun_id
-    | XFRPModule(d) -> d.module_id
-    | XFRPSModule(d) -> d.smodule_id
-  ) elems
-
 %}
 
 %token
@@ -338,7 +295,7 @@ state:
       let nodes = list_to_idmap (fun d -> d.node_id) ns in
       let submodules = list_to_idmap (fun d -> d.submodule_id) subms in
       let consts_ord = tsort_consts consts in
-      let update_ord = get_update_ord nodes, submodules in
+      let update_ord = get_update_ord nodes submodules in
       {
         state_id = id;
         state_params = params;

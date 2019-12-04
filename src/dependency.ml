@@ -1,5 +1,6 @@
 (* dependency analysis *)
 open Syntax
+open Type
 
 type graph = Idset.t Idmap.t
 
@@ -62,15 +63,16 @@ let find_tids_typedef targets def =
        Idset.empty
     | TId(name) ->
        if Idset.mem name targets then
-         Idset.add name res
-       else res
+         Idset.singleton name
+       else Idset.empty
     | TTuple(ts) ->
        List.map extract_id ts
        |> List.fold_left Idset.union Idset.empty
     | _ -> assert false
   in
-  List.map (fun (_, t) -> extract_id t) def.variant_defs
-  |> List.fold_right Idset.union Idset.empty
+  Idmap.fold (fun _ t set ->
+      Idset.union set (extract_id t)
+    ) def.type_conses Idset.empty
 
 (*----- collect ids contained in `targets` -----*)
 
@@ -112,7 +114,7 @@ let find_ids_fundef targets def =
   find_ids_expr (Idset.diff targets param_ids) def.fun_body
 
 let find_ids_constdef targets def =
-  find_names_const targets def.const_body
+  find_ids_expr targets def.const_body
 
 let find_ids_submodule targets def =
   let all_exprs = def.submodule_margs @ def.submodule_inputs in
@@ -123,31 +125,23 @@ let find_ids_submodule targets def =
 (*----- collect module ids contained in `targets` -----*)
 
 let find_mids_moduledef targets def =
-  List.fold_left (fun res elem ->
-      match elem with
-      | MSubmodule(d) ->
-         if Idset.mem d.submodule_module targets then
-           Idset.add d.submodule_module res
-         else res
-      | _ -> res
-    ) Idset.empty def.module_elems
+  Idmap.fold (fun _ d mids ->
+      if Idset.mem d.submodule_module targets then
+        Idset.add d.submodule_module mids
+      else mids
+    ) def.module_submodules Idset.empty
 
 let find_mids_smoduledef targets def =
   let add_state_mids state mids =
-    List.fold_left (fun mids elem ->
-        match elem with
-        | SSubmodule(d) ->
-           if Idset.mem d.submodule_module targets then
-             Idset.add d.submodule_module mids
-           else mids
-        | _ -> mids
-      ) mids state.state_elems
+    Idmap.fold (fun _ d mids ->
+        if Idset.mem d.submodule_module targets then
+          Idset.add d.submodule_module mids
+        else mids
+      ) state.state_submodules mids
   in
-  List.fold_left (fun mids elem ->
-      match elem with
-      | SMState(d) -> add_state_mids d mids
-      | _ -> mids
-    ) Idset.empty def.smodule_elems
+  Idmap.fold (fun _ d mids ->
+      add_state_mids d mids
+    ) def.smodule_states Idset.empty
 
 (* sort type definitions *)
 let tsort_types (tdefs : typedef Idmap.t) =
@@ -209,7 +203,7 @@ let get_update_ord  (ns : node Idmap.t) (subms : submodule Idmap.t) =
   in
   let node_deps =
     Idmap.fold (fun id n deps ->
-        (id, (find_ids_expr targets n.node_body) :: deps)
+        (id, (find_ids_expr targets n.node_body)) :: deps
       ) ns []
   in
   let submodule_deps =
