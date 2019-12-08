@@ -50,7 +50,8 @@ let parse filename =
      close_in_noerr ichan;
      raise e
 
-let get_filedata _data_map ast = ast
+let get_filedata data_map ast =
+  Typing.infer data_map ast
 
 type filestate = Visiting | Visited
 

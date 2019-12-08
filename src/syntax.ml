@@ -256,6 +256,7 @@ let pp_node ppf {node_attr;node_id;node_init;node_type;node_body} =
 type submodule =
   {
     submodule_id : identifier;
+    submodule_type : Type.t list;
     submodule_module : identifier;
     submodule_margs : expression list;
     submodule_inputs : expression list;
@@ -278,6 +279,11 @@ let pp_module_elem ppf = function
   | MSubmodule(d) -> pp_submodule ppf d
   | MConst(d) -> pp_constdef ppf d
 
+let module_elem_id = function
+  | MNode(d) -> d.node_id
+  | MSubmodule(d) -> d.submodule_id
+  | MConst(d) -> d.const_id
+
 type xfrp_module =
   {
     module_pub        : bool;
@@ -288,6 +294,7 @@ type xfrp_module =
     module_consts     : constdef Idmap.t;
     module_nodes      : node Idmap.t;
     module_submodules : submodule Idmap.t;
+    module_all        : module_elem Idmap.t;
     module_consts_ord : identifier list;
     module_update_ord : identifier list;
   }
@@ -321,6 +328,11 @@ let pp_state_elem ppf = function
   | SSubmodule(d) -> pp_submodule ppf d
   | SConst(d) -> pp_constdef ppf d
 
+let state_elem_id = function
+  | SNode(d) -> d.node_id
+  | SSubmodule(d) -> d.submodule_id
+  | SConst(d) -> d.const_id
+               
 type state =
   {
     state_id         : identifier;
@@ -328,6 +340,7 @@ type state =
     state_consts     : constdef Idmap.t;
     state_nodes      : node Idmap.t;
     state_submodules : submodule Idmap.t;
+    state_all        : state_elem Idmap.t;
     state_switch     : expression;
     state_consts_ord : identifier list;
     state_update_ord : identifier list;
@@ -358,6 +371,10 @@ let pp_smodule_elem ppf = function
   | SMState(d) -> pp_state ppf d
   | SMConst(d) -> pp_constdef ppf d
 
+let smodule_elem_id = function                
+  | SMState(d) -> d.state_id
+  | SMConst(d) -> d.const_id
+                
 type xfrp_smodule =
   {
     smodule_pub        : bool;
@@ -369,6 +386,7 @@ type xfrp_smodule =
     smodule_init       : expression;
     smodule_consts     : constdef Idmap.t;
     smodule_states     : state Idmap.t;
+    smodule_all        : smodule_elem Idmap.t;
     smodule_consts_ord : identifier list;
   }
 let pp_xfrp_smodule ppf def =
@@ -403,6 +421,13 @@ let pp_xfrp_elem ppf = function
   | XFRPModule(d) -> pp_xfrp_module ppf d
   | XFRPSModule(d) -> pp_xfrp_smodule ppf d
 
+let xfrp_elem_id = function
+  | XFRPType(d) -> d.type_id
+  | XFRPConst(d) -> d.const_id
+  | XFRPFun(d) -> d.fun_id
+  | XFRPModule(d) -> d.module_id
+  | XFRPSModule(d) -> d.smodule_id
+                    
 type xfrp =
   {
     xfrp_use : identifier list;
@@ -411,6 +436,7 @@ type xfrp =
     xfrp_funs : fundef Idmap.t;
     xfrp_modules : xfrp_module Idmap.t;
     xfrp_smodules : xfrp_smodule Idmap.t;
+    xfrp_all      : xfrp_elem Idmap.t;
   }
 let pp_xfrp ppf def =
   fprintf ppf "@[<v>xfrp: {@;<0 2>";

@@ -13,34 +13,13 @@ let check_dupe (f_id : 'a -> identifier) (elems : 'a list) : unit =
   ()
 
 let check_dupe_module elems =
-  check_dupe (fun elem ->
-      match elem with
-      | MConst(d) -> d.const_id
-      | MNode(d) -> d.node_id
-      | MSubmodule(d) -> d.submodule_id
-    ) elems
+  check_dupe module_elem_id elems
   
 let check_dupe_state elems =
-  check_dupe (fun elem ->
-      match elem with
-      | SConst(d) -> d.const_id
-      | SNode(d) -> d.node_id
-      | SSubmodule(d) -> d.submodule_id
-    ) elems
+  check_dupe state_elem_id elems
 
 let check_dupe_smodule elems =
-  check_dupe (fun elem ->
-      match elem with
-      | SMConst(d) -> d.const_id
-      | SMState(d) -> d.state_id
-    ) elems
+  check_dupe smodule_elem_id elems
 
 let check_dupe_file elems =
-  check_dupe (fun elem ->
-      match elem with
-      | XFRPType(d) -> d.type_id
-      | XFRPConst(d) -> d.const_id
-      | XFRPFun(d) -> d.fun_id
-      | XFRPModule(d) -> d.module_id
-      | XFRPSModule(d) -> d.smodule_id
-    ) elems
+  check_dupe xfrp_elem_id elems

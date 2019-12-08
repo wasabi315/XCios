@@ -101,6 +101,7 @@ xfrp:
       let funs = list_to_idmap (fun d -> d.fun_id) fs in
       let modules = list_to_idmap (fun d -> d.module_id) ms in
       let smodules = list_to_idmap (fun d -> d.smodule_id) sms in
+      let all = list_to_idmap xfrp_elem_id elems in
       {
         xfrp_use = use;
         xfrp_types = types;
@@ -108,6 +109,7 @@ xfrp:
         xfrp_funs = funs;
         xfrp_modules = modules;
         xfrp_smodules = smodules;
+        xfrp_all = all;
       }
     }
 
@@ -214,6 +216,7 @@ xfrp_module:
       let consts = list_to_idmap (fun d -> d.const_id) cs in
       let nodes = list_to_idmap (fun d -> d.node_id) ns in
       let submodules = list_to_idmap (fun d -> d.submodule_id) subms in
+      let all = list_to_idmap module_elem_id elems in
       let consts_ord = tsort_consts consts in
       let update_ord = get_update_ord nodes submodules in
       {
@@ -225,6 +228,7 @@ xfrp_module:
         module_consts = consts;
         module_nodes = nodes;
         module_submodules = submodules;
+        module_all = all;
         module_consts_ord = consts_ord;
         module_update_ord = update_ord;
       }
@@ -262,6 +266,7 @@ xfrp_smodule:
       let (cs, sts) = split_smodule_elems elems in
       let consts = list_to_idmap (fun d -> d.const_id) cs in
       let states = list_to_idmap (fun d -> d.state_id) sts in
+      let all = list_to_idmap smodule_elem_id elems in
       let consts_ord = tsort_consts consts in
       {
         smodule_pub = false;
@@ -273,6 +278,7 @@ xfrp_smodule:
         smodule_init = init;
         smodule_consts = consts;
         smodule_states = states;
+        smodule_all = all;
         smodule_consts_ord = consts_ord;
       }
     }
@@ -294,6 +300,7 @@ state:
       let consts = list_to_idmap (fun d -> d.const_id) cs in
       let nodes = list_to_idmap (fun d -> d.node_id) ns in
       let submodules = list_to_idmap (fun d -> d.submodule_id) subms in
+      let all = list_to_idmap state_elem_id elems in
       let consts_ord = tsort_consts consts in
       let update_ord = get_update_ord nodes submodules in
       {
@@ -302,6 +309,7 @@ state:
         state_consts = consts;
         state_nodes = nodes;
         state_submodules = submodules;
+        state_all = all;
         state_switch = switch;
         state_consts_ord = consts_ord;
         state_update_ord = update_ord;
@@ -352,6 +360,7 @@ submodule:
     {
       {
         submodule_id = bind_id;
+        submodule_type = [];
         submodule_module = module_id;
         submodule_margs = margs;
         submodule_inputs = inputs;
