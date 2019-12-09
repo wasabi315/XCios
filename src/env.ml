@@ -4,7 +4,7 @@ open Type
 type env_entry =
   | ConstId of Type.t
   | NodeId of Type.t
-  | SubmoduleId of Type.t list
+  | NewnodeId of identifier * int * Type.t
   | ValueCons of Type.t * Type.t
   | ModuleCons of Type.t list * Type.t list * Type.t list
 
@@ -27,9 +27,10 @@ let add_env_node (id : identifier) (t : Type.t) (env : env) : env =
   let entry = NodeId(t) in
   add_env id entry env
 
-let add_env_submodule (id : identifier) (tout : Type.t list) (env : env) : env =
-  let entry = SubmoduleId(tout) in
-  add_env id entry env
+let add_env_newnode (nid : identifier) (mid : identifier) (pos : int) (t : Type.t)
+      (env : env) : env =
+  let entry = NewnodeId(mid, pos, t) in
+  add_env nid entry env
 
 let add_env_valuecons (id : identifier) (targ : Type.t) (tret : Type.t)
       (env : env) : env =
@@ -59,8 +60,13 @@ let register_nodedecl (id, _, t) env : env =
 let register_node def env : env =
   add_env_node def.node_id def.node_type env
 
-let register_submodule def env : env =
-  add_env_submodule def.submodule_id def.submodule_type env
+let register_newnode def env : env =
+  let binds_with_index =
+    List.mapi (fun i (_, id, t) -> (i, id, t)) def.newnode_binds
+  in
+  List.fold_left (fun env (i, id, t) ->
+      add_env_newnode id def.newnode_id i t env 
+    ) env binds_with_index
   
 let register_module def env : env =
   let ptype = List.map (fun (_, t) -> t) def.module_params in

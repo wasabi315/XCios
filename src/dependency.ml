@@ -85,7 +85,7 @@ let find_ids_expr targets expr =
     | ETuple(es) -> List.fold_right visit_expr es acc
     | EConst(_) | ERetain -> acc
     | EAnnot(_, ALast) -> acc (* ignore @last *)
-    | EId(id) | EAnnot(id, _) | EDot(id, _) ->
+    | EId(id) | EAnnot(id, _) ->
        if Idset.mem id targets then Idset.add id acc else acc
     | EFuncall(fid, args) ->
        (if Idset.mem fid targets then Idset.add fid acc else acc)
@@ -116,8 +116,8 @@ let find_ids_fundef targets def =
 let find_ids_constdef targets def =
   find_ids_expr targets def.const_body
 
-let find_ids_submodule targets def =
-  let all_exprs = def.submodule_margs @ def.submodule_inputs in
+let find_ids_newnode targets def =
+  let all_exprs = def.newnode_margs @ def.newnode_inputs in
   List.fold_right (fun arg s ->
       Idset.union (find_ids_expr targets arg) s
     ) all_exprs Idset.empty
@@ -126,18 +126,18 @@ let find_ids_submodule targets def =
 
 let find_mids_moduledef targets def =
   Idmap.fold (fun _ d mids ->
-      if Idset.mem d.submodule_module targets then
-        Idset.add d.submodule_module mids
+      if Idset.mem d.newnode_module targets then
+        Idset.add d.newnode_module mids
       else mids
-    ) def.module_submodules Idset.empty
+    ) def.module_newnodes Idset.empty
 
 let find_mids_smoduledef targets def =
   let add_state_mids state mids =
     Idmap.fold (fun _ d mids ->
-        if Idset.mem d.submodule_module targets then
-          Idset.add d.submodule_module mids
+        if Idset.mem d.newnode_module targets then
+          Idset.add d.newnode_module mids
         else mids
-      ) state.state_submodules mids
+      ) state.state_newnodes mids
   in
   Idmap.fold (fun _ d mids ->
       add_state_mids d mids
@@ -196,19 +196,19 @@ let tsort_modules (mdefs : xfrp_module Idmap.t) (smdefs : xfrp_smodule Idmap.t) 
   make_graph (module_deps @ smodule_deps) |> tsort
 
 (* calculate state / module update order *)
-let get_update_ord  (ns : node Idmap.t) (subms : submodule Idmap.t) =
+let get_update_ord  (ns : node Idmap.t) (newns : newnode Idmap.t) =
   let targets =
     Idmap.fold (fun id _ s -> Idset.add id s) ns Idset.empty
-    |> Idmap.fold (fun id _ s -> Idset.add id s) subms
+    |> Idmap.fold (fun id _ s -> Idset.add id s) newns
   in
   let node_deps =
     Idmap.fold (fun id n deps ->
         (id, (find_ids_expr targets n.node_body)) :: deps
       ) ns []
   in
-  let submodule_deps =
-    Idmap.fold (fun id subm deps ->
-        (id, (find_ids_submodule targets subm)) :: deps
-      ) subms []
+  let newnode_deps =
+    Idmap.fold (fun id newn deps ->
+        (id, (find_ids_newnode targets newn)) :: deps
+      ) newns []
   in
-  make_graph (node_deps @ submodule_deps) |> tsort
+  make_graph (node_deps @ newnode_deps) |> tsort

@@ -32,14 +32,14 @@ and pp_tvar ppf = function
   | TVFree(id, lv) -> fprintf ppf "<tvfree %d : level %d>"  id lv
   | TVBound(t) -> fprintf ppf "<tvbound : %a>" pp_t t
 
-let counter = ref 0
+let tvar_counter = ref 0
 
 (* generate fresh free variable *)
 let gen_tvar_free level =
-  counter := !counter + 1;
-  let tvar = TVFree(!counter, level) in TVar(ref tvar)
+  tvar_counter := !tvar_counter + 1;
+  let tvar = TVFree(!tvar_counter, level) in TVar(ref tvar)
 
 (* generate fresh generic variable *)
 let gen_tvar_generic () =
-  counter := !counter + 1;
-  let tvar = TVGeneric(!counter) in TVar(ref tvar)
+  tvar_counter := !tvar_counter + 1;
+  let tvar = TVGeneric(!tvar_counter) in TVar(ref tvar)

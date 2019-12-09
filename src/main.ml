@@ -9,8 +9,8 @@ let test_tsort ppf (progdata : Data.progdata) =
     ) progdata.sdefs
 *)
 
-exception ParseError of string
 exception FileError of string
+exception ParseError of string
 
 let parse filename =
   let () = print_string filename; print_newline () in
@@ -34,11 +34,7 @@ let parse filename =
      in
      close_in_noerr ichan;
      raise (ParseError msg)
-  | Env.NameConflict(id) ->
-     let msg =
-       Printf.sprintf "Detect name confliction in %s : %s" filename id
-     in
-     close_in_noerr ichan;
+  | Check.Error(msg) ->
      raise (ParseError msg)
   | Dependency.Cycle ->
      let msg =

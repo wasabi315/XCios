@@ -4,25 +4,32 @@ open Type
 open Dependency
 open Check
 
+(* Generate fresh identifier *)
+let id_counter = ref 0
+
+let gensym () =
+  id_counter := !id_counter + 1;
+  "#" ^ (string_of_int !id_counter)
+
 (* Convert list to Idmap.t. *)
 let list_to_idmap (id_f : 'a -> identifier) (lst : 'a list) =
   List.fold_left (fun m x -> Idmap.add (id_f x) x m) Idmap.empty lst
 
 (* Split mixed definitions. *)
 let split_module_elems elems =
-  List.fold_right (fun elem (cs, ns, subms) ->
+  List.fold_right (fun elem (cs, ns, newns) ->
     match elem with
-    | MConst(d) -> (d::cs, ns, subms)
-    | MNode(d) -> (cs, d::ns, subms)
-    | MSubmodule(d) -> (cs, ns, d::subms)
+    | MConst(d) -> (d::cs, ns, newns)
+    | MNode(d) -> (cs, d::ns, newns)
+    | MNewnode(d) -> (cs, ns, d::newns)
   ) elems ([],[],[])
 
 let split_state_elems elems =
-  List.fold_right (fun elem (cs, ns, subms) ->
+  List.fold_right (fun elem (cs, ns, newns) ->
     match elem with
-    | SConst(d) -> (d::cs, ns, subms)
-    | SNode(d) -> (cs, d::ns, subms)
-    | SSubmodule(d) -> (cs, ns, d::subms)
+    | SConst(d) -> (d::cs, ns, newns)
+    | SNode(d) -> (cs, d::ns, newns)
+    | SNewnode(d) -> (cs, ns, d::newns)
   ) elems ([],[],[])
 
 let split_smodule_elems elems =
@@ -45,13 +52,13 @@ let split_file_elems elems =
 
 %token
 MODULE SWITCHMODULE IN OUT USE INIT PUBLIC SHARED
-CONST TYPE FUN STATE NODE NEW SWITCH
+CONST TYPE FUN STATE NODE NEWNODE SWITCH
 RETAIN LAST IF THEN ELSE LET CASE OF
 TRUE FALSE
 
 %token
 LBRACE RBRACE LPAREN RPAREN
-COMMA COLON SEMICOLON AT LARROW RARROW DOT
+COMMA COLON SEMICOLON AT LARROW RARROW
 PLUS MINUS ASTERISK SLASH
 PLUSDOT MINUSDOT ASTERISKDOT SLASHDOT
 TILDE PERCENT XOR OR2 AND2 OR AND
@@ -200,7 +207,6 @@ out_node_decl:
 shared_node_decl:
   | SHARED shared_nodes = separated_list(COMMA, node_decl) { shared_nodes }
 
-
 (* module *)
 xfrp_module:
   | MODULE id = UID
@@ -212,13 +218,13 @@ xfrp_module:
     RBRACE
     {
       let () = check_dupe_module elems in
-      let (cs, ns, subms) = split_module_elems elems in
+      let (cs, ns, newns) = split_module_elems elems in
       let consts = list_to_idmap (fun d -> d.const_id) cs in
       let nodes = list_to_idmap (fun d -> d.node_id) ns in
-      let submodules = list_to_idmap (fun d -> d.submodule_id) subms in
+      let newnodes = list_to_idmap (fun d -> d.newnode_id) newns in
       let all = list_to_idmap module_elem_id elems in
       let consts_ord = tsort_consts consts in
-      let update_ord = get_update_ord nodes submodules in
+      let update_ord = get_update_ord nodes newnodes in
       {
         module_pub = false;
         module_id = id;
@@ -227,7 +233,7 @@ xfrp_module:
         module_out = out_nodes;
         module_consts = consts;
         module_nodes = nodes;
-        module_submodules = submodules;
+        module_newnodes = newnodes;
         module_all = all;
         module_consts_ord = consts_ord;
         module_update_ord = update_ord;
@@ -235,20 +241,17 @@ xfrp_module:
     }
 
 module_elem:
-  | attr = nattr_normal? def = node
+  | def = node
     {
-      let def =
-        match attr with
-        | Some(x) -> { def with node_attr = x }
-        | None -> def
-      in
+      let () = check_module_attr_node def in
       MNode(def)
     }
-  | def = submodule { MSubmodule(def) }
+  | def = newnode
+    {
+      let () = check_module_attr_newnode def in
+      MNewnode(def)
+    }
   | def = constdef { MConst(def) }
-
-nattr_normal:
-  | OUT { OutputNode }
 
 (* switch module *)
 xfrp_smodule:
@@ -296,19 +299,19 @@ state:
     RBRACE
     {
       let () = check_dupe_state elems in
-      let (cs, ns, subms) = split_state_elems elems in
+      let (cs, ns, newns) = split_state_elems elems in
       let consts = list_to_idmap (fun d -> d.const_id) cs in
       let nodes = list_to_idmap (fun d -> d.node_id) ns in
-      let submodules = list_to_idmap (fun d -> d.submodule_id) subms in
+      let newnodes = list_to_idmap (fun d -> d.newnode_id) newns in
       let all = list_to_idmap state_elem_id elems in
       let consts_ord = tsort_consts consts in
-      let update_ord = get_update_ord nodes submodules in
+      let update_ord = get_update_ord nodes newnodes in
       {
         state_id = id;
         state_params = params;
         state_consts = consts;
         state_nodes = nodes;
-        state_submodules = submodules;
+        state_newnodes = newnodes;
         state_all = all;
         state_switch = switch;
         state_consts_ord = consts_ord;
@@ -317,35 +320,32 @@ state:
     }
 
 state_elem:
-  | attr = nattr_switch? def = node
-    {
-      let def =
-        match attr with
-        | Some(x) -> { def with node_attr = x }
-        | None -> def
-      in
-      SNode(def)
-    }
-  | def = submodule { SSubmodule(def) }
+  | def = node { SNode(def) }
+  | def = newnode { SNewnode(def) }
   | def = constdef { SConst(def) }
 
-nattr_switch:
+(* node *)
+node_attr:
   | SHARED { SharedNode } | OUT { OutputNode }
 
-(* node *)
 node:
-  | NODE id = ID
+  | attr = node_attr? NODE id = ID
     init = paren(expression)?
     topt = preceded(COLON, typespec)?
     EQUAL body = expression
     {
+      let attr =
+        match attr with
+        | Some(x) -> x
+        | None -> NormalNode
+      in
       let t =
         match topt with
         | Some(x) -> x
         | None -> TEmpty
       in
       {
-        node_attr = NormalNode;
+        node_attr = attr;
         node_id = id;
         node_init = init;
         node_type = t;
@@ -353,18 +353,30 @@ node:
       }
     }
 
-submodule:
-  | NEW bind_id = ID EQUAL
+newnode:
+  | NEWNODE binds = separated_nonempty_list(COMMA, newnode_bind) EQUAL
     module_id = UID margs = loption(paren(separated_list(COMMA, expression)))
     LARROW inputs = separated_nonempty_list(COMMA, expression)
     {
+      let id = gensym () in
       {
-        submodule_id = bind_id;
-        submodule_type = [];
-        submodule_module = module_id;
-        submodule_margs = margs;
-        submodule_inputs = inputs;
+        newnode_id = id;
+        newnode_binds = binds;
+        newnode_module = module_id;
+        newnode_margs = margs;
+        newnode_inputs = inputs;
       }
+    }
+
+newnode_bind:
+  | attr = node_attr? id = ID
+    {
+      let attr =
+        match attr with
+        | Some(x) -> x
+        | None -> NormalNode
+      in
+      (attr, id, TEmpty)
     }
 
 (* expressions *)
@@ -397,8 +409,6 @@ expression:
     { (EId(expr), TEmpty) }
   | id = ID AT annot = annotation
     { (EAnnot(id, annot), TEmpty) }
-  | id = ID DOT out = ID
-    { (EDot(id, out), TEmpty) }
   | id = ID args = paren(separated_list(COMMA, expression))
     { (EFuncall(id, args), TEmpty) }
   | IF etest = expression THEN ethen = expression ELSE eelse = expression
