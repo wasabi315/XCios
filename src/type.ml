@@ -6,7 +6,6 @@ type t =
   | TId of string
   | TTuple of t list
   | TVar of tvar ref
-  | TFun of t list * t
   | TEmpty (* dummy for optional typespec *)
 and tvar =
   | TVGeneric of int
@@ -23,9 +22,6 @@ let rec pp_t ppf = function
   | TTuple(ts) -> fprintf ppf "<type (@[%a@])>"
                     (pp_list_comma pp_t) ts
   | TVar({contents = tvar}) -> fprintf ppf "<typevar %a>" pp_tvar tvar
-  | TFun(params, res_t) -> fprintf ppf "<fun @[(@[%a@])@ -> %a@]>"
-                             (pp_list_comma pp_t) params
-                             pp_t res_t
   | TEmpty -> pp_print_string ppf "<type _>"
 and pp_tvar ppf = function
   | TVGeneric(id) -> fprintf ppf "<tvgen %d>" id

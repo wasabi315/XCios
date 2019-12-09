@@ -46,8 +46,8 @@ let parse filename =
      close_in_noerr ichan;
      raise e
 
-let get_filedata data_map ast =
-  Typing.infer data_map ast
+let get_filedata data_map filename ast =
+  Typing.infer data_map filename ast
 
 type filestate = Visiting | Visited
 
@@ -60,7 +60,7 @@ let gather_filedata entry_file =
        let (visit_state, data_map) =
          List.fold_right visit use_files (visit_state, data_map)
        in
-       let data = get_filedata data_map ast in
+       let data = get_filedata data_map file ast in
        let data_map =  Idmap.add file data data_map in
        let visit_state = Idmap.add file Visited visit_state in
        (visit_state, data_map)

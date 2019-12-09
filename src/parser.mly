@@ -181,18 +181,16 @@ fundef:
   | FUN id = ID params = paren(separated_list(COMMA, id_and_type_opt))
     topt = preceded(COLON, typespec)? EQUAL body = expression
     {
-      let t_params = List.map (fun (_, tvar) -> tvar) params in
-      let t_ret =
+      let tret =
         match topt with
         | Some(x) -> x
         | None -> TEmpty
       in
-      let t_fun = TFun(t_params, t_ret) in
       {
         fun_pub = false;
         fun_id = id;
         fun_params = params;
-        fun_type = t_fun;
+        fun_rettype = tret;
         fun_body = body;
       }
     }
@@ -362,7 +360,7 @@ newnode:
       {
         newnode_id = id;
         newnode_binds = binds;
-        newnode_module = module_id;
+        newnode_module = (module_id, UnknownId);
         newnode_margs = margs;
         newnode_inputs = inputs;
       }
@@ -388,11 +386,12 @@ expression:
     { (EBinOp(op, expr1, expr2), TEmpty) }
   | c = UID v = expression?
     {
+      let cons = (c, UnknownId) in
       match v with
-      | Some x -> (EVariant(c, x), TEmpty)
+      | Some x -> (EVariant(cons, x), TEmpty)
       | None ->
         let expr_unit = (EConst(LUnit), TEmpty) in
-        (EVariant(c, expr_unit), TEmpty)
+        (EVariant(cons, expr_unit), TEmpty)
     }
   | expr = paren(separated_nonempty_list(COMMA, expression))
     {
@@ -405,12 +404,12 @@ expression:
     { (EConst(expr), TEmpty) }
   | RETAIN
     { (ERetain, TEmpty) }
-  | expr = ID
-    { (EId(expr), TEmpty) }
+  | id = ID
+    { let idref = (id, UnknownId) in (EId idref, TEmpty) }
   | id = ID AT annot = annotation
-    { (EAnnot(id, annot), TEmpty) }
+    { let idref = (id, UnknownId) in (EAnnot(idref, annot), TEmpty) }
   | id = ID args = paren(separated_list(COMMA, expression))
-    { (EFuncall(id, args), TEmpty) }
+    { let idref = (id, UnknownId) in (EFuncall(idref, args), TEmpty) }
   | IF etest = expression THEN ethen = expression ELSE eelse = expression
     %prec prec_if
     { (EIf(etest, ethen, eelse), TEmpty) }
@@ -446,11 +445,12 @@ pattern:
     }
   | c = UID v = pattern?
     {
+      let cons = (c, UnknownId) in
       match v with
-      | Some(x) -> (PVariant(c,x), TEmpty)
+      | Some(x) -> (PVariant(cons,x), TEmpty)
       | _ ->
         let pat_unit = (PConst(LUnit), TEmpty) in
-        (PVariant(c, pat_unit), TEmpty)
+        (PVariant(cons, pat_unit), TEmpty)
     }
 
 %inline

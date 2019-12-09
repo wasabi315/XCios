@@ -85,11 +85,15 @@ let find_ids_expr targets expr =
     | ETuple(es) -> List.fold_right visit_expr es acc
     | EConst(_) | ERetain -> acc
     | EAnnot(_, ALast) -> acc (* ignore @last *)
-    | EId(id) | EAnnot(id, _) ->
+    | EId(idref) | EAnnot(idref, _) ->
+       let (id, _) = idref in
        if Idset.mem id targets then Idset.add id acc else acc
-    | EFuncall(fid, args) ->
-       (if Idset.mem fid targets then Idset.add fid acc else acc)
-       |> List.fold_right visit_expr args
+    | EFuncall(fidref, args) ->
+       let (fid, _) = fidref in
+       let acc = 
+         if Idset.mem fid targets then Idset.add fid acc else acc
+       in
+       List.fold_right visit_expr args acc
     | EIf(etest, ethen, eelse) ->
        visit_expr etest acc
        |> visit_expr ethen
@@ -126,16 +130,18 @@ let find_ids_newnode targets def =
 
 let find_mids_moduledef targets def =
   Idmap.fold (fun _ d mids ->
-      if Idset.mem d.newnode_module targets then
-        Idset.add d.newnode_module mids
+      let (mid, _) = d.newnode_module in
+      if Idset.mem mid targets then
+        Idset.add mid mids
       else mids
     ) def.module_newnodes Idset.empty
 
 let find_mids_smoduledef targets def =
   let add_state_mids state mids =
     Idmap.fold (fun _ d mids ->
-        if Idset.mem d.newnode_module targets then
-          Idset.add d.newnode_module mids
+        let (mid, _) = d.newnode_module in
+        if Idset.mem mid targets then
+          Idset.add mid mids
         else mids
       ) state.state_newnodes mids
   in

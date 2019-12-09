@@ -34,9 +34,6 @@ let rec adjust_level id level = function
           if id = id' then raise_err "recursive type"
           else r := TVFree(id', (min level level'))
      end
-  | TFun(args, ret) ->
-     List.iter (adjust_level id level) args;
-     adjust_level id level ret
   | TTuple(ts) -> List.iter (adjust_level id level) ts
   | _ -> ()
 
@@ -49,10 +46,6 @@ let rec unify t1 t2 =
   | TTuple(xs), TTuple(ys) ->
      let ts = unify_list xs ys in
      TTuple(ts)
-  | TFun(params1, t1), TFun(params2, t2) ->
-     let params = unify_list params1 params2 in
-     let ret = unify t1 t2 in
-     TFun(params, ret)
   | TVar({contents = TVBound(t1)} as r), t2
     | t1, TVar({contents = TVBound(t2)} as r) ->
      let t = unify t1 t2 in
@@ -73,8 +66,6 @@ and unify_list ts1 ts2 =
 (* Generalize free variables. *)
 let rec generalize level = function
   | TTuple(ts) -> List.iter (generalize level) ts
-  | TFun(params, t) ->
-     List.iter (generalize level) params; generalize level t
   | TVar({contents = TVFree(id,level')} as r) ->
      if level' > level then r := TVGeneric(id) else ()
   | TVar({contents = TVBound(t)}) -> generalize level t
@@ -85,10 +76,6 @@ let instantiate level t =
     let general_to_free = Hashtbl.create 10 in
     let rec visit = function
       | TTuple(ts) -> TTuple(List.map visit ts)
-      | TFun(params, t) ->
-         let inst_params = List.map visit params in
-         let inst_return = visit t in
-         TFun(inst_params, inst_return)
       | TVar({contents = TVGeneric(id)}) ->
          begin
            match Hashtbl.find_opt general_to_free id with
@@ -109,10 +96,6 @@ let rec replace_tempty level = function
   | TTuple(ts) ->
      let ts' = List.map (replace_tempty level) ts in
      TTuple(ts')
-  | TFun(tparams, tret) ->
-     let tparams' = List.map (replace_tempty level) tparams in
-     let tret' = replace_tempty level tret in
-     TFun(tparams', tret')
   | TVar({contents = TVBound(t)}) -> replace_tempty level t
   | _ as t -> t
 
@@ -121,7 +104,6 @@ let rec is_concrete = function
   | TBool | TInt | TFloat | TUnit | TId(_) | TState
     -> true
   | TTuple(ts) -> List.for_all is_concrete ts
-  | TFun(args,t) -> (List.for_all is_concrete args) && (is_concrete t)
   | TVar({contents = TVBound(t)}) -> is_concrete t
   | TVar(_) -> false
   | TEmpty -> assert false
@@ -130,13 +112,32 @@ let rec flatten_type = function
   | TTuple(ts) ->
      let ts = List.map flatten_type ts in
      TTuple(ts)
-  | TFun(targs, tret) ->
-     let targs = List.map flatten_type targs in
-     let tret = flatten_type tret in
-     TFun(targs, tret)
   | TVar({contents = TVBound(t)}) -> flatten_type t
   | t -> t
-            
+
+let deref_idinfo_type (id, idinfo) =
+  let idinfo = 
+    match idinfo with
+    | UnknownId -> idinfo
+    | LocalId(t) -> LocalId (flatten_type t)
+    | ConstId(file, t) -> ConstId (file, flatten_type t)
+    | FunId(file, tparams, tret) ->
+       let tparams = List.map flatten_type tparams in
+       let tret = flatten_type tret in
+       FunId(file, tparams, tret)
+    | ValueCons(file, tvalue, tret) ->
+       ValueCons(file, flatten_type tvalue, flatten_type tret)
+    | ModuleCons(file, tps, tis, tos) ->
+       let tps = List.map flatten_type tps in
+       let tis = List.map flatten_type tis in
+       let tos = List.map flatten_type tos in
+       ModuleCons(file, tps, tis, tos)
+    | NodeId(t) -> NodeId (flatten_type t)
+    | NewnodeId(mid, pos, t) -> NewnodeId(mid, pos, flatten_type t)
+    | StateCons(t) -> StateCons (flatten_type t)
+  in
+  (id, idinfo)
+       
 let rec deref_pattern_type (ast, t) =
   let t = flatten_type t in
   match ast with
@@ -146,6 +147,7 @@ let rec deref_pattern_type (ast, t) =
      let ps = List.map deref_pattern_type ps in
      (PTuple(ps), t)
   | PVariant(c, p) ->
+     let c = deref_idinfo_type c in
      let p = deref_pattern_type p in
      (PVariant(c, p), t)
             
@@ -156,20 +158,23 @@ let rec deref_expr_type (ast, t) =
     | EUniOp(op, e) ->
        let e = deref_expr_type e in
        (EUniOp(op, e), t)
-       
     | EBinOp(op, e1, e2) ->
        let e1 = deref_expr_type e1 in
        let e2 = deref_expr_type e2 in
        (EBinOp(op, e1, e2), t)
     | EVariant(c, e) ->
+       let c = deref_idinfo_type c in
        let e = deref_expr_type e in
        (EVariant(c, e), t)
     | ETuple(es) ->
        let es = List.map deref_expr_type es in
        (ETuple(es), t)
-    | EConst(_) | ERetain | EId(_) | EAnnot(_, _) | EDot(_, _) ->
+    | EConst(_) | ERetain ->
        (ast, t)
+    | EId(idref) -> (EId (deref_idinfo_type idref), t)
+    | EAnnot(idref, annot) -> (EAnnot (deref_idinfo_type idref, annot), t)
     | EFuncall(f, args) ->
+       let f = deref_idinfo_type f in
        let args = List.map deref_expr_type args in
        (EFuncall(f, args), t)
     | EIf(etest, ethen, eelse) ->
@@ -197,26 +202,36 @@ and deref_branch_type { branch_pat; branch_body } =
   { branch_pat = pat; branch_body = body }
             
 (*----- inference functions -----*)
-let infer_identifier env level id =
-  try
-    match Idmap.find id env with
-    | ConstId(t) -> ConstId(instantiate level t)
-    | NodeId(t) -> NodeId(instantiate level t)
-    | SubmoduleId(ts) ->  SubmoduleId(List.map (instantiate level) ts)
-    | ValueCons(tc, tv) ->
-       let tc = instantiate level tc in
-       let tv = instantiate level tv in
-       ValueCons(tc, tv)
-    | ModuleCons(pts, its, ots) ->
-       let pts = List.map (instantiate level) pts in
-       let its = List.map (instantiate level) its in
-       let ots = List.map (instantiate level) ots in
-       ModuleCons(pts, its, ots)
-  with
-  | Not_found ->
-     raise_err_pp (fun ppf ->
-         fprintf ppf "Unknown %a" pp_identifier id
-       )
+let infer_idref env level (id, _) =
+  let idinfo =
+    try
+      match Idmap.find id env with
+      | UnknownId -> assert false
+      | LocalId(t) -> LocalId (instantiate level t)
+      | ConstId(file, t) -> ConstId (file, instantiate level t)
+      | FunId(file, tparams, tret) ->
+         let tparams = List.map (instantiate level) tparams in
+         let tret = instantiate level tret in
+         FunId(file, tparams, tret)
+      | ValueCons(file, tvalue, tret) ->
+         let tvalue = instantiate level tvalue in
+         let tret = instantiate level tret in
+         ValueCons(file, tvalue, tret)
+      | ModuleCons(file, tps, tis, tos) ->
+         let tps = List.map (instantiate level) tps in
+         let tis = List.map (instantiate level) tis in
+         let tos = List.map (instantiate level) tos in
+         ModuleCons(file, tps, tis, tos)
+      | NodeId(t) -> NodeId (instantiate level t)
+      | NewnodeId(mid, pos, t) -> NewnodeId(mid, pos, instantiate level t)
+      | StateCons(t) -> StateCons (instantiate level t)
+    with
+    | Not_found ->
+       raise_err_pp (fun ppf ->
+           fprintf ppf "Unknown %a" pp_identifier id
+         )
+  in
+  (id, idinfo)
 
 let infer_literal _env _level ast =
   match ast with
@@ -246,18 +261,18 @@ let rec infer_pattern env level (ast, _) =
      let res = (PTuple(ps'), TTuple(tps)) in
      (res, List.concat binds)
   | PVariant(c, p) ->
+     let (cid, consinfo) as c = infer_idref env level c in
      let ((_, tp) as p', binds) = infer_pattern env level p in
      begin
-       match (infer_identifier env level c) with
-       | ValueCons(tp2, tret) ->
+       match consinfo with
+       | ValueCons(_, tp2, tret) ->
           let _ = unify tp tp2 in
           let res = (PVariant(c, p'), tret) in
           (res, binds)
-       | ModuleCons(_, _, _) ->
+       | _ ->
           raise_err_pp (fun ppf ->
-              fprintf ppf "expected constructor : %a" pp_identifier c
+              fprintf ppf "expected value constructor : %a" pp_identifier cid
             )
-       | _ -> assert false
      end
 
 let rec infer_expression env level (ast, _) =
@@ -303,43 +318,48 @@ let rec infer_expression env level (ast, _) =
   in
 
   let infer_retain () =
-    match (infer_identifier env level "Retain") with
-    | NodeId(t) -> (ast, t)
+    match Idmap.find "Retain" env with
+    | LocalId(t) -> (ast, t)
     | _ -> assert false (* fail in register "Retain" *)
   in
 
-  let infer_idref id =
-    match (infer_identifier env level id) with
-    | ConstId(t) | NodeId(t) -> (ast, t)
-    | SubmoduleId(_) ->
+  let infer_idexpr idref =
+    let (id, idinfo) as idref = infer_idref env level idref in
+    match idinfo with
+    | LocalId(t) | ConstId(_, t) | NodeId(t) | NewnodeId(_, _, t) ->
+       (EId idref, t)
+    | _ ->
        raise_err_pp (fun ppf ->
-           fprintf ppf "submodule cannot refer directly : %a" pp_identifier id
+           fprintf ppf "invalid identifier reference : %a" pp_identifier id
          )
-    | _ -> assert false
   in
 
-  let infer_annot id _annot =
-    match (infer_identifier env level id) with
-    | NodeId(t) -> (ast, t)
-    | ConstId(_) | SubmoduleId(_) ->
+  let infer_annot idref annot =
+    let (id, idinfo) as idref = infer_idref env level idref in
+    match idinfo with
+    | NodeId(t) | NewnodeId(_, _, t) ->
+       (EAnnot (idref, annot), t)
+    | _ ->
        raise_err_pp (fun ppf ->
            fprintf ppf "expected node : %a" pp_identifier id
          )
-    | _ -> assert false
   in
 
   let infer_variant c v =
-    let (_, tv) as v' = infer_expression env level v in
-    let ast' = EVariant(c, v') in
-    match (infer_identifier env level c) with
-    | ValueCons(tv2, tret) ->
+    let (cid, cinfo) as c = infer_idref env level c in
+    let (_, tv) as v = infer_expression env level v in
+    let ast = EVariant(c, v) in
+    match cinfo with
+    | ValueCons (_, tv2, tret) ->
        let _ = unify tv tv2 in
-       (ast', tret)
-    | ModuleCons(_, _, _) ->
+       (ast, tret)
+    | StateCons tv2 ->
+       let _ = unify tv tv2 in
+       (ast, TState)
+    | _ ->
        raise_err_pp (fun ppf ->
-           fprintf ppf "expected constructor : %a" pp_identifier c
+           fprintf ppf "expected constructor : %a" pp_identifier cid
          )
-    | _ -> assert false
   in
 
   let infer_tuple es =
@@ -350,18 +370,18 @@ let rec infer_expression env level (ast, _) =
   in
 
   let infer_funcall f args =
-    let args' = List.map (infer_expression env level) args in
-    let (_, targs) = List.split args' in
-    let ast' = EFuncall(f, args') in
-    match (infer_identifier env level f) with
-    | ConstId(TFun(targs2, tret)) ->
+    let (fid, finfo) as f = infer_idref env level f in
+    let args = List.map (infer_expression env level) args in
+    let (_, targs) = List.split args in
+    let ast = EFuncall(f, args) in
+    match finfo with
+    | FunId(_, targs2, tret) ->
        let _ = unify_list targs targs2 in
-       (ast', tret)
-    | NodeId(_) | SubmoduleId(_) ->
+       (ast, tret)
+    | _ ->
        raise_err_pp (fun ppf ->
-           fprintf ppf "expected a function : %a" pp_identifier f
+           fprintf ppf "expected a function : %a" pp_identifier fid
          )
-    | _ -> assert false
   in
 
   let infer_let binds body =
@@ -370,9 +390,9 @@ let rec infer_expression env level (ast, _) =
       let (_, tbody) as body' = infer_expression nowenv (level+1) body in
       let () = generalize level tbody in
       let _ = unify tid tbody in
-      let newenv = add_env_const id tbody nowenv in
+      let env = add_env id (LocalId tbody) nowenv in
       let res = { binder_id = (id, tbody); binder_body = body'} in
-      (res :: acc, newenv)
+      (res :: acc, env)
     in
 
     let (binds', newenv) = List.fold_left infer_binder ([], env) binds in
@@ -396,7 +416,7 @@ let rec infer_expression env level (ast, _) =
     let infer_branch texpr {branch_pat; branch_body} =
       let ((_, tpat) as pat', newbinds) = infer_pattern env level branch_pat in
       let newenv =
-        List.fold_right (fun (id, t) env-> add_env_const id t env) newbinds env
+        List.fold_right (fun (id, t) env-> add_env id (LocalId t) env) newbinds env
       in
       let (_, tbody) as body'= infer_expression newenv level branch_body in
       let res = { branch_pat = pat'; branch_body = body' } in
@@ -423,7 +443,7 @@ let rec infer_expression env level (ast, _) =
      let tl = infer_literal env level l in
      (EConst(l), tl)
   | ERetain -> infer_retain ()
-  | EId(id) -> infer_idref id
+  | EId(id) -> infer_idexpr id
   | EAnnot(id, annot) -> infer_annot id annot
   | EFuncall(f, args) -> infer_funcall f args
   | EIf(etest, ethen, eelse) -> infer_if etest ethen eelse
@@ -444,10 +464,9 @@ let infer_constdef env def =
   else { def with const_body = body; const_type = t }
 
 let infer_fundef env def =
-  let t = replace_tempty 1 def.fun_type in
   let env =
     List.fold_right (fun (id, t) e->
-        add_env_const id (replace_tempty 1 t) e
+        add_env id (LocalId (replace_tempty 1 t)) e
       ) def.fun_params env
   in
   let (_, tbody) as body =
@@ -456,19 +475,19 @@ let infer_fundef env def =
   let params =
     List.map (fun (id, _) ->
         match Idmap.find id env with
-        | ConstId(t) ->
-           let t = flatten_type t in
-           (id, t)
+        | LocalId(t) -> (id, flatten_type t)
         | _ -> assert false
       ) def.fun_params
   in
-  let (_, tparams) = List.split params in
-  let t = unify (TFun(tparams, tbody)) t in
-  let () = generalize 0 t in
-  { def with fun_params = params; fun_type = t; fun_body = body }
+  let tret =
+    replace_tempty 1 def.fun_rettype |> unify tbody |> flatten_type
+  in
+  let () = generalize 0 tret in
+  { def with fun_params = params; fun_rettype = tret; fun_body = body }
 
 let infer_node env def =
   let t = replace_tempty 1 def.node_type in
+  let env = add_env "Retain" (LocalId t) env in
   let init =
     match def.node_init with
     | Some(expr) ->
@@ -490,35 +509,45 @@ let infer_node env def =
       )
   else { def with node_init = init; node_body = body; node_type = t }
 
-let infer_submodule env def =
-  match (infer_identifier env 1 def.submodule_id) with
-  | ValueCons(_, _) ->
-     raise_err_pp (fun ppf ->
-         fprintf ppf "expected constructor : %a"
-           pp_identifier def.submodule_id
-       )
-  | ModuleCons(pts, its, ots) ->
+let infer_newnode env def =
+  let (_, midinfo) as mid = infer_idref env 1 def.newnode_module in
+  match midinfo with
+  | ModuleCons(_, pts, its, ots) ->
      let margs =
        List.map (fun e ->
            infer_expression env 1 e |> deref_expr_type
-         ) def.submodule_margs
+         ) def.newnode_margs
      in
      let (_, tmargs) = List.split margs in
      let _ = unify_list pts tmargs in
      let inputs =
        List.map (fun e ->
            infer_expression env 1 e |> deref_expr_type
-         ) def.submodule_inputs
+         ) def.newnode_inputs
      in
-     let (_, tinputs) = List.split inputs in
-     let _ = unify_list its tinputs in
+     let (_, its2) = List.split inputs in
+     let _ = unify_list its its2 in
+     let ots2 =
+       def.newnode_binds
+       |> List.fold_left (fun acc (_, _, t) -> t :: acc) [] 
+       |> List.rev
+     in
+     let _ = unify_list ots ots2 in
+     let binds =
+       List.map (fun (attr, id, t) -> (attr, id, flatten_type t)) def.newnode_binds
+     in
      {
-       def with submodule_type = ots;
-                submodule_margs = margs;
-                submodule_inputs = inputs;
+       def with newnode_binds = binds;
+                newnode_module = mid;
+                newnode_margs = margs;
+                newnode_inputs = inputs;
      }
-  | _ -> assert false
-  
+  | _ ->
+     raise_err_pp (fun ppf ->
+         fprintf ppf "expected module : %a"
+           pp_identifier def.newnode_id
+       )
+
 let infer_header_node env (id, init, t) =
   match init with
   | None -> (id, None, t)
@@ -544,11 +573,9 @@ let infer_module env def =
   let make_env def env =
     env
     |> List.fold_right
-         (fun (id, t) env -> add_env_const id t env) def.module_params
+         (fun (id, t) env -> add_env id (LocalId t) env) def.module_params
     |> List.fold_right
-         (fun (id, _, t) env -> add_env_node id t env) def.module_in
-    |> List.fold_right
-         (fun (id, _, t) env -> add_env_node id t env) def.module_out
+         (fun (id, _, t) env -> add_env id (NodeId t) env) def.module_in
   in    
 
   let infer_module_consts env def =
@@ -558,7 +585,7 @@ let infer_module env def =
           let def = infer_constdef env def in
           let cs = Idmap.add id def cs in
           let all = Idmap.add id (MConst def) all in
-          let env = register_const def env in
+          let env = add_env def.const_id (LocalId def.const_type) env in
           (cs, all, env)
         ) (def.module_consts, def.module_all, env) def.module_consts_ord
     in
@@ -576,18 +603,18 @@ let infer_module env def =
              let all = Idmap.add id (MNode def) all in
              let env = register_node def env in
              (ns, subms, all, env)
-          | MSubmodule(def) ->
-             let def = infer_submodule env def in
+          | MNewnode(def) ->
+             let def = infer_newnode env def in
              let subms = Idmap.add id def subms in
-             let all = Idmap.add id (MSubmodule def) all in
-             let env = register_submodule def env in
+             let all = Idmap.add id (MNewnode def) all in
+             let env = register_newnode def env in
              (ns, subms, all, env)
           | _ -> assert false
-        ) (def.module_nodes, def.module_submodules, def.module_all, env)
+        ) (def.module_nodes, def.module_newnodes, def.module_all, env)
         def.module_update_ord
     in
     let def =
-      { def with module_nodes = ns; module_submodules = subms; module_all = all }
+      { def with module_nodes = ns; module_newnodes = subms; module_all = all }
     in
     (def, env)
   in
@@ -607,7 +634,7 @@ let infer_state env def =
 
   let make_env def env =
     List.fold_right (fun (id,t) env ->
-        add_env_const id t env
+        add_env id (LocalId t) env
       ) def.state_params env
   in
   
@@ -618,7 +645,7 @@ let infer_state env def =
           let def = infer_constdef env def in
           let cs = Idmap.add id def cs in
           let all = Idmap.add id (SConst def) all in
-          let env = register_const def env in
+          let env = add_env def.const_id (LocalId def.const_type) env in
           (cs, all, env)
         ) (def.state_consts, def.state_all, env) def.state_consts_ord
     in
@@ -636,23 +663,24 @@ let infer_state env def =
              let all = Idmap.add id (SNode def) all in
              let env = register_node def env in
              (ns, subms, all, env)
-          | SSubmodule(def) ->
-             let def = infer_submodule env def in
+          | SNewnode(def) ->
+             let def = infer_newnode env def in
              let subms = Idmap.add id def subms in
-             let all = Idmap.add id (SSubmodule def) all in
-             let env = register_submodule def env in
+             let all = Idmap.add id (SNewnode def) all in
+             let env = register_newnode def env in
              (ns, subms, all, env)
           | _ -> assert false
-        ) (def.state_nodes, def.state_submodules, def.state_all, env)
+        ) (def.state_nodes, def.state_newnodes, def.state_all, env)
         def.state_update_ord
     in
     let def =
-      { def with state_nodes = ns; state_submodules = subms; state_all = all }
+      { def with state_nodes = ns; state_newnodes = subms; state_all = all }
     in
     (def, env)
   in
 
   let infer_state_switch env switch_expr : expression =
+    let env = add_env "Retain" (LocalId TState) env in
     let (astsw, tsw) =
       infer_expression env 1 switch_expr |> deref_expr_type
     in
@@ -671,13 +699,9 @@ let infer_smodule env def =
   let make_env def env = 
     env
     |> List.fold_right
-         (fun (id, t) env -> add_env_const id t env) def.smodule_params
+         (fun (id, t) env -> add_env id (LocalId t) env) def.smodule_params
     |> List.fold_right
-         (fun (id, _, t) env -> add_env_node id t env) def.smodule_in
-    |> List.fold_right
-         (fun (id, _, t) env -> add_env_node id t env) def.smodule_out
-    |> List.fold_right
-         (fun (id, _, t) env -> add_env_node id t env) def.smodule_shared
+         (fun (id, _, t) env -> add_env id (NodeId t) env) def.smodule_in
   in
 
   let register_state_conses def env =
@@ -689,7 +713,7 @@ let infer_smodule env def =
           | [] -> TUnit
           | _ -> TTuple(tparams)
         in
-        add_env_valuecons cons tvalue TState env
+        add_env cons (StateCons tvalue) env
       ) def.smodule_states env
   in
 
@@ -708,7 +732,7 @@ let infer_smodule env def =
           let def = infer_constdef env def in
           let cs = Idmap.add id def cs in
           let all = Idmap.add id (SMConst def) all in
-          let env = register_const def env in
+          let env = add_env def.const_id (LocalId def.const_type) env in
           (cs, all, env)
         ) (def.smodule_consts, def.smodule_all, env) def.smodule_consts_ord
     in
@@ -754,12 +778,12 @@ let infer_smodule env def =
   let () = check_state_header_nodes def in
   def
   
-let infer (other_progs : xfrp Idmap.t) (prog : xfrp) : xfrp =
+let infer (other_progs : xfrp Idmap.t) (filename : string) (prog : xfrp) : xfrp =
 
   let make_env prog =
     List.fold_right (fun file env ->
         let data = Idmap.find file other_progs in
-        use_program data env
+        use_program file data env
       ) prog.xfrp_use Idmap.empty
   in
   
@@ -774,13 +798,13 @@ let infer (other_progs : xfrp Idmap.t) (prog : xfrp) : xfrp =
              let def = infer_constdef env def in
              let cs = Idmap.add id def cs in
              let all = Idmap.add id (XFRPConst def) all in
-             let env = register_const def env in
+             let env = register_const filename def env in
              (cs, fs, all, env)
           | XFRPFun(def) ->
              let def = infer_fundef env def in
              let fs = Idmap.add id def fs in
              let all = Idmap.add id (XFRPFun def) all in
-             let env = register_fun def env in
+             let env = register_fun filename def env in
              (cs, fs, all, env)
           | _ -> assert false
         ) (prog.xfrp_consts, prog.xfrp_funs, prog.xfrp_all, env) material_ord
@@ -802,13 +826,13 @@ let infer (other_progs : xfrp Idmap.t) (prog : xfrp) : xfrp =
              let def = infer_module env def in
              let ms = Idmap.add id def ms in
              let all = Idmap.add id (XFRPModule def) all in
-             let env = register_module def env in
+             let env = register_module filename def env in
              (ms, sms, all, env)
           | XFRPSModule(def) ->
              let def = infer_smodule env def in
              let sms = Idmap.add id def sms in
              let all = Idmap.add id (XFRPSModule def) all in
-             let env = register_smodule def env in
+             let env = register_smodule filename def env in
              (ms, sms, all, env)
           | _ -> assert false
         ) (prog.xfrp_modules, prog.xfrp_smodules, prog.xfrp_all, env)

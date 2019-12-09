@@ -6,9 +6,6 @@ type identifier = string
 
 let pp_identifier = pp_print_string
 
-let pp_id_and_args pp_args =
-  pp_funcall pp_identifier pp_args
-
 let pp_id_and_type ppf (id, t) =
   fprintf ppf "%a : %a"
     pp_identifier id Type.pp_t t
@@ -28,6 +25,33 @@ let pp_idmap pp_contents ppf idmap =
   in
   fprintf ppf "@[<v>%a@]" (pp_list_break pp_binds) (Idmap.bindings idmap);
 
+(* identifier reference *)  
+type idinfo =
+  | UnknownId
+  | LocalId of Type.t
+  | ConstId of string * Type.t
+  | FunId of string * Type.t list * Type.t
+  | ValueCons of string * Type.t * Type.t
+  | ModuleCons of string * Type.t list * Type.t list * Type.t list
+  | NodeId of Type.t
+  | NewnodeId of identifier * int * Type.t
+  | StateCons of Type.t
+let pp_idinfo ppf = function
+  | UnknownId -> fprintf ppf "unknown"
+  | LocalId (_) -> fprintf ppf "local"
+  | ConstId (file, _) -> fprintf ppf "const:%a" pp_print_string file
+  | FunId (file, _, _) -> fprintf ppf "fun:%a" pp_print_string file
+  | ValueCons (file, _, _) -> fprintf ppf "value cons:%a" pp_print_string file
+  | ModuleCons (file, _, _, _) -> fprintf ppf "module cons:%a" pp_print_string file
+  | NodeId (_) -> fprintf ppf "node"
+  | NewnodeId (mid, pos, _) ->
+     fprintf ppf "newnode:%a,%a" pp_identifier mid pp_print_int pos
+  | StateCons(_) -> fprintf ppf "state cons"
+
+type idref = identifier * idinfo
+let pp_idref ppf (id, idinfo) =
+  fprintf ppf "%a(%a)" pp_identifier id pp_idinfo idinfo
+           
 (* literal *)
 type literal =
   | LTrue
@@ -92,7 +116,7 @@ type pattern_ast =
   | PId of identifier
   | PConst of literal
   | PTuple of (pattern list)
-  | PVariant of identifier * pattern
+  | PVariant of idref * pattern
 and pattern = pattern_ast * Type.t
 
 let rec pp_pattern_ast ppf =
@@ -102,7 +126,7 @@ let rec pp_pattern_ast ppf =
     | PId(id) -> pp_identifier ppf id
     | PConst(c) -> pp_literal ppf c
     | PTuple(ps) -> fprintf ppf "(@[%a@])" (pp_list_comma pp_pattern) ps
-    | PVariant(c, p) -> fprintf ppf "%a@ %a" pp_identifier c pp_pattern p
+    | PVariant(c, p) -> fprintf ppf "%a@ %a" pp_idref c pp_pattern p
   end
 and pp_pattern ppf (ast, t) =
   fprintf ppf "%a : %a" pp_pattern_ast ast Type.pp_t t
@@ -111,13 +135,13 @@ and pp_pattern ppf (ast, t) =
 type expression_ast =
   | EUniOp of uni_op * expression
   | EBinOp of bin_op * expression * expression
-  | EVariant of identifier * expression
+  | EVariant of idref * expression
   | ETuple of expression list
   | EConst of literal
   | ERetain
-  | EId of identifier
-  | EAnnot of identifier * annotation
-  | EFuncall of identifier * (expression list)
+  | EId of idref
+  | EAnnot of idref * annotation
+  | EFuncall of idref * (expression list)
   | EIf of expression * expression * expression
   | ELet of (binder list) * expression
   | ECase of expression * (branch list)
@@ -141,15 +165,16 @@ let rec pp_expression_ast ppf = function
   | EBinOp(op, e1, e2) -> fprintf ppf "@[<2><binop %a@ @[%a@ %a@]>@]"
                             pp_bin_op op pp_expression e1 pp_expression e2
   | EVariant(c,v) -> fprintf ppf "@[<2><variant %a %a>@]"
-                       pp_identifier c pp_expression v
-  | ETuple(es) -> fprintf ppf "@[<2><tuple (@[%a@])>@]" (pp_list_comma pp_expression) es
+                       pp_idref c pp_expression v
+  | ETuple(es) -> fprintf ppf "@[<2><tuple (@[%a@])>@]"
+                    (pp_list_comma pp_expression) es
   | EConst(l) -> fprintf ppf "<const %a>" pp_literal l
   | ERetain -> fprintf ppf "<Retain>"
-  | EId(id) -> fprintf ppf "<id %a>" pp_identifier id
-  | EAnnot(id, annot) -> fprintf ppf "@[<2><annot @[%a %@@ %a@]>@]"
-                           pp_identifier id pp_annotation annot
-  | EFuncall(id, es) -> fprintf ppf "<funcall %a>"
-                        (pp_id_and_args pp_expression) (id, es)
+  | EId(idref) -> fprintf ppf "<id %a>" pp_idref idref
+  | EAnnot(idref, annot) -> fprintf ppf "@[<2><annot @[%a %@@ %a@]>@]"
+                           pp_idref idref pp_annotation annot
+  | EFuncall(idref, es) -> fprintf ppf "<@[<v 2>funcall %a@;@[<v>%a@]@]>"
+                          pp_idref idref (pp_list_comma pp_expression) es
   | EIf(etest, ethen, eelse) -> fprintf ppf "<if @[<v>%a@ %a@ %a@]>"
                                   pp_expression etest
                                   pp_expression ethen
@@ -208,16 +233,17 @@ type fundef =
     fun_pub : bool;
     fun_id : identifier;
     fun_params : (identifier * Type.t) list;
-    fun_type : Type.t;
+    fun_rettype : Type.t;
     fun_body : expression;
   }
 
-let pp_fundef ppf {fun_pub;fun_id;fun_type;fun_params;fun_body} =
+let pp_fundef ppf {fun_pub;fun_id;fun_rettype;fun_params;fun_body} =
   fprintf ppf "@[<v>FunDef: {@;<0 2>";
-  fprintf ppf "@[<v>id: %a@;" pp_id_and_type (fun_id, fun_type);
+  fprintf ppf "@[<v>id: %a@;" pp_identifier fun_id;
   fprintf ppf "public: %a@;" pp_print_bool fun_pub;
   fprintf ppf "params: @[%a@]@;"
     (pp_list_comma pp_id_and_type) fun_params;
+  fprintf ppf "return: %a" Type.pp_t fun_rettype;
   fprintf ppf "body: %a@]@;" pp_expression fun_body;
   fprintf ppf "}@]"
 
@@ -238,7 +264,7 @@ let pp_nattr ppf = function
 type node =
   {
     node_attr : nattr;
-    node_id : identifier;
+    node_id   : identifier;
     node_init : expression option;
     node_type : Type.t;
     node_body : expression;
@@ -254,7 +280,7 @@ type newnode =
   {
     newnode_id : identifier; (* generated by compiler *)
     newnode_binds : (nattr * identifier * Type.t) list;
-    newnode_module : identifier;
+    newnode_module : idref;
     newnode_margs : expression list;
     newnode_inputs : expression list;
   }
@@ -265,7 +291,7 @@ let pp_newnode ppf def =
   fprintf ppf "@[<v>newnode: {@;<0 2>";
   fprintf ppf "@[<v>bind: @[%a@]@;"
     (pp_list_comma pp_newnode_bind) def.newnode_binds;
-  fprintf ppf "module: %a@;" pp_identifier def.newnode_module;
+  fprintf ppf "module: %a@;" pp_idref def.newnode_module;
   fprintf ppf "args: %a@;" (pp_list_comma pp_expression) def.newnode_margs;
   fprintf ppf "input: @[%a@]@]@;" (pp_list_comma pp_expression) def.newnode_inputs;
   fprintf ppf "}@]"
