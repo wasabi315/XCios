@@ -281,9 +281,12 @@ let rec infer_expression env level (ast, _) =
     let (_, te1) as e1' = infer_expression env level e1 in
     let ast' = EUniOp(op, e1') in
     match op with
-    | UInv | UPlus | UMinus | UFPlus | UFMinus ->
+    | UInv | UPlus | UMinus ->
        let _ = unify TInt te1 in
        (ast', TInt)
+    | UFPlus | UFMinus ->
+       let _ = unify TFloat te1 in
+       (ast', TFloat)
     | UNot ->
        let _ = unify TBool te1 in
        (ast', TBool)
@@ -294,27 +297,31 @@ let rec infer_expression env level (ast, _) =
     let (_, te2) as e2' = infer_expression env level e2 in
     let ast' = EBinOp(op, e1', e2') in
     match op with
-    | BMul |BDiv | BAdd | BSub
-      | BMod | BShl | BShr
-      | BAnd | BOr | BXor
-      | BLt | BLeq | BGt | BGeq
-      -> let _ = unify TInt te1 in
-         let _ = unify TInt te2 in
-         (ast', TInt)
-    | BFMul |BFDiv | BFAdd | BFSub
-      | BFLt | BFLeq | BFGt | BFGeq
-      -> let _ = unify TFloat te1 in
-         let _ = unify TFloat te2 in
-         (ast', TFloat)
-    | BLand | BLor
-      -> let _ = unify TBool te1 in
-         let _ = unify TBool te2 in
-         (ast', TBool)
-    | BEq | BNeq
-      -> let tvar = gen_tvar_free level in
-         let _ = unify tvar te1 in
-         let _ = unify tvar te2 in
-         (ast', TBool)
+    | BMul |BDiv | BAdd | BSub | BMod | BShl | BShr | BAnd | BOr | BXor ->
+       let _ = unify TInt te1 in
+       let _ = unify TInt te2 in
+       (ast', TInt)
+    | BLt | BLeq | BGt | BGeq ->
+       let _ = unify TInt te1 in
+       let _ = unify TInt te2 in
+       (ast', TBool)
+    | BFMul |BFDiv | BFAdd | BFSub ->
+       let _ = unify TFloat te1 in
+       let _ = unify TFloat te2 in
+       (ast', TFloat)
+    | BFLt | BFLeq | BFGt | BFGeq ->
+       let _ = unify TFloat te1 in
+       let _ = unify TFloat te2 in
+       (ast', TBool)
+    | BLand | BLor ->
+       let _ = unify TBool te1 in
+       let _ = unify TBool te2 in
+       (ast', TBool)
+    | BEq | BNeq ->
+       let tvar = gen_tvar_free level in
+       let _ = unify tvar te1 in
+       let _ = unify tvar te2 in
+       (ast', TBool)
   in
 
   let infer_retain () =
@@ -492,22 +499,17 @@ let infer_node env def =
     match def.node_init with
     | Some(expr) ->
        let (_, texpr) as expr =
-         infer_expression env 1 expr |> deref_expr_type
+         infer_expression env 1 expr
        in
        let _ = unify t texpr in
        Some(expr)
     | None -> None
   in
   let (_, tbody) as body =
-    infer_expression env 1 def.node_body |> deref_expr_type
+    infer_expression env 1 def.node_body
   in
   let t = unify t tbody in
-  if not (is_concrete t) then
-    raise_err_pp (fun ppf ->
-        fprintf ppf "type of node is not concrete : %a"
-          pp_identifier def.node_id
-      )
-  else { def with node_init = init; node_body = body; node_type = t }
+  { def with node_init = init; node_body = body; node_type = t }
 
 let infer_newnode env def =
   let (_, midinfo) as mid = infer_idref env 1 def.newnode_module in
@@ -515,26 +517,29 @@ let infer_newnode env def =
   | ModuleCons(_, pts, its, ots) ->
      let margs =
        List.map (fun e ->
-           infer_expression env 1 e |> deref_expr_type
+           infer_expression env 1 e
          ) def.newnode_margs
      in
      let (_, tmargs) = List.split margs in
      let _ = unify_list pts tmargs in
      let inputs =
        List.map (fun e ->
-           infer_expression env 1 e |> deref_expr_type
+           infer_expression env 1 e
          ) def.newnode_inputs
      in
      let (_, its2) = List.split inputs in
      let _ = unify_list its its2 in
      let ots2 =
        def.newnode_binds
-       |> List.fold_left (fun acc (_, _, t) -> t :: acc) [] 
+       |> List.fold_left (fun acc (_, _, t) -> (replace_tempty 1 t) :: acc) [] 
        |> List.rev
      in
-     let _ = unify_list ots ots2 in
+     let ots = unify_list ots ots2 in
+     let margs = List.map deref_expr_type margs in
+     let inputs = List.map deref_expr_type inputs in
      let binds =
-       List.map (fun (attr, id, t) -> (attr, id, flatten_type t)) def.newnode_binds
+       List.map2 (fun (attr, id, _) t -> (attr, id, flatten_type t))
+         def.newnode_binds ots
      in
      {
        def with newnode_binds = binds;
@@ -568,6 +573,66 @@ let check_header_nodes
       ()
     ) node_decls
 
+let infer_whole_nodes env nodes newnodes =
+
+  let add_env_node def env =
+    match def.node_attr with
+    | NormalNode ->
+       let t = replace_tempty 1 def.node_type in
+       add_env def.node_id (NodeId t) env
+    | _ -> env
+  in
+  
+  let add_env_newnode def env =
+    let binds_with_index =
+      List.mapi (fun i (attr, id, t) -> (i, attr, id, t)) def.newnode_binds
+    in
+    List.fold_left (fun env (i, attr, id, t) ->
+        match attr with
+        | NormalNode ->
+           let t = replace_tempty 1 t in
+           let entry = NewnodeId (def.newnode_id, i, t) in
+           add_env id entry env
+        | _ -> env
+      ) env binds_with_index
+  in
+  
+  let make_env env  =
+    env
+    |> Idmap.fold (fun _ def env -> add_env_node def env) nodes
+    |> Idmap.fold (fun _ def env -> add_env_newnode def env) newnodes
+  in
+
+  let deref_nodedef_type def =
+    let t = flatten_type def.node_type in
+    let init =
+      match def.node_init with
+      | None -> None
+      | Some(expr) -> Some (deref_expr_type expr)
+    in
+    let body = deref_expr_type def.node_body in
+    let () = 
+      if not (is_concrete t) then
+        raise_err_pp (fun ppf ->
+            fprintf ppf "type of node is not concrete : %a"
+              pp_identifier def.node_id
+          )
+      else ()
+    in
+    { def with node_type = t; node_init = init; node_body = body }
+  in
+
+  (* 
+     Types of newnode elements must be determined by module signature.
+     You need not dereference types of them.
+   *)
+
+  let env = make_env env in
+  let nodes = Idmap.map (infer_node env) nodes in
+  let newnodes = Idmap.map (infer_newnode env) newnodes in
+  let nodes = Idmap.map deref_nodedef_type nodes in
+  (nodes, newnodes, env)
+  
 let infer_module env def =
 
   let make_env def env =
@@ -576,6 +641,8 @@ let infer_module env def =
          (fun (id, t) env -> add_env id (LocalId t) env) def.module_params
     |> List.fold_right
          (fun (id, _, t) env -> add_env id (NodeId t) env) def.module_in
+    |> List.fold_right
+         (fun (id, _, t) env -> add_env id (NodeId t) env) def.module_out
   in    
 
   let infer_module_consts env def =
@@ -594,27 +661,24 @@ let infer_module env def =
   in
 
   let infer_module_nodes env def =
-    let (ns, subms, all, env) =
-      List.fold_left (fun (ns, subms, all, env) id ->
-          match Idmap.find id all with
-          | MNode(def) ->
-             let def = infer_node env def in
-             let ns = Idmap.add id def ns in
-             let all = Idmap.add id (MNode def) all in
-             let env = register_node def env in
-             (ns, subms, all, env)
-          | MNewnode(def) ->
-             let def = infer_newnode env def in
-             let subms = Idmap.add id def subms in
-             let all = Idmap.add id (MNewnode def) all in
-             let env = register_newnode def env in
-             (ns, subms, all, env)
-          | _ -> assert false
-        ) (def.module_nodes, def.module_newnodes, def.module_all, env)
-        def.module_update_ord
+    let (nodes, newnodes, env) =
+      infer_whole_nodes env def.module_nodes def.module_newnodes
+    in
+    let all =
+      def.module_all
+      |> Idmap.fold (fun id def all ->
+             Idmap.add id (MNode def) all
+           ) nodes
+      |> Idmap.fold (fun id def all ->
+             Idmap.add id (MNewnode def) all
+           ) newnodes
     in
     let def =
-      { def with module_nodes = ns; module_newnodes = subms; module_all = all }
+      {
+        def with module_nodes = nodes;
+                 module_newnodes = newnodes;
+                 module_all = all
+      }
     in
     (def, env)
   in
@@ -654,27 +718,24 @@ let infer_state env def =
   in
 
   let infer_state_nodes env def =
-    let (ns, subms, all, env) =
-      List.fold_left (fun (ns, subms, all, env) id ->
-          match Idmap.find id all with
-          | SNode(def) ->
-             let def = infer_node env def in
-             let ns = Idmap.add id def ns in
-             let all = Idmap.add id (SNode def) all in
-             let env = register_node def env in
-             (ns, subms, all, env)
-          | SNewnode(def) ->
-             let def = infer_newnode env def in
-             let subms = Idmap.add id def subms in
-             let all = Idmap.add id (SNewnode def) all in
-             let env = register_newnode def env in
-             (ns, subms, all, env)
-          | _ -> assert false
-        ) (def.state_nodes, def.state_newnodes, def.state_all, env)
-        def.state_update_ord
+    let (nodes, newnodes, env) =
+      infer_whole_nodes env def.state_nodes def.state_newnodes
+    in
+    let all =
+      def.state_all
+      |> Idmap.fold (fun id def all ->
+             Idmap.add id (SNode def) all
+           ) nodes
+      |> Idmap.fold (fun id def all ->
+             Idmap.add id (SNewnode def) all
+           ) newnodes
     in
     let def =
-      { def with state_nodes = ns; state_newnodes = subms; state_all = all }
+      {
+        def with state_nodes = nodes;
+                 state_newnodes = newnodes;
+                 state_all = all
+      }
     in
     (def, env)
   in
@@ -696,14 +757,6 @@ let infer_state env def =
 
 let infer_smodule env def =
 
-  let make_env def env = 
-    env
-    |> List.fold_right
-         (fun (id, t) env -> add_env id (LocalId t) env) def.smodule_params
-    |> List.fold_right
-         (fun (id, _, t) env -> add_env id (NodeId t) env) def.smodule_in
-  in
-
   let register_state_conses def env =
     Idmap.fold (fun _ state env ->
         let cons = state.state_id in
@@ -711,10 +764,24 @@ let infer_smodule env def =
         let tvalue =
           match tparams with
           | [] -> TUnit
+          | [t] -> t
           | _ -> TTuple(tparams)
         in
         add_env cons (StateCons tvalue) env
       ) def.smodule_states env
+  in
+
+  let make_env def env = 
+    env
+    |> List.fold_right
+         (fun (id, t) env -> add_env id (LocalId t) env) def.smodule_params
+    |> List.fold_right
+         (fun (id, _, t) env -> add_env id (NodeId t) env) def.smodule_in
+    |> List.fold_right
+         (fun (id, _, t) env -> add_env id (NodeId t) env) def.smodule_out
+    |> List.fold_right
+         (fun (id, _, t) env -> add_env id (NodeId t) env) def.smodule_shared
+    |> register_state_conses def
   in
 
   let infer_smodule_init env init_expr =
@@ -772,19 +839,22 @@ let infer_smodule env def =
                smodule_init = init;
     }
   in
-  let env = register_state_conses def env in
   let (def, env) = infer_smodule_consts env def in
   let def = infer_smodule_states env def in
-  let () = check_state_header_nodes def in
+  (* let () = check_state_header_nodes def in *)
   def
   
 let infer (other_progs : xfrp Idmap.t) (filename : string) (prog : xfrp) : xfrp =
 
   let make_env prog =
-    List.fold_right (fun file env ->
-        let data = Idmap.find file other_progs in
-        use_program file data env
-      ) prog.xfrp_use Idmap.empty
+    Idmap.empty
+    |> List.fold_right (fun file env ->
+           let file = file ^ ".xfrp" in
+           let () = printf "use %s\n" file in
+           let data = Idmap.find file other_progs in
+           use_program file data env
+         ) prog.xfrp_use
+    |> Idmap.fold (fun _ def env -> register_type filename def env) prog.xfrp_types 
   in
   
   let infer_file_materials env prog =
@@ -843,7 +913,8 @@ let infer (other_progs : xfrp Idmap.t) (filename : string) (prog : xfrp) : xfrp 
     in
     (prog, env)
   in
-  
+
+  let () = printf "infer %s\n" filename in
   let env = make_env prog in
   let (prog, env) = infer_file_materials env prog in
   let (prog, _) = infer_file_modules env prog in
