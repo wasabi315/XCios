@@ -70,8 +70,8 @@ BANG EQUAL
 %token <string> ID
 %token <string> UID
 
-%token <string> INT
-%token <string> FLOAT
+%token <int> INT
+%token <float> FLOAT
 %token UNIT
 
 %token EOF
@@ -381,7 +381,17 @@ newnode_bind:
 expression:
   | op = uni_op expr = expression
     %prec prec_uni
-    { (EUniOp(op, expr), TEmpty) }
+    {
+      let (sub, _) = expr in
+      let ast = 
+        match op, sub with
+        | UPlus, EConst (LInt _) | UPlus, EConst (LFloat _) -> sub
+        | UMinus, EConst (LInt n) -> EConst (LInt (- n))
+        | UMinus, EConst (LFloat n) -> EConst (LFloat (-. n))
+        | _, _ -> EUniOp(op, expr)
+      in
+      (ast, TEmpty)
+    }
   | expr1 = expression op = bin_op expr2 = expression
     { (EBinOp(op, expr1, expr2), TEmpty) }
   | c = UID v = expression?
@@ -400,7 +410,7 @@ expression:
       | [x] -> x
       | _ -> (ETuple(expr), TEmpty)
     }
-  | expr = literal
+  | expr = single_literal
     { (EConst(expr), TEmpty) }
   | RETAIN
     { (ERetain, TEmpty) }
@@ -494,12 +504,29 @@ node_decl:
   | id = ID init = paren(expression)? COLON t = typespec
     { (id, init, t) }
 
-literal:
+single_literal:
   | TRUE { LTrue }
   | FALSE { LFalse }
   | UNIT { LUnit }
   | n = INT { LInt(n) }
   | n = FLOAT { LFloat(n) }
+
+literal:
+  | TRUE { LTrue }
+  | FALSE { LFalse }
+  | UNIT { LUnit }
+  | n = int_literal { LInt(n) }
+  | n = float_literal { LFloat(n) }
+
+int_literal:
+  | n = INT { n }
+  | PLUS n = int_literal { n }
+  | MINUS n = int_literal { - n }
+
+float_literal:
+  | n = FLOAT { n }
+  | PLUS n = float_literal { n }
+  | MINUS n = float_literal { -. n }
 
 typespec:
   | id = UID

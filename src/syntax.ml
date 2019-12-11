@@ -56,15 +56,15 @@ let pp_idref ppf (id, idinfo) =
 type literal =
   | LTrue
   | LFalse
-  | LInt of string
-  | LFloat of string
+  | LInt of int
+  | LFloat of float
   | LUnit
 
 let pp_literal ppf = function
   | LTrue -> fprintf ppf "<literal True>"
   | LFalse -> fprintf ppf "<literal False>"
-  | LInt(n) -> fprintf ppf "<literal int %a>" pp_print_string n
-  | LFloat(n) -> fprintf ppf "<literal float %a>" pp_print_string n
+  | LInt(n) -> fprintf ppf "<literal int %a>" pp_print_int n
+  | LFloat(n) -> fprintf ppf "<literal float %a>" pp_print_float n
   | LUnit -> fprintf ppf "<literal Unit>"
 
 (* operators *)

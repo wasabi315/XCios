@@ -95,8 +95,8 @@ rule read = parse
           if 'A' <= s.[0] && s.[0] <= 'Z' then UID s else ID s
     }
   | "()"     { UNIT }
-  | digits   { INT (Lexing.lexeme lexbuf)}
-  | fliteral { FLOAT (Lexing.lexeme lexbuf)}
+  | digits   { INT (Lexing.lexeme lexbuf |> int_of_string)}
+  | fliteral { FLOAT (Lexing.lexeme lexbuf |> float_of_string)}
   | eof      { EOF }
   | _        { assert false }
 and read_comment = parse
