@@ -85,7 +85,7 @@ let find_ids_expr targets expr =
     | ETuple(es) -> List.fold_right visit_expr es acc
     | EConst(_) | ERetain -> acc
     | EAnnot(_, ALast) -> acc (* ignore @last *)
-    | EId(idref) | EAnnot(idref, _) ->
+    | EId(idref) ->
        let (id, _) = idref in
        if Idset.mem id targets then Idset.add id acc else acc
     | EFuncall(fidref, args) ->
