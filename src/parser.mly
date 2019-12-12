@@ -101,7 +101,7 @@ xfrp:
     elems = nonempty_list(xfrp_elem)
     EOF
     {
-      let () = check_dupe_file elems in
+      let () = check_name_conflict_file elems in
       let (ts, cs, fs, ms, sms) = split_file_elems elems in
       let types = list_to_idmap (fun d -> d.type_id) ts in
       let consts = list_to_idmap (fun d -> d.const_id) cs in
@@ -215,7 +215,7 @@ xfrp_module:
     elems = nonempty_list(module_elem)
     RBRACE
     {
-      let () = check_dupe_module elems in
+      let () = check_name_conflict_module elems in
       let (cs, ns, newns) = split_module_elems elems in
       let consts = list_to_idmap (fun d -> d.const_id) cs in
       let nodes = list_to_idmap (fun d -> d.node_id) ns in
@@ -223,6 +223,7 @@ xfrp_module:
       let all = list_to_idmap module_elem_id elems in
       let consts_ord = tsort_consts consts in
       let update_ord = get_update_ord nodes newnodes in
+      let () = check_nodes out_nodes [] nodes newnodes in
       {
         module_pub = false;
         module_id = id;
@@ -263,12 +264,17 @@ xfrp_smodule:
     elems = nonempty_list(smodule_elem)
     RBRACE
     {
-      let () = check_dupe_smodule elems in
+      let () = check_name_conflict_smodule elems in
       let (cs, sts) = split_smodule_elems elems in
       let consts = list_to_idmap (fun d -> d.const_id) cs in
       let states = list_to_idmap (fun d -> d.state_id) sts in
       let all = list_to_idmap smodule_elem_id elems in
       let consts_ord = tsort_consts consts in
+      let () =
+        List.iter (fun st ->
+          check_nodes out_nodes shared_nodes st.state_nodes st.state_newnodes
+        ) sts
+      in
       {
         smodule_pub = false;
         smodule_id = id;
@@ -296,8 +302,8 @@ state:
     SWITCH COLON switch = expression
     RBRACE
     {
-      let () = check_dupe_state elems in
       let (cs, ns, newns) = split_state_elems elems in
+      let () = check_name_conflict_state elems in
       let consts = list_to_idmap (fun d -> d.const_id) cs in
       let nodes = list_to_idmap (fun d -> d.node_id) ns in
       let newnodes = list_to_idmap (fun d -> d.newnode_id) newns in
@@ -383,7 +389,7 @@ expression:
     %prec prec_uni
     {
       let (sub, _) = expr in
-      let ast = 
+      let ast =
         match op, sub with
         | UPlus, EConst (LInt _) | UPlus, EConst (LFloat _) -> sub
         | UMinus, EConst (LInt n) -> EConst (LInt (- n))

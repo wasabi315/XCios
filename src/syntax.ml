@@ -25,7 +25,7 @@ let pp_idmap pp_contents ppf idmap =
   in
   fprintf ppf "@[<v>%a@]" (pp_list_break pp_binds) (Idmap.bindings idmap);
 
-(* identifier reference *)  
+(* identifier reference *)
 type idinfo =
   | UnknownId
   | LocalId of Type.t
@@ -51,7 +51,7 @@ let pp_idinfo ppf = function
 type idref = identifier * idinfo
 let pp_idref ppf (id, idinfo) =
   fprintf ppf "%a(%a)" pp_identifier id pp_idinfo idinfo
-           
+
 (* literal *)
 type literal =
   | LTrue
@@ -359,7 +359,7 @@ let state_elem_id = function
   | SNode(d) -> d.node_id
   | SNewnode(d) -> d.newnode_id
   | SConst(d) -> d.const_id
-               
+
 type state =
   {
     state_id         : identifier;
@@ -398,10 +398,10 @@ let pp_smodule_elem ppf = function
   | SMState(d) -> pp_state ppf d
   | SMConst(d) -> pp_constdef ppf d
 
-let smodule_elem_id = function                
+let smodule_elem_id = function
   | SMState(d) -> d.state_id
   | SMConst(d) -> d.const_id
-                
+
 type xfrp_smodule =
   {
     smodule_pub        : bool;
@@ -454,7 +454,7 @@ let xfrp_elem_id = function
   | XFRPFun(d) -> d.fun_id
   | XFRPModule(d) -> d.module_id
   | XFRPSModule(d) -> d.smodule_id
-                    
+
 type xfrp =
   {
     xfrp_use : identifier list;

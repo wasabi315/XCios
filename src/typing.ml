@@ -116,7 +116,7 @@ let rec flatten_type = function
   | t -> t
 
 let deref_idinfo_type (id, idinfo) =
-  let idinfo = 
+  let idinfo =
     match idinfo with
     | UnknownId -> idinfo
     | LocalId(t) -> LocalId (flatten_type t)
@@ -137,7 +137,7 @@ let deref_idinfo_type (id, idinfo) =
     | StateCons(t) -> StateCons (flatten_type t)
   in
   (id, idinfo)
-       
+
 let rec deref_pattern_type (ast, t) =
   let t = flatten_type t in
   match ast with
@@ -150,7 +150,7 @@ let rec deref_pattern_type (ast, t) =
      let c = deref_idinfo_type c in
      let p = deref_pattern_type p in
      (PVariant(c, p), t)
-            
+
 let rec deref_expr_type (ast, t) =
   begin
     let t = flatten_type t in
@@ -200,7 +200,7 @@ and deref_branch_type { branch_pat; branch_body } =
   let pat = deref_pattern_type branch_pat in
   let body = deref_expr_type branch_body in
   { branch_pat = pat; branch_body = body }
-            
+
 (*----- inference functions -----*)
 let infer_idref env level (id, _) =
   let idinfo =
@@ -477,7 +477,7 @@ let infer_fundef env def =
       ) def.fun_params env
   in
   let (_, tbody) as body =
-    infer_expression env 1 def.fun_body |> deref_expr_type 
+    infer_expression env 1 def.fun_body |> deref_expr_type
   in
   let params =
     List.map (fun (id, _) ->
@@ -531,7 +531,7 @@ let infer_newnode env def =
      let _ = unify_list its its2 in
      let ots2 =
        def.newnode_binds
-       |> List.fold_left (fun acc (_, _, t) -> (replace_tempty 1 t) :: acc) [] 
+       |> List.fold_left (fun acc (_, _, t) -> (replace_tempty 1 t) :: acc) []
        |> List.rev
      in
      let ots = unify_list ots ots2 in
@@ -563,16 +563,6 @@ let infer_header_node env (id, init, t) =
      let _ = unify t texpr in
      (id, Some(expr), t)
 
-let check_header_nodes
-      (node_decls : (identifier * (expression option) * Type.t) list)
-      (nodes : node Idmap.t) : unit =
-  List.iter (fun (id, _, t) ->
-      let node = Idmap.find id nodes in
-      let t' = node.node_type in
-      let _ = unify t t' in
-      ()
-    ) node_decls
-
 let infer_whole_nodes env nodes newnodes =
 
   let add_env_node def env =
@@ -582,7 +572,7 @@ let infer_whole_nodes env nodes newnodes =
        add_env def.node_id (NodeId t) env
     | _ -> env
   in
-  
+
   let add_env_newnode def env =
     let binds_with_index =
       List.mapi (fun i (attr, id, t) -> (i, attr, id, t)) def.newnode_binds
@@ -596,7 +586,7 @@ let infer_whole_nodes env nodes newnodes =
         | _ -> env
       ) env binds_with_index
   in
-  
+
   let make_env env  =
     env
     |> Idmap.fold (fun _ def env -> add_env_node def env) nodes
@@ -611,7 +601,7 @@ let infer_whole_nodes env nodes newnodes =
       | Some(expr) -> Some (deref_expr_type expr)
     in
     let body = deref_expr_type def.node_body in
-    let () = 
+    let () =
       if not (is_concrete t) then
         raise_err_pp (fun ppf ->
             fprintf ppf "type of node is not concrete : %a"
@@ -622,7 +612,7 @@ let infer_whole_nodes env nodes newnodes =
     { def with node_type = t; node_init = init; node_body = body }
   in
 
-  (* 
+  (*
      Types of newnode elements must be determined by module signature.
      You need not dereference types of them.
    *)
@@ -632,7 +622,7 @@ let infer_whole_nodes env nodes newnodes =
   let newnodes = Idmap.map (infer_newnode env) newnodes in
   let nodes = Idmap.map deref_nodedef_type nodes in
   (nodes, newnodes, env)
-  
+
 let infer_module env def =
 
   let make_env def env =
@@ -643,12 +633,12 @@ let infer_module env def =
          (fun (id, _, t) env -> add_env id (NodeId t) env) def.module_in
     |> List.fold_right
          (fun (id, _, t) env -> add_env id (NodeId t) env) def.module_out
-  in    
+  in
 
   let infer_module_consts env def =
     let (cs, all, env) =
       List.fold_left (fun (cs, all, env) id ->
-          let def = Idmap.find id cs in 
+          let def = Idmap.find id cs in
           let def = infer_constdef env def in
           let cs = Idmap.add id def cs in
           let all = Idmap.add id (MConst def) all in
@@ -682,7 +672,7 @@ let infer_module env def =
     in
     (def, env)
   in
-  
+
   let env = make_env def env in
   let in_nodes = List.map (infer_header_node env) def.module_in in
   let out_nodes = List.map (infer_header_node env) def.module_out in
@@ -691,9 +681,8 @@ let infer_module env def =
   in
   let (def, env) = infer_module_consts env def in
   let (def, _) = infer_module_nodes env def in
-  let () = check_header_nodes def.module_out def.module_nodes in
   def
-  
+
 let infer_state env def =
 
   let make_env def env =
@@ -701,11 +690,11 @@ let infer_state env def =
         add_env id (LocalId t) env
       ) def.state_params env
   in
-  
+
   let infer_state_consts env def =
     let (cs, all, env) =
       List.fold_left (fun (cs, all, env) id ->
-          let def = Idmap.find id cs in 
+          let def = Idmap.find id cs in
           let def = infer_constdef env def in
           let cs = Idmap.add id def cs in
           let all = Idmap.add id (SConst def) all in
@@ -771,7 +760,7 @@ let infer_smodule env def =
       ) def.smodule_states env
   in
 
-  let make_env def env = 
+  let make_env def env =
     env
     |> List.fold_right
          (fun (id, t) env -> add_env id (LocalId t) env) def.smodule_params
@@ -795,7 +784,7 @@ let infer_smodule env def =
   let infer_smodule_consts env def =
     let (cs, all, env) =
       List.fold_left (fun (cs, all, env) id ->
-          let def = Idmap.find id cs in 
+          let def = Idmap.find id cs in
           let def = infer_constdef env def in
           let cs = Idmap.add id def cs in
           let all = Idmap.add id (SMConst def) all in
@@ -819,13 +808,6 @@ let infer_smodule env def =
     { def with smodule_states = sts; smodule_all = all }
   in
 
-  let check_state_header_nodes def =
-    Idmap.iter (fun _ state ->
-        check_header_nodes def.smodule_out state.state_nodes;
-        check_header_nodes def.smodule_shared state.state_nodes;
-      ) def.smodule_states
-  in
-
   let env = make_env def env in
   let in_nodes = List.map (infer_header_node env) def.smodule_in in
   let out_nodes = List.map (infer_header_node env) def.smodule_out in
@@ -841,9 +823,8 @@ let infer_smodule env def =
   in
   let (def, env) = infer_smodule_consts env def in
   let def = infer_smodule_states env def in
-  (* let () = check_state_header_nodes def in *)
   def
-  
+
 let infer (other_progs : xfrp Idmap.t) (filename : string) (prog : xfrp) : xfrp =
 
   let make_env prog =
@@ -854,14 +835,14 @@ let infer (other_progs : xfrp Idmap.t) (filename : string) (prog : xfrp) : xfrp 
            let data = Idmap.find file other_progs in
            use_program file data env
          ) prog.xfrp_use
-    |> Idmap.fold (fun _ def env -> register_type filename def env) prog.xfrp_types 
+    |> Idmap.fold (fun _ def env -> register_type filename def env) prog.xfrp_types
   in
-  
+
   let infer_file_materials env prog =
     let material_ord =
       Dependency.tsort_materials prog.xfrp_consts prog.xfrp_funs
     in
-    let (cs, fs, all, env) = 
+    let (cs, fs, all, env) =
       List.fold_left (fun (cs, fs, all, env) id ->
           match Idmap.find id all with
           | XFRPConst(def) ->
@@ -884,7 +865,7 @@ let infer (other_progs : xfrp Idmap.t) (filename : string) (prog : xfrp) : xfrp 
     in
     (prog, env)
   in
-  
+
   let infer_file_modules env prog =
     let module_ord =
       Dependency.tsort_modules prog.xfrp_modules prog.xfrp_smodules

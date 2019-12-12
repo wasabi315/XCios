@@ -90,7 +90,7 @@ let find_ids_expr targets expr =
        if Idset.mem id targets then Idset.add id acc else acc
     | EFuncall(fidref, args) ->
        let (fid, _) = fidref in
-       let acc = 
+       let acc =
          if Idset.mem fid targets then Idset.add fid acc else acc
        in
        List.fold_right visit_expr args acc

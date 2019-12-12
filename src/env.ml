@@ -10,7 +10,7 @@ let add_env (id : identifier) (entry : idinfo) (env : env) : env =
   match Idmap.find_opt id env with
   | Some(_) -> raise (NameConflict id)
   | None -> Idmap.add id entry env
-          
+
 (*----- Register definition to environment -----*)
 let register_type file def env : env =
   Idmap.fold (fun c tval env ->
@@ -27,7 +27,7 @@ let register_fun file def env : env =
   let (_, tparams) = List.split def.fun_params in
   let entry = FunId (file, tparams, def.fun_rettype) in
   add_env def.fun_id entry env
-  
+
 let register_module file def env : env =
   let ptype = List.map (fun (_, t) -> t) def.module_params in
   let itype = List.map (fun (_, _, t) -> t) def.module_in in
@@ -56,7 +56,7 @@ let register_newnode def env : env =
       let entry = NewnodeId (def.newnode_id, i, t) in
       add_env id entry env
     ) env binds_with_index
-  
+
 let use_program filename prog env : env =
   env
   |> Idmap.fold (fun _ def env ->
