@@ -30,7 +30,7 @@ let pp_idmap pp_contents ppf idmap =
   let pp_binds ppf (id, x) =
     fprintf ppf "%a -> %a" pp_identifier id pp_contents x
   in
-  fprintf ppf "@[<v>%a@]" (pp_list_break pp_binds) (Idmap.bindings idmap)
+  pp_list_comma pp_binds ppf (Idmap.bindings idmap)
 
 let pp_idset ppf idset =
   let idlist = Idset.to_seq idset |> List.of_seq in
