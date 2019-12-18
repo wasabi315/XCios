@@ -61,7 +61,7 @@ let find_tids_typedef targets def =
   let rec extract_id = function
     | TBool | TInt | TFloat | TUnit ->
        Idset.empty
-    | TId(name) ->
+    | TId(_, name) ->
        if Idset.mem name targets then
          Idset.singleton name
        else Idset.empty

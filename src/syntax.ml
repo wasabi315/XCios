@@ -10,6 +10,13 @@ let pp_id_and_type ppf (id, t) =
   fprintf ppf "%a : %a"
     pp_identifier id Type.pp_t t
 
+let conc_id idlist =
+  let idlist = List.rev idlist in
+  match idlist with
+  | [] -> ""
+  | x :: xs ->
+     List.fold_left (fun acc id -> id ^ "_" ^ acc) x xs
+
 module Identifier =
   struct
     type t = identifier
@@ -23,7 +30,19 @@ let pp_idmap pp_contents ppf idmap =
   let pp_binds ppf (id, x) =
     fprintf ppf "%a -> %a" pp_identifier id pp_contents x
   in
-  fprintf ppf "@[<v>%a@]" (pp_list_break pp_binds) (Idmap.bindings idmap);
+  fprintf ppf "@[<v>%a@]" (pp_list_break pp_binds) (Idmap.bindings idmap)
+
+let pp_idset ppf idset =
+  let idlist = Idset.to_seq idset |> List.of_seq in
+  pp_list_comma pp_identifier ppf idlist
+
+(* node attribute *)
+type nattr = NormalNode | InputNode | OutputNode | SharedNode
+let pp_nattr ppf = function
+  | NormalNode -> fprintf ppf "normal"
+  | InputNode -> fprintf ppf "input"
+  | OutputNode -> fprintf ppf "output"
+  | SharedNode -> fprintf ppf "shared"
 
 (* identifier reference *)
 type idinfo =
@@ -33,20 +52,50 @@ type idinfo =
   | FunId of string * Type.t list * Type.t
   | ValueCons of string * Type.t * Type.t
   | ModuleCons of string * Type.t list * Type.t list * Type.t list
-  | NodeId of Type.t
-  | NewnodeId of identifier * int * Type.t
-  | StateCons of Type.t
+  | StateCons of string * identifier * Type.t
+  | ModuleParam of Type.t
+  | ModuleConst of Type.t
+  | StateParam of Type.t
+  | StateConst of Type.t
+  | NodeId of nattr * Type.t
 let pp_idinfo ppf = function
   | UnknownId -> fprintf ppf "unknown"
-  | LocalId (_) -> fprintf ppf "local"
+  | LocalId _ -> fprintf ppf "local"
   | ConstId (file, _) -> fprintf ppf "const:%a" pp_print_string file
   | FunId (file, _, _) -> fprintf ppf "fun:%a" pp_print_string file
   | ValueCons (file, _, _) -> fprintf ppf "value cons:%a" pp_print_string file
   | ModuleCons (file, _, _, _) -> fprintf ppf "module cons:%a" pp_print_string file
-  | NodeId (_) -> fprintf ppf "node"
-  | NewnodeId (mid, pos, _) ->
-     fprintf ppf "newnode:%a,%a" pp_identifier mid pp_print_int pos
-  | StateCons(_) -> fprintf ppf "state cons"
+  | StateCons(_, _, _) -> fprintf ppf "state cons"
+  | ModuleParam _ -> fprintf ppf "module param"
+  | ModuleConst _ -> fprintf ppf "module const"
+  | StateParam _ -> fprintf ppf "state param"
+  | StateConst _ -> fprintf ppf "state const"
+  | NodeId (_,_) -> fprintf ppf "node"
+
+let map_idinfo_type (f : Type.t -> Type.t) (idinfo : idinfo) : idinfo =
+  match idinfo with
+  | UnknownId -> idinfo
+  | LocalId(t) -> LocalId (f t)
+  | ConstId(file, t) -> ConstId (file, f t)
+  | FunId(file, tparams, tret) ->
+     let tparams = List.map f tparams in
+     let tret = f tret in
+     FunId(file, tparams, tret)
+  | ValueCons(file, tvalue, tret) ->
+     let tvalue = f tvalue in
+     let tret = f tret in
+     ValueCons(file, tvalue, tret)
+  | ModuleCons(file, tps, tis, tos) ->
+     let tps = List.map f tps in
+     let tis = List.map f tis in
+     let tos = List.map f tos in
+     ModuleCons(file, tps, tis, tos)
+  | StateCons(file, mname, t) -> StateCons (file, mname, f t)
+  | ModuleParam t -> ModuleParam (f t)
+  | ModuleConst t -> ModuleConst (f t)
+  | StateParam t -> StateParam (f t)
+  | StateConst t -> StateConst (f t)
+  | NodeId(attr, t) -> NodeId (attr, f t)
 
 type idref = identifier * idinfo
 let pp_idref ppf (id, idinfo) =
@@ -254,12 +303,6 @@ let pp_node_decl ppf (id, init, t) =
     pp_identifier id
     (pp_opt pp_expression pp_init_none) init
     Type.pp_t t
-
-type nattr = NormalNode | OutputNode | SharedNode
-let pp_nattr ppf = function
-  | NormalNode -> fprintf ppf "normal"
-  | OutputNode -> fprintf ppf "output"
-  | SharedNode -> fprintf ppf "shared"
 
 type node =
   {

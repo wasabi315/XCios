@@ -541,7 +541,7 @@ typespec:
       | "Bool" -> TBool
       | "Int" -> TInt
       | "Float" -> TFloat
-      | _ -> TId(id)
+      | _ -> TId("", id)
     }
   | ts = paren(separated_nonempty_list(COMMA, typespec))
     { TTuple(ts) }

@@ -70,13 +70,18 @@ let gather_filedata entry_file =
   let (_, data_map) = visit entry_file (Idmap.empty, Idmap.empty)  in
   data_map
 
-let codegen data_map =
-  printf "%a" (pp_idmap pp_xfrp) data_map;
+let codegen entry_file all_data =
+  let () =
+    printf "%a" (pp_idmap pp_xfrp) all_data;
+    print_newline ()
+  in
+  let metainfo = MetaInfo.get_metainfo entry_file all_data in
+  printf "%a" MetaInfo.pp_metainfo metainfo;
   print_newline ()
 
 let compile file =
   try
-    gather_filedata file |> codegen
+    gather_filedata file |> codegen file
   with
   | ParseError msg | FileError msg
     -> printf "Compile Error : %s" msg;
