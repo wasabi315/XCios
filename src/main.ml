@@ -13,7 +13,6 @@ exception FileError of string
 exception ParseError of string
 
 let parse filename =
-  let () = print_string filename; print_newline () in
   let () =
     if not (Sys.file_exists filename) then
       let msg = Printf.sprintf "File %s is not found" filename in
@@ -46,29 +45,26 @@ let parse filename =
      close_in_noerr ichan;
      raise e
 
-let get_filedata data_map filename ast =
-  Typing.infer data_map filename ast
-
 type filestate = Visiting | Visited
 
 let gather_filedata entry_file =
-  let rec visit file (visit_state, data_map) =
+  let rec visit file (visit_state, all_data) =
     match Idmap.find_opt file visit_state with
     | None ->
-       let ast = parse file in
-       let use_files = List.map (fun f -> f ^ ".xfrp") ast.xfrp_use in
-       let (visit_state, data_map) =
-         List.fold_right visit use_files (visit_state, data_map)
+       let filename = file ^ ".xfrp" in
+       let ast = parse filename in
+       let (visit_state, all_data) =
+         List.fold_right visit ast.xfrp_use (visit_state, all_data)
        in
-       let data = get_filedata data_map file ast in
-       let data_map =  Idmap.add file data data_map in
+       let data = Typing.infer all_data file ast in
+       let all_data =  Idmap.add file data all_data in
        let visit_state = Idmap.add file Visited visit_state in
-       (visit_state, data_map)
+       (visit_state, all_data)
     | Some(Visiting) -> raise (FileError "Detect cyclic file dependency")
-    | Some(Visited) -> (visit_state, data_map)
+    | Some(Visited) -> (visit_state, all_data)
   in
-  let (_, data_map) = visit entry_file (Idmap.empty, Idmap.empty)  in
-  data_map
+  let (_, all_data) = visit entry_file (Idmap.empty, Idmap.empty)  in
+  all_data
 
 let codegen entry_file all_data =
   let () =
@@ -79,8 +75,13 @@ let codegen entry_file all_data =
   printf "%a" MetaInfo.pp_metainfo metainfo;
   print_newline ()
 
-let compile file =
+let compile filename =
   try
+    let ext = Filename.extension filename in
+    let () =
+      if ext = ".xfrp" then () else raise (FileError "Invalid file name")
+    in
+    let file = Filename.remove_extension filename in
     gather_filedata file |> codegen file
   with
   | ParseError msg | FileError msg

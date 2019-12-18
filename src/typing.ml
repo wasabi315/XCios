@@ -870,7 +870,7 @@ let infer_smodule env tenv file def =
   let def = infer_smodule_states env tenv def in
   def
 
-let infer (other_progs : xfrp Idmap.t) (filename : string) (prog : xfrp) : xfrp =
+let infer (other_progs : xfrp Idmap.t) (file : string) (prog : xfrp) : xfrp =
 
   let register_typeconses file def env : env =
   Idmap.fold (fun c tval env ->
@@ -907,40 +907,38 @@ let infer (other_progs : xfrp Idmap.t) (filename : string) (prog : xfrp) : xfrp 
     add_env def.smodule_id entry env
   in
 
-  let use_program filename prog (env, tenv) =
+  let use_program file prog (env, tenv) =
     let env =
       env
       |> Idmap.fold (fun _ def env ->
-             if def.type_pub then register_typeconses filename def env else env
+             if def.type_pub then register_typeconses file def env else env
            ) prog.xfrp_types
       |> Idmap.fold (fun _ def env ->
-             if def.const_pub then register_const filename def env else env
+             if def.const_pub then register_const file def env else env
            ) prog.xfrp_consts
       |> Idmap.fold (fun _ def env ->
-             if def.fun_pub then register_fun filename def env else env
+             if def.fun_pub then register_fun file def env else env
            ) prog.xfrp_funs
       |> Idmap.fold (fun _ def env ->
-             if def.module_pub then register_module filename def env else env
+             if def.module_pub then register_module file def env else env
            ) prog.xfrp_modules
       |> Idmap.fold (fun _ def env ->
-           if def.smodule_pub then register_smodule filename def env else env
+           if def.smodule_pub then register_smodule file def env else env
            ) prog.xfrp_smodules
     in
     let tenv =
       Idmap.fold (fun _ def tenv ->
-          if def.type_pub then add_tenv def.type_id filename tenv else tenv
+          if def.type_pub then add_tenv def.type_id file tenv else tenv
         ) prog.xfrp_types tenv
     in
     (env, tenv)
   in
 
   let make_env_tenv prog =
-    let use_files = List.map (fun f -> f ^ ".xfrp") prog.xfrp_use in
     List.fold_right (fun file env_tenv ->
-        let () = printf "use %s\n" file in
         let data = Idmap.find file other_progs in
         use_program file data env_tenv
-      ) use_files (Idmap.empty, Idmap.empty)
+      ) prog.xfrp_use (Idmap.empty, Idmap.empty)
   in
 
   let infer_file_types env tenv prog =
@@ -953,8 +951,8 @@ let infer (other_progs : xfrp Idmap.t) (filename : string) (prog : xfrp) : xfrp 
           let def = infer_typedef env tenv def in
           let ts = Idmap.add id def ts in
           let all = Idmap.add id (XFRPType def) all in
-          let env = register_typeconses filename def env in
-          let tenv = add_tenv def.type_id filename tenv in
+          let env = register_typeconses file def env in
+          let tenv = add_tenv def.type_id file tenv in
           (ts, all, env, tenv)
         ) (prog.xfrp_types, prog.xfrp_all, env, tenv) type_ord
     in
@@ -973,13 +971,13 @@ let infer (other_progs : xfrp Idmap.t) (filename : string) (prog : xfrp) : xfrp 
              let def = infer_constdef env tenv def in
              let cs = Idmap.add id def cs in
              let all = Idmap.add id (XFRPConst def) all in
-             let env = register_const filename def env in
+             let env = register_const file def env in
              (cs, fs, all, env)
           | XFRPFun(def) ->
              let def = infer_fundef env tenv def in
              let fs = Idmap.add id def fs in
              let all = Idmap.add id (XFRPFun def) all in
-             let env = register_fun filename def env in
+             let env = register_fun file def env in
              (cs, fs, all, env)
           | _ -> assert false
         ) (prog.xfrp_consts, prog.xfrp_funs, prog.xfrp_all, env) material_ord
@@ -1001,13 +999,13 @@ let infer (other_progs : xfrp Idmap.t) (filename : string) (prog : xfrp) : xfrp 
              let def = infer_module env tenv def in
              let ms = Idmap.add id def ms in
              let all = Idmap.add id (XFRPModule def) all in
-             let env = register_module filename def env in
+             let env = register_module file def env in
              (ms, sms, all, env)
           | XFRPSModule(def) ->
-             let def = infer_smodule env tenv filename def in
+             let def = infer_smodule env tenv file def in
              let sms = Idmap.add id def sms in
              let all = Idmap.add id (XFRPSModule def) all in
-             let env = register_smodule filename def env in
+             let env = register_smodule file def env in
              (ms, sms, all, env)
           | _ -> assert false
         ) (prog.xfrp_modules, prog.xfrp_smodules, prog.xfrp_all, env)
@@ -1019,7 +1017,6 @@ let infer (other_progs : xfrp Idmap.t) (filename : string) (prog : xfrp) : xfrp 
     (prog, env)
   in
 
-  let () = printf "infer %s\n" filename in
   let (env, tenv) = make_env_tenv prog in
   let (prog, env, tenv) = infer_file_types env tenv prog in
   let (prog, env) = infer_file_materials env tenv prog in
