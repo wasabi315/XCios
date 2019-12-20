@@ -203,18 +203,46 @@ let tsort_modules (mdefs : xfrp_module Idmap.t) (smdefs : xfrp_smodule Idmap.t) 
 
 (* calculate state / module update order *)
 let get_update_ord  (ns : node Idmap.t) (newns : newnode Idmap.t) =
-  let targets =
-    Idmap.fold (fun id _ s -> Idset.add id s) ns Idset.empty
-    |> Idmap.fold (fun id _ s -> Idset.add id s) newns
+  let newnode_bind_ids newnode =
+    List.map (fun (_, id, _) -> id) newnode.newnode_binds
+    |> List.fold_left (fun acc id -> Idset.add id acc) Idset.empty
+  in
+  let all_nodes =
+    Idset.empty
+    |> Idmap.fold (fun _ node ids ->
+           Idset.add node.node_id ids
+         ) ns
+    |> Idmap.fold (fun _ bind_ids ids ->
+           Idset.union bind_ids ids
+         ) (Idmap.map newnode_bind_ids newns)
+  in
+  let nodeid_to_elementid =
+    Idmap.empty
+    |> Idmap.fold (fun _ node m ->
+           Idmap.add node.node_id node.node_id m
+         ) ns
+    |> Idmap.fold (fun _ newnode m ->
+           Idset.fold (fun bind_id m ->
+               Idmap.add bind_id newnode.newnode_id m
+             ) (newnode_bind_ids newnode) m
+         ) newns
   in
   let node_deps =
     Idmap.fold (fun id n deps ->
-        (id, (find_ids_expr targets n.node_body)) :: deps
+        let depend_elements =
+          find_ids_expr all_nodes n.node_body
+          |> Idset.map (fun id -> Idmap.find id nodeid_to_elementid)
+        in
+        (id, depend_elements) :: deps
       ) ns []
   in
   let newnode_deps =
     Idmap.fold (fun id newn deps ->
-        (id, (find_ids_newnode targets newn)) :: deps
+        let depend_elements =
+          find_ids_newnode all_nodes newn
+          |> Idset.map (fun id -> Idmap.find id nodeid_to_elementid)
+        in
+        (id, depend_elements) :: deps
       ) newns []
   in
   make_graph (node_deps @ newnode_deps) |> tsort
