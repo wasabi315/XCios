@@ -1,13 +1,6 @@
 open Syntax
+open MetaInfo
 open Extension.Format
-
-(*
-let test_tsort ppf (progdata : Data.progdata) =
-  Idmap.iter (fun _ sdef ->
-      (pp_list_comma pp_identifier) ppf (Dependency.tsort_statenode sdef);
-      pp_print_newline ppf ()
-    ) progdata.sdefs
-*)
 
 exception FileError of string
 exception ParseError of string
@@ -48,31 +41,49 @@ let parse filename =
 type filestate = Visiting | Visited
 
 let gather_filedata entry_file =
-  let rec visit file (visit_state, all_data) =
+  let rec visit file acc =
+    let (visit_state, _, _) = acc in
     match Idmap.find_opt file visit_state with
     | None ->
        let filename = file ^ ".xfrp" in
        let ast = parse filename in
-       let (visit_state, all_data) =
-         List.fold_right visit ast.xfrp_use (visit_state, all_data)
+       let (visit_state, all_data, file_ord_rev) =
+         List.fold_right visit ast.xfrp_use acc
        in
        let data = Typing.infer all_data file ast in
-       let all_data =  Idmap.add file data all_data in
        let visit_state = Idmap.add file Visited visit_state in
-       (visit_state, all_data)
+       let all_data =  Idmap.add file data all_data in
+       let file_ord_rev = file :: file_ord_rev in
+       (visit_state, all_data, file_ord_rev)
     | Some(Visiting) -> raise (FileError "Detect cyclic file dependency")
-    | Some(Visited) -> (visit_state, all_data)
+    | Some(Visited) -> acc
   in
-  let (_, all_data) = visit entry_file (Idmap.empty, Idmap.empty)  in
-  all_data
+  let (_, all_data, file_ord_rev) =
+    visit entry_file (Idmap.empty, Idmap.empty, [])
+  in
+  (all_data, List.rev file_ord_rev)
 
-let codegen entry_file all_data =
+let get_metainfo entry_file (all_data, file_ord) =
+  let filedata = Idmap.find entry_file all_data in
+  let () =
+    match Idmap.find_opt "Main" filedata.xfrp_all with
+    | Some (XFRPModule _) | Some (XFRPSModule _) -> ()
+    | _ -> raise (FileError "Main module not found")
+  in
+  let metainfo =
+    metainfo_empty
+    |> (fun metainfo -> { metainfo with file_ord = file_ord })
+    |> GatherUsed.fill_used_materials all_data entry_file
+    |> Lifetime.fill_lifetime all_data entry_file
+  in
+  (all_data, metainfo)
+  
+let codegen _entry_file (all_data, metainfo) =
   let () =
     printf "%a" (pp_idmap pp_xfrp) all_data;
     print_newline ()
   in
-  let metainfo = MetaInfo.get_metainfo entry_file all_data in
-  printf "%a" MetaInfo.pp_metainfo metainfo;
+  printf "%a" pp_metainfo metainfo;
   print_newline ()
 
 let compile filename =
@@ -82,7 +93,7 @@ let compile filename =
       if ext = ".xfrp" then () else raise (FileError "Invalid file name")
     in
     let file = Filename.remove_extension filename in
-    gather_filedata file |> codegen file
+    gather_filedata file |> get_metainfo file |> codegen file
   with
   | ParseError msg | FileError msg
     -> printf "Compile Error : %s" msg;

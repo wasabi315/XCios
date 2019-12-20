@@ -1,55 +1,6 @@
 open Syntax
-open Extension.Format
-   
-type nodelife =
-  {
-    curref_life  : int Idmap.t;
-    lastref_life : int Idmap.t;
-  }
-  
-let pp_nodelife ppf nodelife =
-  fprintf ppf "@[<v>curref_life:@;<0 2>";
-  fprintf ppf "@[<hov>%a@]@;" (pp_idmap pp_print_int) nodelife.curref_life;
-  fprintf ppf "lastref_life:@;<0 2>";
-  fprintf ppf "@[<hov>%a@]@]" (pp_idmap pp_print_int) nodelife.lastref_life
-
-let empty_nodelife = { curref_life = Idmap.empty; lastref_life = Idmap.empty }
-                   
-type lifetime =
-  {
-    timestamp : int Idmap.t;
-    nodelifes : nodelife Idmap.t;
-  }
-
-module Intmap = Map.Make(struct type t = int let compare = compare end)
-
-let pp_intmap pp_contents ppf intmap =
-  let pp_binds ppf (i, x) =
-    fprintf ppf "%a : %a" pp_print_int i pp_contents x
-  in
-  pp_list_comma pp_binds ppf (Intmap.to_seq intmap |> List.of_seq)
-
-let rev_timestamp timestamp =
-  let update id time revmap =
-    Intmap.update time (function
-        | Some s -> Some (Idset.add id s)
-        | None -> Some (Idset.singleton id)
-      ) revmap
-  in
-  Idmap.fold update timestamp Intmap.empty
-  
-let pp_lifetime ppf lifetime =
-  let pp_timetable_row ppf ids =
-    fprintf ppf "@[<hov>%a@]" pp_idset ids
-  in
-  fprintf ppf "@[<v>timestamp:@;<0 2>";
-  fprintf ppf "@[<v>%a@]@;"
-    (pp_intmap pp_timetable_row) (rev_timestamp lifetime.timestamp);
-  fprintf ppf "nodelifes:@;<0 2>";
-  fprintf ppf "@[<v>%a@]@]" (pp_idmap pp_nodelife) lifetime.nodelifes
-
-let empty_lifetime = { timestamp = Idmap.empty; nodelifes = Idmap.empty }
-  
+open MetaInfo
+     
 let update_nodelife clock self_id expr nodelife =
 
   let update id life =
@@ -154,7 +105,7 @@ and visit_module all_data instance_name def (clock, lifetime) =
         | MNewnode def ->
            visit_newnode all_data instance_name def (clock, lifetime, nodelife)
         | _ -> assert false
-      ) (List.rev def.module_update_ord) (clock, lifetime, empty_nodelife)
+      ) (List.rev def.module_update_ord) (clock, lifetime, nodelife_empty)
   in
   let nodelifes = Idmap.add instance_name nodelife lifetime.nodelifes in
   let lifetime = { lifetime with nodelifes = nodelifes } in
@@ -167,7 +118,7 @@ and visit_state all_data state_name def (clock, lifetime) =
   in
   let lifetime = { lifetime with timestamp = timestamp } in
   let (clock, lifetime, nodelife) =
-    (clock, lifetime, empty_nodelife)
+    (clock, lifetime, nodelife_empty)
     |> List.fold_right (fun id (clock, lifetime, nodelife) ->
            match Idmap.find id def.state_all with
            | SNode def ->
@@ -196,14 +147,18 @@ and visit_smodule all_data instance_name def (clock, lifetime) =
       (max next_clock next_clock', lifetime)
     ) def.smodule_states (clock, lifetime)
 
-let get_module_lifetime all_data def =
-  let (_, lifetime) =
-    visit_module all_data "instance_#0" def (0, empty_lifetime)
-  in
-  lifetime
-
-let get_smodule_lifetime all_data def =
-  let (_, lifetime) =
-    visit_smodule all_data "instance_#0" def (0, empty_lifetime)
-  in
-  lifetime
+let fill_lifetime all_data entry_file metainfo =
+  let filedata = Idmap.find entry_file all_data in
+  let main_instance_name = "instance_#0" in
+  match Idmap.find "Main" filedata.xfrp_all with
+  | XFRPModule def ->
+     let (_, lifetime) =
+       visit_module all_data main_instance_name def (0, lifetime_empty)
+     in
+     { metainfo with lifetime = lifetime }
+  | XFRPSModule def ->
+     let (_, lifetime) =
+       visit_smodule all_data main_instance_name def (0, lifetime_empty)
+     in
+     { metainfo with lifetime = lifetime }
+  | _ -> assert false
