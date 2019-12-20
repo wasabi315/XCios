@@ -21,7 +21,7 @@ let rec pp_t ppf = function
   | TState(_, _) -> pp_print_string ppf "<type State>"
   | TId(file, t) -> fprintf ppf "<type Id(%a:%a)>"
                       pp_print_string file pp_print_string t
-  | TTuple(ts) -> fprintf ppf "<type (@[%a@])>"
+  | TTuple(ts) -> fprintf ppf "<type (@[<h>%a@])>"
                     (pp_list_comma pp_t) ts
   | TVar({contents = tvar}) -> fprintf ppf "<typevar %a>" pp_tvar tvar
   | TEmpty -> pp_print_string ppf "<type _>"
