@@ -1,6 +1,6 @@
 open Syntax
 open MetaInfo
-     
+
 let update_nodelife clock self_id expr nodelife =
 
   let update id life =
@@ -76,7 +76,7 @@ and visit_newnode all_data _global_prefix def (clock, lifetime, nodelife) =
           let (clock, lifetime) =
             visit_smodule all_data instance_name def (clock, lifetime)
           in
-          (clock, lifetime, nodelife)            
+          (clock, lifetime, nodelife)
        | _ -> assert false
      end
   | _ -> assert false
@@ -110,7 +110,7 @@ and visit_module all_data instance_name def (clock, lifetime) =
   let nodelifes = Idmap.add instance_name nodelife lifetime.nodelifes in
   let lifetime = { lifetime with nodelifes = nodelifes } in
   (clock, lifetime)
-  
+
 and visit_state all_data state_name def (clock, lifetime) =
   let clock = clock + 1 in
   let timestamp =
@@ -152,13 +152,15 @@ let fill_lifetime all_data entry_file metainfo =
   let main_instance_name = "instance_#0" in
   match Idmap.find "Main" filedata.xfrp_all with
   | XFRPModule def ->
-     let (_, lifetime) =
+     let (period, lifetime) =
        visit_module all_data main_instance_name def (0, lifetime_empty)
      in
+     let lifetime = { lifetime with clockperiod = period } in
      { metainfo with lifetime = lifetime }
   | XFRPSModule def ->
-     let (_, lifetime) =
+     let (period, lifetime) =
        visit_smodule all_data main_instance_name def (0, lifetime_empty)
      in
+     let lifetime = { lifetime with clockperiod = period } in
      { metainfo with lifetime = lifetime }
   | _ -> assert false

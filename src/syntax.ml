@@ -36,6 +36,9 @@ let pp_idset ppf idset =
   let idlist = Idset.to_seq idset |> List.of_seq in
   pp_list_comma pp_identifier ppf idlist
 
+let idmap_fold_values (f : 'a -> 'b -> 'b) (m : 'a Idmap.t) (acc : 'b) : 'b =
+  Idmap.fold (fun _ v acc -> f v acc) m acc
+
 (* node attribute *)
 type nattr = NormalNode | InputNode | OutputNode | SharedNode
 let pp_nattr ppf = function

@@ -71,13 +71,14 @@ let get_metainfo entry_file (all_data, file_ord) =
     | _ -> raise (FileError "Main module not found")
   in
   let metainfo =
-    metainfo_empty
+    metainfo_empty ()
     |> (fun metainfo -> { metainfo with file_ord = file_ord })
     |> GatherUsed.fill_used_materials all_data entry_file
     |> Lifetime.fill_lifetime all_data entry_file
+    |> Alloc.calc_alloc_amount all_data entry_file
   in
   (all_data, metainfo)
-  
+
 let codegen _entry_file (all_data, metainfo) =
   let () =
     printf "%a" (pp_idmap pp_xfrp) all_data;
