@@ -216,7 +216,7 @@ let get_free_table all_data node_to_type nodelife =
            add_sizeof_type all_data sizeof_type amount
          ) free_ids
   in
-  
+
   let ref_life_to_free_table ref_life =
     to_timetable ref_life |> Intmap.map get_total_free_amount
   in
@@ -229,7 +229,7 @@ let get_free_table all_data node_to_type nodelife =
       | Some amount, None | None, Some amount -> Some amount
       | None, None -> None
     ) curref_table lastref_table
-  
+
 let get_module_free_table all_data xfrp_module nodelife =
   let node_to_type =
     Idmap.empty
@@ -246,7 +246,7 @@ let get_module_free_table all_data xfrp_module nodelife =
          ) xfrp_module.module_newnodes
   in
   get_free_table all_data node_to_type nodelife
-       
+
 let get_state_free_table all_data xfrp_smodule state_id nodelife =
   let state = Idmap.find state_id xfrp_smodule.smodule_states in
   let (_, tstate) = state.state_switch in

@@ -1,6 +1,8 @@
 module Format = struct
   include Format
 
+  type 'a printer = formatter -> 'a -> unit
+
   let pp_list_sep sep_str pp_element =
     let separetor ppf () = fprintf ppf "%s@ " sep_str in
     pp_print_list pp_element ~pp_sep:separetor
