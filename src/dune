@@ -15,4 +15,5 @@
  (deps (source_tree %{project_root}/test))
  (action (progn
           (run ./main.exe %{project_root}/test/Test1.xfrp)
-          (run ./main.exe %{project_root}/test/Test2.xfrp))))
+          (run ./main.exe %{project_root}/test/Test2.xfrp)
+          (run ./main.exe %{project_root}/test/Watch/Main.xfrp))))

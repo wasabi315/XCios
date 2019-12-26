@@ -87,13 +87,16 @@ let codegen _entry_file (all_data, metainfo) =
   printf "%a" pp_metainfo metainfo;
   print_newline ()
 
-let compile filename =
+let compile path =
   try
-    let ext = Filename.extension filename in
+    let basename = Filename.basename path in
+    let ext = Filename.extension basename in
     let () =
       if ext = ".xfrp" then () else raise (FileError "Invalid file name")
     in
-    let file = Filename.remove_extension filename in
+    let dir = Filename.dirname path in
+    let () = Sys.chdir dir in
+    let file = Filename.remove_extension basename in
     gather_filedata file |> get_metainfo file |> codegen file
   with
   | ParseError msg | FileError msg
