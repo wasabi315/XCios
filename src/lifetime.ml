@@ -21,6 +21,9 @@ let update_nodelife clock self_id expr nodelife =
     | EId (id, NodeId _) ->
        let curref_life = update id nodelife.curref_life in
        { nodelife with curref_life = curref_life }
+    | EId (_, StateParam _) ->
+       let lastref_life = update "switch" nodelife.lastref_life in
+       { nodelife with lastref_life = lastref_life }
     | EId _ -> nodelife
     | EAnnot ((id, NodeId _), _) ->
        let lastref_life = update id nodelife.lastref_life in
@@ -46,8 +49,12 @@ let update_nodelife clock self_id expr nodelife =
   rec_f expr nodelife
 
 let rec visit_node _all_data global_prefix def (clock, lifetime, nodelife) =
+  let curref_life =
+    Idmap.add def.node_id (clock + 1) nodelife.curref_life
+  in
   let nodelife =
-    update_nodelife clock def.node_id def.node_body nodelife
+    { nodelife with curref_life = curref_life }
+    |> update_nodelife clock def.node_id def.node_body
   in
   let clock = clock + 1 in
   let global_name = conc_id [global_prefix; def.node_id] in
@@ -81,17 +88,31 @@ and visit_newnode all_data _global_prefix def (clock, lifetime, nodelife) =
      end
   | _ -> assert false
 
-and visit_switch _all_data state_name expr (clock, lifetime, nodelife) =
-  let nodelife =
-    update_nodelife clock "switch" expr nodelife
-  in
-  let clock = clock + 1 in
-  let global_name = conc_id [state_name; "switch"] in
-  let timestamp = Idmap.add global_name clock lifetime.timestamp in
-  let lifetime = { lifetime with timestamp = timestamp } in
-  (clock, lifetime, nodelife)
+and visit_input_nodes clock (id, _, _) nodelife =
+  let curref_life = Idmap.add id (clock+1) nodelife.curref_life in
+  { nodelife with curref_life = curref_life }
+
+and visit_init clock id init nodelife =
+  match init with
+  | Some _ ->
+     let lastref_life = Idmap.add id (clock + 1) nodelife.lastref_life in
+     { nodelife with lastref_life = lastref_life }
+  | None -> nodelife
+
+and visit_header_init clock (id, init, _) nodelife =
+  visit_init clock id init nodelife
+
+and visit_node_init clock node nodelife =
+  visit_init clock node.node_id node.node_init nodelife
 
 and visit_module all_data instance_name def (clock, lifetime) =
+  let base_nodelife =
+    nodelife_empty
+    |> List.fold_right (visit_input_nodes clock) def.module_in
+    |> List.fold_right (visit_header_init clock) def.module_in
+    |> List.fold_right (visit_header_init clock) def.module_out
+    |> idmap_fold_values (visit_node_init clock) def.module_nodes
+  in
   let clock = clock + 1 in
   let timestamp =
     Idmap.add (conc_id [instance_name; "init"]) clock lifetime.timestamp
@@ -105,20 +126,33 @@ and visit_module all_data instance_name def (clock, lifetime) =
         | MNewnode def ->
            visit_newnode all_data instance_name def (clock, lifetime, nodelife)
         | _ -> assert false
-      ) (List.rev def.module_update_ord) (clock, lifetime, nodelife_empty)
+      ) (List.rev def.module_update_ord) (clock, lifetime, base_nodelife)
   in
   let nodelifes = Idmap.add instance_name nodelife lifetime.nodelifes in
   let lifetime = { lifetime with nodelifes = nodelifes } in
   (clock, lifetime)
 
-and visit_state all_data state_name def (clock, lifetime) =
+and visit_switch _all_data state_name expr (clock, lifetime, nodelife) =
+  let nodelife =
+    update_nodelife clock "switch" expr nodelife
+  in
+  let clock = clock + 1 in
+  let global_name = conc_id [state_name; "switch"] in
+  let timestamp = Idmap.add global_name clock lifetime.timestamp in
+  let lifetime = { lifetime with timestamp = timestamp } in
+  (clock, lifetime, nodelife)
+
+and visit_state all_data base_nodelife state_name def (clock, lifetime) =
+  let nodelife =
+    idmap_fold_values (visit_node_init clock) def.state_nodes base_nodelife
+  in
   let clock = clock + 1 in
   let timestamp =
     Idmap.add (conc_id [state_name; "init"]) clock lifetime.timestamp
   in
   let lifetime = { lifetime with timestamp = timestamp } in
   let (clock, lifetime, nodelife) =
-    (clock, lifetime, nodelife_empty)
+    (clock, lifetime, nodelife)
     |> List.fold_right (fun id (clock, lifetime, nodelife) ->
            match Idmap.find id def.state_all with
            | SNode def ->
@@ -133,7 +167,19 @@ and visit_state all_data state_name def (clock, lifetime) =
   let lifetime = { lifetime with nodelifes = nodelifes } in
   (clock, lifetime)
 
+and visit_state_init clock nodelife =
+  let lastref_life = Idmap.add "switch" (clock + 1) nodelife.lastref_life in
+  { nodelife with lastref_life = lastref_life}
+
 and visit_smodule all_data instance_name def (clock, lifetime) =
+  let base_nodelife =
+    nodelife_empty
+    |> List.fold_right (visit_input_nodes clock) def.smodule_in
+    |> List.fold_right (visit_header_init clock) def.smodule_in
+    |> List.fold_right (visit_header_init clock) def.smodule_out
+    |> List.fold_right (visit_header_init clock) def.smodule_shared
+    |> visit_state_init clock
+  in
   let clock = clock + 1 in
   let timestamp =
     Idmap.add (conc_id [instance_name; "init"]) clock lifetime.timestamp
@@ -142,10 +188,30 @@ and visit_smodule all_data instance_name def (clock, lifetime) =
   Idmap.fold (fun _ def (next_clock, lifetime) ->
       let state_name = conc_id [instance_name; def.state_id] in
       let (next_clock', lifetime) =
-        visit_state all_data state_name def (clock, lifetime)
+        visit_state all_data base_nodelife state_name def (clock, lifetime)
       in
       (max next_clock next_clock', lifetime)
     ) def.smodule_states (clock, lifetime)
+
+let extend_curref_life metainfo =
+  let timestamp = metainfo.lifetime.timestamp in
+  let clockperiod = metainfo.lifetime.clockperiod in
+  let nodelifes =
+    Idmap.mapi (fun instance_id nodelife ->
+        let update_head =
+          (Idmap.find (conc_id [instance_id; "init"]) timestamp) - 1
+        in
+        let next_update_head = update_head + clockperiod in
+        let curref_life =
+          Idmap.fold (fun id _ life ->
+              Idmap.add id next_update_head life
+            ) nodelife.lastref_life nodelife.curref_life
+        in
+        { nodelife with curref_life = curref_life }
+      ) metainfo.lifetime.nodelifes
+  in
+  let lifetime = { metainfo.lifetime with nodelifes = nodelifes } in
+  { metainfo with lifetime = lifetime }
 
 let fill_lifetime all_data entry_file metainfo =
   let filedata = Idmap.find entry_file all_data in
@@ -156,11 +222,11 @@ let fill_lifetime all_data entry_file metainfo =
        visit_module all_data main_instance_name def (0, lifetime_empty)
      in
      let lifetime = { lifetime with clockperiod = period } in
-     { metainfo with lifetime = lifetime }
+     { metainfo with lifetime = lifetime } |> extend_curref_life
   | XFRPSModule def ->
      let (period, lifetime) =
        visit_smodule all_data main_instance_name def (0, lifetime_empty)
      in
      let lifetime = { lifetime with clockperiod = period } in
-     { metainfo with lifetime = lifetime }
+     { metainfo with lifetime = lifetime } |> extend_curref_life
   | _ -> assert false
