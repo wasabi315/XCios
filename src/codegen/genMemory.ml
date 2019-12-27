@@ -1,6 +1,6 @@
 open Extension.Format
 open Syntax
-open Codegen
+open GenExpr
 open MetaInfo
 
 let gen_param ppf (id, t) =
@@ -56,19 +56,19 @@ let gen_module ppf (file, xfrp_module) =
     in
     let newnodes = idmap_value_list xfrp_module.module_newnodes in
     fprintf ppf "@[<v>";
-    fprintf ppf "@[<h>int init;@]@,";
+    fprintf ppf "@[<h>int init;@]";
     if params = [] then () else
-      fprintf ppf "%a@," (pp_print_list gen_param) params;
+      fprintf ppf "@,%a" (pp_print_list gen_param) params;
     if in_nodes = [] then () else
-      fprintf ppf "%a@," (pp_print_list gen_header_node) in_nodes;
+      fprintf ppf "@,%a" (pp_print_list gen_header_node) in_nodes;
     if out_nodes = [] then () else
-      fprintf ppf "%a@," (pp_print_list gen_header_node) out_nodes;
+      fprintf ppf "@,%a" (pp_print_list gen_header_node) out_nodes;
     if consts = [] then () else
-      fprintf ppf "%a@," (pp_print_list gen_local_const) consts;
+      fprintf ppf "@,%a" (pp_print_list gen_local_const) consts;
     if normal_nodes = [] then () else
-      fprintf ppf "%a@," (pp_print_list gen_normal_node) normal_nodes;
+      fprintf ppf "@,%a" (pp_print_list gen_normal_node) normal_nodes;
     if newnodes = [] then () else
-      fprintf ppf "%a" (pp_print_list gen_newnode) newnodes;
+      fprintf ppf "@,%a" (pp_print_list gen_newnode) newnodes;
     fprintf ppf "@]"
   in
 
@@ -87,14 +87,14 @@ let gen_state ppf (module_name, state) =
     in
     let newnodes = idmap_value_list state.state_newnodes in
     fprintf ppf "@[<v>";
-    fprintf ppf "@[<h>int init;@]@,";
+    fprintf ppf "@[<h>int init;@]";
     (* state parameters are included in state type value *)
     if consts = [] then () else
-      fprintf ppf "%a@," (pp_print_list gen_local_const) consts;
+      fprintf ppf "@,%a" (pp_print_list gen_local_const) consts;
     if normal_nodes = [] then () else
-      fprintf ppf "%a@," (pp_print_list gen_normal_node) normal_nodes;
+      fprintf ppf "@,%a" (pp_print_list gen_normal_node) normal_nodes;
     if newnodes = [] then () else
-      fprintf ppf "%a" (pp_print_list gen_newnode) newnodes;
+      fprintf ppf "@,%a" (pp_print_list gen_newnode) newnodes;
     fprintf ppf "@]"
   in
 
@@ -103,7 +103,7 @@ let gen_state ppf (module_name, state) =
 let gen_smodule ppf (file, xfrp_smodule) =
   let file = String.capitalize_ascii file in
 
-  let gen_state ppf () =
+  let gen_state_nodes ppf () =
 
     let gen_field ppf state =
       fprintf ppf "@[<h>struct Memory%s%s%s %s;@]"
@@ -121,7 +121,7 @@ let gen_smodule ppf (file, xfrp_smodule) =
 
     fprintf ppf "%a %a"
       (gen_codeblock gen_head gen_body) ()
-      pp_print_string "memory"
+      pp_print_string "nodes"
   in
 
   let gen_head ppf () =
@@ -136,23 +136,31 @@ let gen_smodule ppf (file, xfrp_smodule) =
     let consts = idmap_value_list xfrp_smodule.smodule_consts in
     let (_, tstate) = xfrp_smodule.smodule_init in
     fprintf ppf "@[<v>";
-    fprintf ppf "@[<h>int init;@]@,";
+    fprintf ppf "@[<h>int init;@]";
     if params = [] then () else
-      fprintf ppf "%a@," (pp_print_list gen_param) params;
+      fprintf ppf "@,%a" (pp_print_list gen_param) params;
     if in_nodes = [] then () else
-      fprintf ppf "%a@," (pp_print_list gen_header_node) in_nodes;
+      fprintf ppf "@,%a" (pp_print_list gen_header_node) in_nodes;
     if out_nodes = [] then () else
-      fprintf ppf "%a@," (pp_print_list gen_header_node) out_nodes;
+      fprintf ppf "@,%a" (pp_print_list gen_header_node) out_nodes;
     if shared_nodes = [] then () else
-      fprintf ppf "%a@," (pp_print_list gen_header_node) shared_nodes;
+      fprintf ppf "@,%a" (pp_print_list gen_header_node) shared_nodes;
     if consts = [] then () else
-      fprintf ppf "%a@," (pp_print_list gen_local_const) consts;
-    fprintf ppf "@[<h>%a state;@]@," gen_ctype tstate;
-    fprintf ppf "%a" gen_state ();
+      fprintf ppf "@,%a" (pp_print_list gen_local_const) consts;
+    fprintf ppf "@,@[<h>%a state;@]" gen_ctype tstate;
+    fprintf ppf "@,%a" gen_state_nodes ();
     fprintf ppf "@]"
   in
 
-  (gen_codeblock gen_head gen_body) ppf ()
+  let file_and_states =
+    idmap_value_list xfrp_smodule.smodule_states
+    |>  List.map (fun st -> (file, st))
+  in
+  fprintf ppf "@[<v>";
+  fprintf ppf "%a@,%a"
+    (pp_print_list gen_state) file_and_states
+    (gen_codeblock gen_head gen_body) ();
+  fprintf ppf "@]"
 
 let generate ppf (all_data, metainfo) =
 
