@@ -1,0 +1,4 @@
+(library
+ (name dependency)
+ (libraries ast)
+ (wrapped false))

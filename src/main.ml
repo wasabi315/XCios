@@ -27,11 +27,6 @@ let parse filename =
      close_in_noerr ichan;
      raise (ParseError msg)
   | Check.Error(msg) ->
-     raise (ParseError msg)
-  | Dependency.Cycle ->
-     let msg =
-       Printf.sprintf "Detect cyclic dependency in %s" filename
-     in
      close_in_noerr ichan;
      raise (ParseError msg)
   | e ->

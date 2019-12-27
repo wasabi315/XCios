@@ -1,0 +1,4 @@
+(library
+ (name infer)
+ (libraries ast dependency extension)
+ (wrapped false))

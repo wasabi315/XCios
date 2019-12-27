@@ -3,12 +3,10 @@
   (flags (:standard -warn-error -A))))
 
 (executable
- (name main))
-
-(ocamllex lexer)
-
-(menhir
- (modules parser))
+ (name main)
+ (libraries
+  extension ast parser
+  infer metainfo codegen))
 
 (alias
  (name runtest)

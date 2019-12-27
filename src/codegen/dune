@@ -1,0 +1,4 @@
+(library
+ (name codegen)
+ (libraries ast metainfo dependency extension)
+ (wrapped false))

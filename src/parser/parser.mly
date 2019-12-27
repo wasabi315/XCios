@@ -215,28 +215,35 @@ xfrp_module:
     elems = nonempty_list(module_elem)
     RBRACE
     {
-      let () = check_name_conflict_module elems in
-      let (cs, ns, newns) = split_module_elems elems in
-      let consts = list_to_idmap (fun d -> d.const_id) cs in
-      let nodes = list_to_idmap (fun d -> d.node_id) ns in
-      let newnodes = list_to_idmap (fun d -> d.newnode_id) newns in
-      let all = list_to_idmap module_elem_id elems in
-      let consts_ord = tsort_consts consts in
-      let update_ord = get_update_ord nodes newnodes in
-      let () = check_nodes out_nodes [] nodes newnodes in
-      {
-        module_pub = false;
-        module_id = id;
-        module_params = params;
-        module_in = in_nodes;
-        module_out = out_nodes;
-        module_consts = consts;
-        module_nodes = nodes;
-        module_newnodes = newnodes;
-        module_all = all;
-        module_consts_ord = consts_ord;
-        module_update_ord = update_ord;
-      }
+      try
+        let () = check_name_conflict_module elems in
+        let (cs, ns, newns) = split_module_elems elems in
+        let consts = list_to_idmap (fun d -> d.const_id) cs in
+        let nodes = list_to_idmap (fun d -> d.node_id) ns in
+        let newnodes = list_to_idmap (fun d -> d.newnode_id) newns in
+        let all = list_to_idmap module_elem_id elems in
+        let consts_ord = tsort_consts consts in
+        let update_ord = get_update_ord nodes newnodes in
+        let () = check_nodes out_nodes [] nodes newnodes in
+        {
+          module_pub = false;
+          module_id = id;
+          module_params = params;
+          module_in = in_nodes;
+          module_out = out_nodes;
+          module_consts = consts;
+          module_nodes = nodes;
+          module_newnodes = newnodes;
+          module_all = all;
+          module_consts_ord = consts_ord;
+          module_update_ord = update_ord;
+        }
+      with
+      | Dependency.Cycle ->
+          let msg =
+            Printf.sprintf "Detect cyclic dependency"
+          in
+          raise (Check.Error msg)
     }
 
 module_elem:
@@ -264,30 +271,37 @@ xfrp_smodule:
     elems = nonempty_list(smodule_elem)
     RBRACE
     {
-      let () = check_name_conflict_smodule elems in
-      let (cs, sts) = split_smodule_elems elems in
-      let consts = list_to_idmap (fun d -> d.const_id) cs in
-      let states = list_to_idmap (fun d -> d.state_id) sts in
-      let all = list_to_idmap smodule_elem_id elems in
-      let consts_ord = tsort_consts consts in
-      let () =
-        List.iter (fun st ->
-          check_nodes out_nodes shared_nodes st.state_nodes st.state_newnodes
-        ) sts
-      in
-      {
-        smodule_pub = false;
-        smodule_id = id;
-        smodule_params = params;
-	smodule_in = in_nodes;
-	smodule_out = out_nodes;
-        smodule_shared = shared_nodes;
-        smodule_init = init;
-        smodule_consts = consts;
-        smodule_states = states;
-        smodule_all = all;
-        smodule_consts_ord = consts_ord;
-      }
+      try
+        let () = check_name_conflict_smodule elems in
+        let (cs, sts) = split_smodule_elems elems in
+        let consts = list_to_idmap (fun d -> d.const_id) cs in
+        let states = list_to_idmap (fun d -> d.state_id) sts in
+        let all = list_to_idmap smodule_elem_id elems in
+        let consts_ord = tsort_consts consts in
+        let () =
+          List.iter (fun st ->
+            check_nodes out_nodes shared_nodes st.state_nodes st.state_newnodes
+          ) sts
+        in
+        {
+          smodule_pub = false;
+          smodule_id = id;
+          smodule_params = params;
+	  smodule_in = in_nodes;
+	  smodule_out = out_nodes;
+          smodule_shared = shared_nodes;
+          smodule_init = init;
+          smodule_consts = consts;
+          smodule_states = states;
+          smodule_all = all;
+          smodule_consts_ord = consts_ord;
+        }
+      with
+      | Dependency.Cycle ->
+          let msg =
+            Printf.sprintf "Detect cyclic dependency"
+          in
+          raise (Check.Error msg)
     }
 
 smodule_elem:
@@ -302,25 +316,32 @@ state:
     SWITCH COLON switch = expression
     RBRACE
     {
-      let (cs, ns, newns) = split_state_elems elems in
-      let () = check_name_conflict_state elems in
-      let consts = list_to_idmap (fun d -> d.const_id) cs in
-      let nodes = list_to_idmap (fun d -> d.node_id) ns in
-      let newnodes = list_to_idmap (fun d -> d.newnode_id) newns in
-      let all = list_to_idmap state_elem_id elems in
-      let consts_ord = tsort_consts consts in
-      let update_ord = get_update_ord nodes newnodes in
-      {
-        state_id = id;
-        state_params = params;
-        state_consts = consts;
-        state_nodes = nodes;
-        state_newnodes = newnodes;
-        state_all = all;
-        state_switch = switch;
-        state_consts_ord = consts_ord;
-        state_update_ord = update_ord;
-      }
+      try
+        let (cs, ns, newns) = split_state_elems elems in
+        let () = check_name_conflict_state elems in
+        let consts = list_to_idmap (fun d -> d.const_id) cs in
+        let nodes = list_to_idmap (fun d -> d.node_id) ns in
+        let newnodes = list_to_idmap (fun d -> d.newnode_id) newns in
+        let all = list_to_idmap state_elem_id elems in
+        let consts_ord = tsort_consts consts in
+        let update_ord = get_update_ord nodes newnodes in
+        {
+          state_id = id;
+          state_params = params;
+          state_consts = consts;
+          state_nodes = nodes;
+          state_newnodes = newnodes;
+          state_all = all;
+          state_switch = switch;
+          state_consts_ord = consts_ord;
+          state_update_ord = update_ord;
+        }
+      with
+      | Dependency.Cycle ->
+          let msg =
+            Printf.sprintf "Detect cyclic dependency"
+          in
+          raise (Check.Error msg)
     }
 
 state_elem:
