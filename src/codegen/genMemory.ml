@@ -1,6 +1,6 @@
 open Extension.Format
 open Syntax
-open GenExpr
+open CodegenUtil
 open MetaInfo
 
 let gen_param metainfo ppf (id, t) =

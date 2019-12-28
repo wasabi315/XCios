@@ -4,6 +4,13 @@ open Syntax
 open Type
 open MetaInfo
 
+let get_nonenum_types metainfo =
+  Hashtbl.fold (fun t _ targets ->
+      if Hashset.mem metainfo.typedata.enum_types t then
+        targets
+      else t :: targets
+    ) metainfo.alloc_amount []
+   
 let gen_codeblock gen_head gen_body ppf () =
   fprintf ppf "@[<v>%a {@;<0 2>" gen_head ();
   fprintf ppf "@[%a@]@;" gen_body ();

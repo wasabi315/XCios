@@ -3,7 +3,7 @@ open Extension.Format
 open Syntax
 open Type
 open MetaInfo
-open GenExpr
+open CodegenUtil
 
 let gen_tstate all_data metainfo ppf (file, module_name) =
   let typedata = metainfo.typedata in
@@ -137,12 +137,6 @@ let generate ppf (all_data, metainfo) =
     | _ -> assert false
   in
 
-  let target_types =
-    Hashtbl.fold (fun t _ targets ->
-        if Hashset.mem metainfo.typedata.enum_types t then
-          targets
-        else t :: targets
-      ) metainfo.alloc_amount []
-  in
-  (pp_print_list gen_single_type) ppf target_types
+  get_nonenum_types metainfo
+  |> (pp_print_list gen_single_type) ppf
 
