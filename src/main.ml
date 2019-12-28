@@ -65,28 +65,28 @@ let get_metainfo entry_file (all_data, file_ord) =
     | Some (XFRPModule _) | Some (XFRPSModule _) -> ()
     | _ -> raise (FileError "Main module not found")
   in
+  let used_materials = GatherUsed.gather all_data entry_file in
   let metainfo =
     metainfo_empty ()
-    |> (fun metainfo -> { metainfo with file_ord = file_ord })
-    |> GatherUsed.fill_used_materials all_data entry_file
+    |> AllElements.get_all_elements all_data file_ord used_materials
     |> Lifetime.fill_lifetime all_data entry_file
     |> Alloc.calc_alloc_amount all_data entry_file
-    |> TypeData.calc_typedata all_data
+    |> TypeData.calc_typedata all_data file_ord
   in
-  (all_data, metainfo)
+  metainfo
 
 let debug all_data metainfo =
   printf "%a@." (pp_idmap pp_xfrp) all_data;
   printf "%a@." pp_metainfo metainfo
 
-let generate_main _entry_file all_data metainfo =
+let generate_main _entry_file metainfo =
   printf "@[<v>" ;
-  printf "%a" GenDataType.generate (all_data, metainfo);
-  printf "@,%a" GenMemory.generate (all_data, metainfo);
+  printf "%a" GenDataType.generate metainfo;
+  printf "@,%a" GenMemory.generate metainfo;
   printf "@]"
 
-let codegen entry_file (all_data, metainfo) =
-  generate_main entry_file all_data metainfo
+let codegen entry_file metainfo =
+  generate_main entry_file metainfo
 
 let compile path =
   try

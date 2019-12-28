@@ -1,5 +1,4 @@
 open Syntax
-open MetaInfo
 
 let update_used all_data expr used =
   let rec rec_f (ast, _) used =
@@ -115,13 +114,11 @@ and visit_smodule all_data file def used =
          visit_state all_data def used
        ) def.smodule_states
 
-let fill_used_materials all_data entry_file metainfo =
+let gather all_data entry_file =
   let filedata = Idmap.find entry_file all_data in
   match Idmap.find "Main" filedata.xfrp_all with
   | XFRPModule def ->
-     let used = visit_module all_data entry_file def Idset.empty in
-     { metainfo with used_materials = used }
+     visit_module all_data entry_file def Idset.empty
   | XFRPSModule def ->
-     let used = visit_smodule all_data entry_file def Idset.empty in
-     { metainfo with used_materials = used }
+     visit_smodule all_data entry_file def Idset.empty
   | _ -> assert false

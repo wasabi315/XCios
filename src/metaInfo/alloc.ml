@@ -414,21 +414,10 @@ let calc_alloc_amount all_data entry_file metainfo =
   in
 
   let (current, req_amount) =
-    List.fold_left (fun (current, req_amount) file ->
-        let filedata = Idmap.find file all_data in
-        let material_ord =
-          Dependency.tsort_materials filedata.xfrp_consts filedata.xfrp_funs
-        in
-        List.fold_left (fun (current, req_amount) id ->
-            match Idmap.find_opt id filedata.xfrp_consts with
-            | None -> (current, req_amount)
-            | Some const ->
-               let global_name = conc_id [file; "const"; const.const_id] in
-               let used = Idset.mem global_name metainfo.used_materials in
-               if not used then (current, req_amount) else
-                 visit_global_const const (current, req_amount)
-          ) (current, req_amount) material_ord
-      ) (alloc_amount_empty (), alloc_amount_empty ()) metainfo.file_ord
+    List.fold_left (fun (current, req_amount) (_, const) ->
+          visit_global_const const (current, req_amount)
+      ) (alloc_amount_empty (), alloc_amount_empty ())
+      metainfo.all_elements.all_consts
   in
   let entry_filedata = Idmap.find entry_file all_data in
   let main_instance_name = "instance_#0" in

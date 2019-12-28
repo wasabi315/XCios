@@ -154,31 +154,13 @@ let gen_smodule metainfo ppf (file, xfrp_smodule) =
     (gen_codeblock gen_head gen_body) ();
   fprintf ppf "@]"
 
-let generate ppf (all_data, metainfo) =
+let generate ppf metainfo =
 
-  let gen_single_module file ppf module_id =
-    let filedata = Idmap.find file all_data in
-    match Idmap.find module_id filedata.xfrp_all with
+  let gen_single_module ppf (file, module_or_smodule) =
+    match module_or_smodule with
     | XFRPModule m -> gen_module metainfo ppf (file, m)
     | XFRPSModule sm -> gen_smodule metainfo ppf (file, sm)
     | _ -> assert false
   in
 
-  let gen_single_file ppf file =
-    let filedata = Idmap.find file all_data in
-    let ord =
-      Dependency.tsort_modules filedata.xfrp_modules filedata.xfrp_smodules
-    in
-    let generator = gen_single_module file in
-    (pp_print_list generator) ppf ord
-  in
-
-  let target_files =
-    List.filter (fun file ->
-        let filedata = Idmap.find file all_data in
-        let num_of_modules = Idmap.cardinal filedata.xfrp_modules in
-        let num_of_smodules = Idmap.cardinal filedata.xfrp_smodules in
-        (num_of_modules + num_of_smodules) > 0
-      ) metainfo.file_ord
-  in
-  (pp_print_list gen_single_file) ppf target_files
+  (pp_print_list gen_single_module) ppf metainfo.all_elements.all_modules

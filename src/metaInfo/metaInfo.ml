@@ -22,6 +22,49 @@ let to_timetable clockinfo =
   in
   Idmap.fold update clockinfo Intmap.empty
 
+type all_elements =
+  {
+    all_modules : (string * xfrp_elem) list;
+    all_consts : (string * constdef) list;
+    all_funs : (string * fundef) list;
+  }
+
+let pp_all_elements ppf all_elements =
+
+  let pp_all_modules_elem ppf (file, module_or_smodule) =
+    match module_or_smodule with
+    | XFRPModule m -> fprintf ppf "%s:%s" file m.module_id
+    | XFRPSModule sm -> fprintf ppf "%s:%s" file sm.smodule_id
+    | _ -> assert false
+  in
+
+  let pp_all_consts_elem ppf (file, constdef) =
+    fprintf ppf "%s:%s" file constdef.const_id
+  in
+
+  let pp_all_funs_elem ppf (file, fundef) =
+    fprintf ppf "%s:%s" file fundef.fun_id
+  in
+
+  let get_list_printer pp_elem =
+    pp_print_list pp_elem ~pp_sep:pp_print_commaspace
+  in
+
+  let all_modules = all_elements.all_modules in
+  let all_consts = all_elements.all_consts in
+  let all_funs = all_elements.all_funs in
+  fprintf ppf "@[<v>";
+  fprintf ppf "@[<hv>all_modules: {@;<0 2>@[<hov>%a@]@;<0 0>}@]"
+    (get_list_printer pp_all_modules_elem) all_modules;
+  fprintf ppf "@,@[<hv>all_consts: {@;<0 2>@[<hov>%a@]@;<0 0>}@]"
+    (get_list_printer pp_all_consts_elem) all_consts;
+  fprintf ppf "@,@[<hv>all_funs: {@;<0 2>@[<hov>%a@]@;<0 0>}@]"
+    (get_list_printer pp_all_funs_elem) all_funs;
+  fprintf ppf "@]"
+
+let all_elements_empty =
+  { all_modules = []; all_consts = []; all_funs = [] }
+
 type nodelife =
   {
     curref_life  : clockinfo;
@@ -107,6 +150,9 @@ type typedata =
     enum_types : Type.t Hashset.t;
     singleton_types : Type.t Hashset.t;
     cons_id : (Type.t, int Idmap.t) Hashtbl.t;
+    nonenum_tid_defs : (string * typedef) list;
+    tuple_types : (Type.t list) list;
+    nonenum_tstate_defs : (string * xfrp_smodule) list;
   }
 
 let typedata_empty () =
@@ -114,6 +160,9 @@ let typedata_empty () =
     enum_types = Hashset.create 20;
     singleton_types = Hashset.create 20;
     cons_id = Hashtbl.create 20;
+    nonenum_tid_defs = [];
+    tuple_types = [];
+    nonenum_tstate_defs = [];
   }
 
 let pp_typedata ppf typedata =
@@ -129,31 +178,60 @@ let pp_typedata ppf typedata =
     (pp_print_hashtbl pp_single_map) ppf cons_id
   in
 
+  let list_printer pp_elem =
+    pp_print_list pp_elem ~pp_sep:pp_print_commaspace
+  in
+
+  let pp_nonenum_tid_defs ppf nonenum_tid_defs =
+    let pp_elem ppf (file, typedef) =
+      fprintf ppf "%s:%s" file typedef.type_id
+    in
+    (list_printer pp_elem) ppf nonenum_tid_defs
+  in
+
+  let pp_tuple_types ppf tuple_types =
+    let pp_elem ppf types =
+      fprintf ppf "@[<h>(%a)@]" (list_printer Type.pp_t) types
+    in
+    (list_printer pp_elem) ppf tuple_types
+  in
+
+  let pp_nonenum_tstate_defs ppf nonenum_tstate_defs =
+    let pp_elem ppf (file, xfrp_smodule) =
+      fprintf ppf "%s:%s" file xfrp_smodule.smodule_id
+    in
+    (list_printer pp_elem) ppf nonenum_tstate_defs
+  in
+
   fprintf ppf "@[<v>";
-  fprintf ppf "enum_types";
+  fprintf ppf "enum_types:";
   fprintf ppf "@;<0 2>@[<hov> %a @]" pp_typeset typedata.enum_types;
-  fprintf ppf "@,singleton_types";
+  fprintf ppf "@,singleton_types:";
   fprintf ppf "@;<0 2>@[<hov>%a@]" pp_typeset typedata.singleton_types;
-  fprintf ppf "@,cons_id";
+  fprintf ppf "@,cons_id:";
   fprintf ppf "@;<0 2>@[<v>%a@]" pp_cons_id typedata.cons_id;
+  fprintf ppf "@,nonenum_tid_defs:";
+  fprintf ppf "@;<0 2>@[<hov>%a@]"
+    pp_nonenum_tid_defs typedata.nonenum_tid_defs;
+  fprintf ppf "@,tuple_types:";
+  fprintf ppf "@;<0 2>@[<hov>%a@]" pp_tuple_types typedata.tuple_types;
+  fprintf ppf "@,nonenum_tstate_defs:";
+  fprintf ppf "@;<0 2>@[<hov>%a@]"
+    pp_nonenum_tstate_defs typedata.nonenum_tstate_defs;
   fprintf ppf "@]"
 
 type metainfo =
   {
-    file_ord : string list;
-    used_materials : Idset.t;
+    all_elements : all_elements;
     lifetime : lifetime;
     alloc_amount : alloc_amount;
     typedata : typedata;
   }
 let pp_metainfo ppf metainfo =
   fprintf ppf "@[<v 2>metainfo:@;";
-  fprintf ppf "@[<v>file_ord: {@;<0 2>";
-  fprintf ppf "@[<hov>%a@]@;" (pp_list_comma pp_identifier) metainfo.file_ord;
-  fprintf ppf "}@]@;";
-  fprintf ppf "@[<v>used_materials: {@;<0 2>";
-  fprintf ppf "@[<hov>%a@]@;" pp_idset metainfo.used_materials;
-  fprintf ppf "}@]@;";
+  fprintf ppf "@[<v>all_elements: {@;<0 2>";
+  fprintf ppf "%a@;" pp_all_elements metainfo.all_elements;
+  fprintf ppf "}@]";
   fprintf ppf "@[<v>lifetime: {@;<0 2>";
   fprintf ppf "%a@;" pp_lifetime metainfo.lifetime;
   fprintf ppf "}@]@;";
@@ -167,8 +245,7 @@ let pp_metainfo ppf metainfo =
 
 let metainfo_empty () =
   {
-    file_ord = [];
-    used_materials = Idset.empty;
+    all_elements = all_elements_empty;
     lifetime = lifetime_empty;
     alloc_amount = alloc_amount_empty ();
     typedata = typedata_empty ();
