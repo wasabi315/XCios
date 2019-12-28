@@ -71,6 +71,7 @@ let get_metainfo entry_file (all_data, file_ord) =
     |> GatherUsed.fill_used_materials all_data entry_file
     |> Lifetime.fill_lifetime all_data entry_file
     |> Alloc.calc_alloc_amount all_data entry_file
+    |> TypeData.calc_typedata all_data
   in
   (all_data, metainfo)
 
@@ -84,7 +85,6 @@ let generate_main _entry_file all_data metainfo =
   printf "@]"
 
 let codegen entry_file (all_data, metainfo) =
-  debug all_data metainfo;
   generate_main entry_file all_data metainfo
 
 let compile path =

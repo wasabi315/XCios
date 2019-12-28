@@ -18,11 +18,15 @@ let rec pp_t ppf = function
   | TInt -> pp_print_string ppf "<type Int>"
   | TFloat -> pp_print_string ppf "<type Float>"
   | TUnit -> pp_print_string ppf "<type Unit>"
-  | TState(_, _) -> pp_print_string ppf "<type State>"
-  | TId(file, t) -> fprintf ppf "<type Id(%a:%a)>"
-                      pp_print_string file pp_print_string t
-  | TTuple(ts) -> fprintf ppf "<type (@[<h>%a@])>"
-                    (pp_list_comma pp_t) ts
+  | TState(file, module_name) ->
+     fprintf ppf "<type %a:%a:State>"
+       pp_print_string file pp_print_string module_name
+  | TId(file, type_name) ->
+     fprintf ppf "<type Id(%a:%a)>"
+       pp_print_string file pp_print_string type_name
+  | TTuple(ts) ->
+     fprintf ppf "<type (@[<h>%a@])>"
+       (pp_list_comma pp_t) ts
   | TVar({contents = tvar}) -> fprintf ppf "<typevar %a>" pp_tvar tvar
   | TEmpty -> pp_print_string ppf "<type _>"
 and pp_tvar ppf = function

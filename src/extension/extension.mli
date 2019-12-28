@@ -1,3 +1,16 @@
+module Hashset : sig
+  type 'a t = ('a, unit) Hashtbl.t
+
+  (** Hashset.create n creates new empty set with size n *)
+  val create : ?random:bool -> int -> 'a t
+
+  (** Hashset.mem tests if x belongs to s *)
+  val mem : 'a t -> 'a -> bool
+
+  (** Hashset.add s x adds x to s *)
+  val add : 'a t -> 'a -> unit
+end
+
 module Format : sig
   include module type of Format
 
@@ -24,4 +37,17 @@ module Format : sig
 
   (** A dummy pretty printer. Do nothing. *)
   val pp_none : unit printer
+
+  (** Print comma and space break hint *)
+  val pp_print_commaspace : unit printer
+
+  (** A pretty printter for Hashtable *)
+  val pp_print_hashtbl : ?pp_sep: unit printer ->
+                         ('a * 'b) printer ->
+                         ('a, 'b) Hashtbl.t printer
+
+  (** A pretty printer for Hashset (= ('a, unit) Hashtbl.t) *)
+  val pp_print_hashset : ?pp_sep:unit printer ->
+                         'a printer ->
+                         'a Hashset.t printer
 end

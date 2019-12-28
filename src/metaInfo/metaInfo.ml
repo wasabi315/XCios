@@ -1,4 +1,5 @@
 open Syntax
+open Extension
 open Extension.Format
 
 module Intmap = Map.Make(struct type t = int let compare = compare end)
@@ -66,12 +67,7 @@ let pp_alloc_amount ppf alloc_amount =
   let pp_binds ppf (t, size) =
     fprintf ppf "%a -> %a" Type.pp_t t pp_print_int size
   in
-  let binds =
-    Hashtbl.fold (fun t size binds ->
-        (t, size) :: binds
-      ) alloc_amount []
-  in
-  pp_list_comma pp_binds ppf binds
+  pp_print_hashtbl pp_binds ppf alloc_amount ~pp_sep:pp_print_commaspace
 
 let alloc_amount_empty () =
   Hashtbl.create 20
@@ -106,12 +102,49 @@ let alloc_amount_diff amount1 amount2 =
       | None -> raise AllocAmountDiffError
     ) amount2 amount1
 
+type typedata =
+  {
+    enum_types : Type.t Hashset.t;
+    singleton_types : Type.t Hashset.t;
+    cons_id : (Type.t, int Idmap.t) Hashtbl.t;
+  }
+
+let typedata_empty () =
+  {
+    enum_types = Hashset.create 20;
+    singleton_types = Hashset.create 20;
+    cons_id = Hashtbl.create 20;
+  }
+
+let pp_typedata ppf typedata =
+
+  let pp_typeset ppf typeset  =
+    (pp_print_hashset Type.pp_t ~pp_sep:pp_print_commaspace) ppf typeset
+  in
+
+  let pp_cons_id ppf cons_id =
+    let pp_single_map ppf (t, m) =
+      fprintf ppf "%a -> @[<v>%a@]" Type.pp_t t (pp_idmap pp_print_int) m
+    in
+    (pp_print_hashtbl pp_single_map) ppf cons_id
+  in
+
+  fprintf ppf "@[<v>";
+  fprintf ppf "enum_types";
+  fprintf ppf "@;<0 2>@[<hov> %a @]" pp_typeset typedata.enum_types;
+  fprintf ppf "@,singleton_types";
+  fprintf ppf "@;<0 2>@[<hov>%a@]" pp_typeset typedata.singleton_types;
+  fprintf ppf "@,cons_id";
+  fprintf ppf "@;<0 2>@[<v>%a@]" pp_cons_id typedata.cons_id;
+  fprintf ppf "@]"
+
 type metainfo =
   {
     file_ord : string list;
     used_materials : Idset.t;
     lifetime : lifetime;
     alloc_amount : alloc_amount;
+    typedata : typedata;
   }
 let pp_metainfo ppf metainfo =
   fprintf ppf "@[<v 2>metainfo:@;";
@@ -126,13 +159,18 @@ let pp_metainfo ppf metainfo =
   fprintf ppf "}@]@;";
   fprintf ppf "@[<v>alloc_amount: {@;<0 2>";
   fprintf ppf "@[<hov>%a@]@;" pp_alloc_amount metainfo.alloc_amount;
-  fprintf ppf "}@]@]"
+  fprintf ppf "}@]";
+  fprintf ppf "@[<v>typedata: {@;<0 2>";
+  fprintf ppf "%a@;" pp_typedata metainfo.typedata;
+  fprintf ppf "}@]";
+  fprintf ppf "@]"
 
 let metainfo_empty () =
   {
     file_ord = [];
     used_materials = Idset.empty;
     lifetime = lifetime_empty;
-    alloc_amount = alloc_amount_empty ()
+    alloc_amount = alloc_amount_empty ();
+    typedata = typedata_empty ();
   }
 
