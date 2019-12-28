@@ -81,7 +81,8 @@ let debug all_data metainfo =
 
 let generate_main _entry_file all_data metainfo =
   printf "@[<v>" ;
-  printf "%a" GenMemory.generate (all_data, metainfo);
+  printf "%a" GenDataType.generate (all_data, metainfo);
+  printf "@,%a" GenMemory.generate (all_data, metainfo);
   printf "@]"
 
 let codegen entry_file (all_data, metainfo) =

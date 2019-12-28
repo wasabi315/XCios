@@ -38,16 +38,14 @@ and calc_sizeof_tstate all_data file module_id =
   let smodule_def = Idmap.find module_id filedata.xfrp_smodules in
   let tstate = TState (file,module_id) in
   alloc_amount_empty ()
-  |> idmap_fold_values (fun state size ->
+  |> idmap_fold_values (fun state sizeof_state ->
          let tparams = List.map (fun (_, t) -> t) state.state_params in
-         match tparams with
-         | [] -> size
-         | [t] ->
-            get_sizeof_type all_data t
-            |> alloc_amount_union size
-         | ts ->
-            get_sizeof_type all_data (TTuple ts)
-            |> alloc_amount_union size
+         let sizeof_params =
+           List.fold_left (fun size t ->
+               get_sizeof_type all_data t |> alloc_amount_sum size
+             ) (alloc_amount_empty ()) tparams
+         in
+         alloc_amount_union sizeof_state sizeof_params
        ) smodule_def.smodule_states
   |> (fun size -> Hashtbl.add size tstate 1; size)
 
