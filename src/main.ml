@@ -75,17 +75,15 @@ let get_metainfo entry_file (all_data, file_ord) =
   in
   metainfo
 
-let debug all_data metainfo =
-  printf "%a@." (pp_idmap pp_xfrp) all_data;
-  printf "%a@." pp_metainfo metainfo
-
-let generate_main _entry_file metainfo =
+let generate_main entry_file metainfo =
   printf "@[<v>" ;
   printf "%a" GenDataType.generate metainfo;
   printf "@,%a" GenMemory.generate metainfo;
+  printf "@,%a" GenGlobal.generate (entry_file, metainfo);
   printf "@]"
 
 let codegen entry_file metainfo =
+  printf "%a@." pp_metainfo metainfo;
   generate_main entry_file metainfo
 
 let compile path =

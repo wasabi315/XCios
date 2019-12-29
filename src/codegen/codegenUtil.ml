@@ -4,13 +4,6 @@ open Syntax
 open Type
 open MetaInfo
 
-let get_nonenum_types metainfo =
-  Hashtbl.fold (fun t _ targets ->
-      if Hashset.mem metainfo.typedata.enum_types t then
-        targets
-      else t :: targets
-    ) metainfo.alloc_amount []
-   
 let gen_codeblock gen_head gen_body ppf () =
   fprintf ppf "@[<v>%a {@;<0 2>" gen_head ();
   fprintf ppf "@[%a@]@;" gen_body ();
@@ -26,11 +19,11 @@ let gen_anonymous_union gen_body var_name ppf () =
     (gen_codeblock (fun ppf () -> pp_print_string ppf "union") gen_body) ()
     pp_print_string var_name
 
-let gen_tstate_typename ppf (file, module_name) =
-  fprintf ppf "State%s%s" file module_name
+let gen_tstate_typename ppf (file, module_id) =
+  fprintf ppf "State%s%s" file module_id
 
-let gen_tid_typename ppf (file, type_name) =
-  fprintf ppf "struct %s%s" file type_name
+let gen_tid_typename ppf (file, type_id) =
+  fprintf ppf "%s%s" file type_id
 
 let rec gen_ttuple_typename ppf ts =
 
@@ -50,7 +43,10 @@ let rec gen_ttuple_typename ppf ts =
   fprintf ppf "Tuple%a"
     (pp_print_list gen_element_name ~pp_sep:pp_none) ts
 
-let gen_ctype metainfo ppf t =
+let gen_global_constname ppf (file, const_id) =
+  pp_print_string ppf (conc_id [file; const_id])
+
+let gen_value_type metainfo ppf t =
   let enum_types = metainfo.typedata.enum_types in
   match t with
   | TBool | TInt -> pp_print_string ppf "int"
@@ -76,7 +72,7 @@ let gen_newnode_field ppf newnode =
   let number_str = String.sub newnode.newnode_id 1 (len-1) in
   fprintf ppf "newnode%s" number_str
 
-let gen_module_memory_name ppf (file, module_name) =
+let gen_module_memory_type ppf (file, module_name) =
   let file = String.capitalize_ascii file in
   fprintf ppf "struct Memory%s%s" file module_name
 

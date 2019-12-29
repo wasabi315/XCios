@@ -12,7 +12,8 @@ let gen_tid metainfo ppf (file, typedef) =
   let gen_value_union ppf conses =
 
     let gen_union_field ppf (c, vtype) =
-      fprintf ppf "@[<h>%a %a;@]" (gen_ctype metainfo) vtype pp_print_string c
+      fprintf ppf "@[<h>%a %a;@]"
+        (gen_value_type metainfo) vtype pp_print_string c
     in
 
     let gen_value_union_body ppf () =
@@ -46,7 +47,7 @@ let gen_tid metainfo ppf (file, typedef) =
 let gen_ttuple metainfo ppf types =
 
   let gen_member_value ppf (t, pos) =
-    fprintf ppf "@[<h>%a member%a;@]" (gen_ctype metainfo) t pp_print_int pos
+    fprintf ppf "@[<h>%a member%a;@]" (gen_value_type metainfo) t pp_print_int pos
   in
 
   let gen_ttuple_head ppf () =
@@ -73,7 +74,7 @@ let gen_tstate metainfo ppf (file, xfrp_smodule) =
   let gen_param_struct ppf state =
 
     let gen_param_field ppf (id, t) =
-      fprintf ppf "@[<h>%a %a;@]" (gen_ctype metainfo) t pp_print_string id
+      fprintf ppf "@[<h>%a %a;@]" (gen_value_type metainfo) t pp_print_string id
     in
 
     let gen_param_struct_body ppf () =

@@ -4,20 +4,20 @@ open CodegenUtil
 open MetaInfo
 
 let gen_param metainfo ppf (id, t) =
-  fprintf ppf "@[<h>%a %a;@]" (gen_ctype metainfo) t pp_print_string id
+  fprintf ppf "@[<h>%a %a;@]" (gen_value_type metainfo) t pp_print_string id
 
 let gen_header_node metainfo ppf (id, _, t) =
-  fprintf ppf "@[<h>%a %a[2];@]" (gen_ctype metainfo) t pp_print_string id
+  fprintf ppf "@[<h>%a %a[2];@]" (gen_value_type metainfo) t pp_print_string id
 
 let gen_local_const metainfo ppf const =
   fprintf ppf "@[<h>%a %a;@]"
-    (gen_ctype metainfo) const.const_type pp_print_string const.const_id
+    (gen_value_type metainfo) const.const_type pp_print_string const.const_id
 
 let gen_normal_node metainfo ppf node =
   match node.node_attr with
   | NormalNode ->
      fprintf ppf "@[<h>%a %a[2];@]"
-       (gen_ctype metainfo) node.node_type pp_print_string node.node_id
+       (gen_value_type metainfo) node.node_type pp_print_string node.node_id
   | _ -> ()
 
 let gen_newnode _metainfo ppf newnode =
@@ -28,7 +28,7 @@ let gen_newnode _metainfo ppf newnode =
   in
   let file = String.capitalize_ascii file in
   fprintf ppf "@[<h>%a %a;@]"
-    gen_module_memory_name (file, module_name)
+    gen_module_memory_type (file, module_name)
     gen_newnode_field newnode
 
 let filter_normal_nodes nodes =
@@ -41,7 +41,7 @@ let filter_normal_nodes nodes =
 let gen_module metainfo ppf (file, xfrp_module) =
 
   let gen_head ppf () =
-    gen_module_memory_name ppf (file, xfrp_module.module_id)
+    gen_module_memory_type ppf (file, xfrp_module.module_id)
   in
 
   let gen_body ppf () =
@@ -117,7 +117,7 @@ let gen_smodule metainfo ppf (file, xfrp_smodule) =
   in
 
   let gen_head ppf () =
-    gen_module_memory_name ppf (file, xfrp_smodule.smodule_id)
+    gen_module_memory_type ppf (file, xfrp_smodule.smodule_id)
   in
 
   let gen_body ppf () =
@@ -139,7 +139,7 @@ let gen_smodule metainfo ppf (file, xfrp_smodule) =
       fprintf ppf "@,%a" (pp_print_list (gen_header_node metainfo)) shared_nodes;
     if consts = [] then () else
       fprintf ppf "@,%a" (pp_print_list (gen_local_const metainfo)) consts;
-    fprintf ppf "@,@[<h>%a state;@]" (gen_ctype metainfo) tstate;
+    fprintf ppf "@,@[<h>%a state;@]" (gen_value_type metainfo) tstate;
     fprintf ppf "@,%a" gen_state_nodes ();
     fprintf ppf "@]"
   in
