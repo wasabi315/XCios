@@ -149,7 +149,7 @@ type typedata =
   {
     enum_types : Type.t Hashset.t;
     singleton_types : Type.t Hashset.t;
-    cons_id : (Type.t, int Idmap.t) Hashtbl.t;
+    cons_tag : (Type.t, int Idmap.t) Hashtbl.t;
     nonenum_tid_defs : (string * typedef) list;
     tuple_types : (Type.t list) list;
     nonenum_tstate_defs : (string * xfrp_smodule) list;
@@ -159,7 +159,7 @@ let typedata_empty () =
   {
     enum_types = Hashset.create 20;
     singleton_types = Hashset.create 20;
-    cons_id = Hashtbl.create 20;
+    cons_tag = Hashtbl.create 20;
     nonenum_tid_defs = [];
     tuple_types = [];
     nonenum_tstate_defs = [];
@@ -171,11 +171,11 @@ let pp_typedata ppf typedata =
     (pp_print_hashset Type.pp_t ~pp_sep:pp_print_commaspace) ppf typeset
   in
 
-  let pp_cons_id ppf cons_id =
+  let pp_cons_tag ppf cons_tag =
     let pp_single_map ppf (t, m) =
       fprintf ppf "%a -> @[<v>%a@]" Type.pp_t t (pp_idmap pp_print_int) m
     in
-    (pp_print_hashtbl pp_single_map) ppf cons_id
+    (pp_print_hashtbl pp_single_map) ppf cons_tag
   in
 
   let list_printer pp_elem =
@@ -208,8 +208,8 @@ let pp_typedata ppf typedata =
   fprintf ppf "@;<0 2>@[<hov> %a @]" pp_typeset typedata.enum_types;
   fprintf ppf "@,singleton_types:";
   fprintf ppf "@;<0 2>@[<hov>%a@]" pp_typeset typedata.singleton_types;
-  fprintf ppf "@,cons_id:";
-  fprintf ppf "@;<0 2>@[<v>%a@]" pp_cons_id typedata.cons_id;
+  fprintf ppf "@,cons_tag:";
+  fprintf ppf "@;<0 2>@[<v>%a@]" pp_cons_tag typedata.cons_tag;
   fprintf ppf "@,nonenum_tid_defs:";
   fprintf ppf "@;<0 2>@[<hov>%a@]"
     pp_nonenum_tid_defs typedata.nonenum_tid_defs;
@@ -250,4 +250,3 @@ let metainfo_empty () =
     alloc_amount = alloc_amount_empty ();
     typedata = typedata_empty ();
   }
-

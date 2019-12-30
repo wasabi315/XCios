@@ -24,12 +24,12 @@ let calc_typedata all_data file_ord metainfo =
         Hashset.add typedata.singleton_types tstate
       else ()
     in
-    let (id_table, _) =
-      idmap_fold_values (fun state (id_table, new_id) ->
-          (Idmap.add state.state_id new_id id_table, new_id + 1)
+    let (tag_table, _) =
+      idmap_fold_values (fun state (tag_table, new_tag) ->
+          (Idmap.add state.state_id new_tag tag_table, new_tag + 1)
         ) xfrp_smodule.smodule_states (Idmap.empty, 0)
     in
-    Hashtbl.add typedata.cons_id tstate id_table
+    Hashtbl.add typedata.cons_tag tstate tag_table
   in
 
   let visit_tid typedata file type_name =
@@ -46,12 +46,12 @@ let calc_typedata all_data file_ord metainfo =
     let () =
       if num_conses = 1 then Hashset.add typedata.singleton_types tid else ()
     in
-    let (id_table, _) =
-      Idmap.fold (fun id _ (id_table, new_id) ->
-          (Idmap.add id new_id id_table, new_id + 1)
+    let (tag_table, _) =
+      Idmap.fold (fun id _ (tag_table, new_tag) ->
+          (Idmap.add id new_tag tag_table, new_tag + 1)
         ) typedef.type_conses (Idmap.empty, 0)
     in
-    Hashtbl.add typedata.cons_id tid id_table
+    Hashtbl.add typedata.cons_tag tid tag_table
   in
 
   let visit_ttuple typedata ts =

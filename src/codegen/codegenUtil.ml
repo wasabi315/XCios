@@ -4,6 +4,17 @@ open Syntax
 open Type
 open MetaInfo
 
+type writer = unit printer
+
+(* writer for the prototype and writer for the definition *)
+type fun_writer = writer * writer
+
+let exec_all_writers ?(pp_sep = pp_print_cut) () ppf writers =
+  let exec ppf writer =
+    fprintf ppf "%a" writer ()
+  in
+  (pp_print_list exec ~pp_sep:pp_sep) ppf writers
+
 let gen_codeblock gen_head gen_body ppf () =
   fprintf ppf "@[<v>%a {@;<0 2>" gen_head ();
   fprintf ppf "@[%a@]@;" gen_body ();
@@ -20,9 +31,11 @@ let gen_anonymous_union gen_body var_name ppf () =
     pp_print_string var_name
 
 let gen_tstate_typename ppf (file, module_id) =
+  let file = String.capitalize_ascii file in
   fprintf ppf "State%s%s" file module_id
 
 let gen_tid_typename ppf (file, type_id) =
+  let file = String.capitalize_ascii file in
   fprintf ppf "%s%s" file type_id
 
 let rec gen_ttuple_typename ppf ts =
@@ -44,6 +57,7 @@ let rec gen_ttuple_typename ppf ts =
     (pp_print_list gen_element_name ~pp_sep:pp_none) ts
 
 let gen_global_constname ppf (file, const_id) =
+  let file = String.capitalize_ascii file in
   pp_print_string ppf (conc_id [file; const_id])
 
 let gen_value_type metainfo ppf t =
@@ -79,3 +93,17 @@ let gen_module_memory_type ppf (file, module_name) =
 let gen_state_memory_type ppf (file, module_name, state_name) =
   let file = String.capitalize_ascii file in
   fprintf ppf "struct Memory%s%s%s" file module_name state_name
+
+let gen_tid_consname ppf (file, type_id, cons_id) =
+  fprintf ppf "%a_%a"
+    gen_tid_typename (file, type_id)
+    pp_print_string cons_id
+
+let gen_ttuple_consname ppf types =
+  fprintf ppf "%a_Cons"
+    gen_ttuple_typename types
+
+let gen_tstate_consname ppf (file, module_id, cons_id) =
+  fprintf ppf "%a_%a"
+    gen_tstate_typename (file, module_id)
+    pp_print_string cons_id

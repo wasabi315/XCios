@@ -37,7 +37,7 @@ let gen_tid metainfo ppf (file, typedef) =
     fprintf ppf "@[<v>";
     fprintf ppf "@[<h>int mark;@]";
     if Hashset.mem typedata.singleton_types tid then () else
-      fprintf ppf "@,@[<h>int cons_id;@]";
+      fprintf ppf "@,@[<h>int tag;@]";
     fprintf ppf "@,"; gen_value_union ppf typedef.type_conses;
     fprintf ppf "@]"
   in
@@ -112,24 +112,24 @@ let gen_tstate metainfo ppf (file, xfrp_smodule) =
     fprintf ppf "@[<v>";
     fprintf ppf "@[<h>int mark;@]";
     if Hashset.mem typedata.singleton_types tstate then () else
-      fprintf ppf "@,@[<h>int cons_id;@]";
+      fprintf ppf "@,@[<h>int tag;@]";
     fprintf ppf "@,"; gen_param_union ppf xfrp_smodule.smodule_states;
     fprintf ppf "@]"
   in
 
   (gen_codeblock gen_tstate_head gen_tstate_body) ppf ()
 
-let generate ppf  metainfo =
+let generate ppf metainfo =
   let nonenum_tid_defs = metainfo.typedata.nonenum_tid_defs in
   let tuple_types = metainfo.typedata.tuple_types in
   let nonenum_tstate_defs = metainfo.typedata.nonenum_tstate_defs in
   if nonenum_tid_defs = [] then () else
-    fprintf ppf "@,%a"
+    fprintf ppf "%a@,"
       (pp_print_list (gen_tid metainfo)) nonenum_tid_defs;
   if tuple_types = [] then () else
-    fprintf ppf "@,%a"
+    fprintf ppf "%a@,"
       (pp_print_list (gen_ttuple metainfo)) tuple_types;
   if nonenum_tstate_defs = [] then () else
-    fprintf ppf "@,%a"
+    fprintf ppf "%a"
       (pp_print_list (gen_tstate metainfo)) nonenum_tstate_defs
 

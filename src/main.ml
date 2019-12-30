@@ -80,6 +80,7 @@ let generate_main entry_file metainfo =
   printf "%a" GenDataType.generate metainfo;
   printf "@,%a" GenMemory.generate metainfo;
   printf "@,%a" GenGlobal.generate (entry_file, metainfo);
+  printf "@,%a" GenFun.generate metainfo;
   printf "@]"
 
 let codegen entry_file metainfo =
