@@ -29,7 +29,14 @@ let calc_typedata all_data file_ord metainfo =
           (Idmap.add state.state_id new_tag tag_table, new_tag + 1)
         ) xfrp_smodule.smodule_states (Idmap.empty, 0)
     in
-    Hashtbl.add typedata.cons_tag tstate tag_table
+    let param_ids_table =
+      idmap_fold_values (fun state table ->
+          let (param_ids, _) = List.split state.state_params in
+          Idmap.add state.state_id param_ids table
+        ) xfrp_smodule.smodule_states Idmap.empty
+    in
+    Hashtbl.add typedata.cons_tag tstate tag_table;
+    Hashtbl.add typedata.tstate_param_ids tstate param_ids_table
   in
 
   let visit_tid typedata file type_name =
@@ -78,7 +85,7 @@ let calc_typedata all_data file_ord metainfo =
     List.fold_left visit_file [] file_ord |> List.rev
   in
 
-  let get_tuple_types () =
+  let get_tuple_types metainfo =
     Hashtbl.fold (fun t _ targets ->
         match t with
         | TTuple ts -> ts :: targets
@@ -113,7 +120,7 @@ let calc_typedata all_data file_ord metainfo =
         ) metainfo.alloc_amount;
   in
   let nonenum_tid_defs = get_nonenum_tid_defs metainfo in
-  let tuple_types = get_tuple_types () in
+  let tuple_types = get_tuple_types metainfo in
   let nonenum_tstate_defs = get_nonenum_tstate_defs metainfo in
   let typedata =
     {

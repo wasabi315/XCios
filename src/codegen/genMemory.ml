@@ -100,7 +100,7 @@ let gen_state metainfo ppf (file, module_name, state) =
 
 let gen_smodule metainfo ppf (file, xfrp_smodule) =
 
-  let gen_state_nodes ppf () =
+  let gen_statebody ppf () =
 
     let gen_field ppf state =
       fprintf ppf "@[<h>%a %a;@]"
@@ -113,7 +113,7 @@ let gen_smodule metainfo ppf (file, xfrp_smodule) =
       fprintf ppf "@[<v>%a@]" (pp_print_list gen_field) states;
     in
 
-    (gen_anonymous_union gen_body "nodes") ppf ()
+    (gen_anonymous_union gen_body "statebody") ppf ()
   in
 
   let gen_head ppf () =
@@ -140,7 +140,7 @@ let gen_smodule metainfo ppf (file, xfrp_smodule) =
     if consts = [] then () else
       fprintf ppf "@,%a" (pp_print_list (gen_local_const metainfo)) consts;
     fprintf ppf "@,@[<h>%a state;@]" (gen_value_type metainfo) tstate;
-    fprintf ppf "@,%a" gen_state_nodes ();
+    fprintf ppf "@,%a" gen_statebody ();
     fprintf ppf "@]"
   in
 

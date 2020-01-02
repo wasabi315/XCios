@@ -60,6 +60,10 @@ let gen_global_constname ppf (file, const_id) =
   let file = String.capitalize_ascii file in
   pp_print_string ppf (conc_id [file; const_id])
 
+let gen_global_funname ppf (file, fun_id) =
+  let file = String.capitalize_ascii file in
+  pp_print_string ppf (conc_id [file;fun_id])
+
 let gen_value_type metainfo ppf t =
   let enum_types = metainfo.typedata.enum_types in
   match t with
@@ -86,13 +90,22 @@ let gen_newnode_field ppf newnode =
   let number_str = String.sub newnode.newnode_id 1 (len-1) in
   fprintf ppf "newnode%s" number_str
 
+let gen_global_modulename ppf (file, module_name) =
+  let file = String.capitalize_ascii file in
+  fprintf ppf "%s%s" file module_name
+
 let gen_module_memory_type ppf (file, module_name) =
   let file = String.capitalize_ascii file in
-  fprintf ppf "struct Memory%s%s" file module_name
+  fprintf ppf "struct Memory%a" gen_global_modulename (file, module_name)
+
+let gen_global_statename ppf (file, module_name, state_name) =
+  let file = String.capitalize_ascii file in
+  fprintf ppf "%s%s%s" file module_name state_name
 
 let gen_state_memory_type ppf (file, module_name, state_name) =
   let file = String.capitalize_ascii file in
-  fprintf ppf "struct Memory%s%s%s" file module_name state_name
+  fprintf ppf "struct Memory%a"
+    gen_global_statename (file, module_name, state_name)
 
 let gen_tid_consname ppf (file, type_id, cons_id) =
   fprintf ppf "%a_%a"

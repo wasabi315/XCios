@@ -42,22 +42,24 @@ let define_tid_conses metainfo (file, typedef) fun_writers =
 
   let define_single_cons cons_id vtype fun_writers =
 
-    let gen_argtype ppf () =
+    let gen_paramtype ppf () =
       if vtype = TUnit then () else (gen_value_type metainfo) ppf vtype
     in
 
-    let gen_prototype ppf () =
-      fprintf ppf "@[<h>static %a %a(%a);@]"
+    let gen_funname ppf () =
+      fprintf ppf "static %a %a"
         (gen_value_type metainfo) tid
         gen_tid_consname (file, type_id, cons_id)
-        gen_argtype ()
+    in
+
+    let gen_prototype ppf () =
+      fprintf ppf "@[<h>%a(%a);@]"
+        gen_funname () gen_paramtype ()
     in
 
     let gen_definition_head ppf () =
-      fprintf ppf "@[<h>static %a %a(%a value)@]"
-        (gen_value_type metainfo) tid
-        gen_tid_consname (file, type_id, cons_id)
-        gen_argtype ()
+      fprintf ppf "@[<h>%a(%a value)@]"
+        gen_funname () gen_paramtype ()
     in
 
     let gen_definition_body_core ppf () =
@@ -93,19 +95,23 @@ let define_ttuple_cons metainfo types fun_writers =
   let ttuple = TTuple types in
   let types_with_position = List.mapi (fun pos t -> (t, pos)) types in
 
-  let gen_prototype_args ppf () =
+  let gen_funname ppf () =
+    fprintf ppf "static %a %a"
+      (gen_value_type metainfo) ttuple
+      gen_ttuple_consname types
+  in
+
+  let gen_prototype_params ppf () =
     pp_print_list (gen_value_type metainfo) ppf types
       ~pp_sep:pp_print_commaspace
   in
 
   let gen_prototype ppf () =
-    fprintf ppf "@[<h>static %a %a(%a);@]"
-      (gen_value_type metainfo) ttuple
-      gen_ttuple_consname types
-      gen_prototype_args ()
+    fprintf ppf "@[<h>%a(%a);@]"
+      gen_funname () gen_prototype_params ()
   in
 
-  let gen_definition_args ppf () =
+  let gen_definition_params ppf () =
     pp_print_list (fun ppf (t, pos) ->
         fprintf ppf "%a member%a"
           (gen_value_type metainfo) t pp_print_int pos
@@ -114,10 +120,8 @@ let define_ttuple_cons metainfo types fun_writers =
   in
 
   let gen_definition_head ppf () =
-    fprintf ppf "@[<h>static %a %a(%a)@]"
-      (gen_value_type metainfo) ttuple
-      gen_ttuple_consname types
-      gen_definition_args ()
+    fprintf ppf "@[<h>%a(%a)@]"
+      gen_funname () gen_definition_params ()
   in
 
   let gen_definition_body_core ppf () =
@@ -147,7 +151,13 @@ let define_tstate_conses metainfo (file, xfrp_smodule) fun_writers =
     let state_id = state.state_id in
     let state_params = state.state_params in
 
-    let gen_prototype_args ppf () =
+    let gen_funname ppf () =
+      fprintf ppf "static %a %a"
+        (gen_value_type metainfo) tstate
+        gen_tstate_consname (file, module_id, state_id)
+    in
+
+    let gen_prototype_params ppf () =
       pp_print_list (fun ppf (_, t) ->
           (gen_value_type metainfo) ppf t
         ) ppf state_params
@@ -155,13 +165,11 @@ let define_tstate_conses metainfo (file, xfrp_smodule) fun_writers =
     in
 
     let gen_prototype ppf () =
-      fprintf ppf "@[<h>static %a %a(%a);@]"
-        (gen_value_type metainfo) tstate
-        gen_tstate_consname (file, module_id, state_id)
-        gen_prototype_args ()
+      fprintf ppf "@[<h>%a(%a);@]"
+        gen_funname () gen_prototype_params ()
     in
 
-    let gen_definition_args ppf () =
+    let gen_definition_params ppf () =
       pp_print_list (fun ppf (id, t) ->
           fprintf ppf "%a %a"
             (gen_value_type metainfo) t pp_print_string id
@@ -172,7 +180,7 @@ let define_tstate_conses metainfo (file, xfrp_smodule) fun_writers =
       fprintf ppf "@[<h>static %a %a(%a)@]"
         (gen_value_type metainfo) tstate
         gen_tstate_consname (file, module_id, state_id)
-        gen_definition_args ()
+        gen_definition_params ()
     in
 
     let gen_definition_body_core ppf () =
@@ -220,10 +228,15 @@ let define_tstate_conses metainfo (file, xfrp_smodule) fun_writers =
   idmap_fold_values define_single_cons states fun_writers
 
 
-let define_gcfuns typename gen_recmark_opt gen_recfree_opt fun_writers =
+let define_gcfun typename gen_recmark_opt gen_recfree_opt fun_writers =
+
+  let gen_funname_mark ppf () =
+    fprintf ppf "static void mark_%s" typename
+  in
 
   let gen_markfun_prototype ppf () =
-    fprintf ppf "static void mark_%s(struct %s*, int);" typename typename
+    fprintf ppf "%a(struct %a*, int);"
+      gen_funname_mark () pp_print_string typename
   in
 
   let gen_markfun_definition ppf () =
@@ -239,13 +252,18 @@ let define_gcfuns typename gen_recmark_opt gen_recfree_opt fun_writers =
 
     (gen_codeblock
        (fun ppf () ->
-         fprintf ppf "@[<h>static void mark_%s(struct %s* x, int mark)@]"
-           typename typename)
+         fprintf ppf "@[<h>%a(struct %a* x, int mark)@]"
+           gen_funname_mark () pp_print_string typename)
        gen_markfun_definition_body) ppf ()
   in
 
+  let gen_funname_free ppf () =
+    fprintf ppf "static void free_%s" typename
+  in
+
   let gen_freefun_prototype ppf () =
-    fprintf ppf "static void free_%s(struct %s*);" typename typename
+    fprintf ppf "%a(struct %a*);"
+      gen_funname_free () pp_print_string typename
   in
 
   let gen_freefun_definition ppf () =
@@ -261,8 +279,8 @@ let define_gcfuns typename gen_recmark_opt gen_recfree_opt fun_writers =
 
     (gen_codeblock
        (fun ppf () ->
-         fprintf ppf "@[<h>static void free_%s(struct %s* x)@]"
-           typename typename)
+         fprintf ppf "@[<h>static void %a(struct %a* x)@]"
+           gen_funname_free () pp_print_string typename)
        gen_freefun_definition_body) ppf ()
   in
 
@@ -270,7 +288,7 @@ let define_gcfuns typename gen_recmark_opt gen_recfree_opt fun_writers =
   |> List.cons (gen_markfun_prototype, gen_markfun_definition)
   |> List.cons (gen_freefun_prototype, gen_freefun_definition)
 
-let define_tid_gcfuns metainfo (file, typedef) fun_writers =
+let define_tid_gcfun metainfo (file, typedef) fun_writers =
   let type_id = typedef.type_id in
   let tid = TId (file, type_id) in
   let typename = asprintf "%a" gen_tid_typename (file, type_id) in
@@ -339,9 +357,9 @@ let define_tid_gcfuns metainfo (file, typedef) fun_writers =
       (Some gen_recmark, Some gen_recfree)
   in
 
-  define_gcfuns typename gen_recmark_opt gen_recfree_opt fun_writers
+  define_gcfun typename gen_recmark_opt gen_recfree_opt fun_writers
 
-let define_ttuple_gcfuns metainfo types fun_writers =
+let define_ttuple_gcfun metainfo types fun_writers =
   let typename = asprintf "%a" gen_ttuple_typename types in
   let types_with_position = List.mapi (fun pos t -> (t, pos)) types in
   let enum_types = metainfo.typedata.enum_types in
@@ -387,9 +405,9 @@ let define_ttuple_gcfuns metainfo types fun_writers =
       (Some gen_recmark, Some gen_recfree)
   in
 
-  define_gcfuns typename gen_recmark_opt gen_recfree_opt fun_writers
+  define_gcfun typename gen_recmark_opt gen_recfree_opt fun_writers
 
-let define_tstate_gcfuns metainfo (file, xfrp_smodule) fun_writers =
+let define_tstate_gcfun metainfo (file, xfrp_smodule) fun_writers =
   let module_id = xfrp_smodule.smodule_id in
   let tstate = TState (file, module_id) in
   let typename = asprintf "%a" gen_tstate_typename (file, module_id) in
@@ -473,31 +491,31 @@ let define_tstate_gcfuns metainfo (file, xfrp_smodule) fun_writers =
       (Some gen_recmark, Some gen_recfree)
   in
 
-  define_gcfuns typename gen_recmark_opt gen_recfree_opt fun_writers
+  define_gcfun typename gen_recmark_opt gen_recfree_opt fun_writers
 
-let define_tid_funs metainfo (file, typedef) fun_writers =
+let define_tid_fun metainfo (file, typedef) fun_writers =
   fun_writers
   |> define_tid_conses metainfo (file, typedef)
-  |> define_tid_gcfuns metainfo (file, typedef)
+  |> define_tid_gcfun metainfo (file, typedef)
 
-let define_ttuple_funs metainfo types fun_writers =
+let define_ttuple_fun metainfo types fun_writers =
   fun_writers
   |> define_ttuple_cons metainfo types
-  |> define_ttuple_gcfuns metainfo types
+  |> define_ttuple_gcfun metainfo types
 
-let define_tstate_funs metainfo (file, xfrp_smodule) fun_writers =
+let define_tstate_fun metainfo (file, xfrp_smodule) fun_writers =
   fun_writers
   |> define_tstate_conses metainfo (file, xfrp_smodule)
-  |> define_tstate_gcfuns metainfo (file, xfrp_smodule)
+  |> define_tstate_gcfun metainfo (file, xfrp_smodule)
 
-let define_type_funs metainfo fun_writers=
+let define_type_fun metainfo fun_writers=
   let nonenum_tid_defs = metainfo.typedata.nonenum_tid_defs in
   let tuple_types = metainfo.typedata.tuple_types in
   let nonenum_tstate_defs = metainfo.typedata.nonenum_tstate_defs in
   fun_writers
-  |> List.fold_right (define_tid_funs metainfo)
+  |> List.fold_right (define_tid_fun metainfo)
        (List.rev nonenum_tid_defs)
-  |> List.fold_right (define_ttuple_funs metainfo)
+  |> List.fold_right (define_ttuple_fun metainfo)
        (List.rev tuple_types)
-  |> List.fold_right (define_tstate_funs metainfo)
+  |> List.fold_right (define_tstate_fun metainfo)
        (List.rev nonenum_tstate_defs)
