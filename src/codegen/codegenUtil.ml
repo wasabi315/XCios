@@ -120,3 +120,65 @@ let gen_tstate_consname ppf (file, module_id, cons_id) =
   fprintf ppf "%a_%a"
     gen_tstate_typename (file, module_id)
     pp_print_string cons_id
+
+type update_generator =
+  {
+    update_gen_body : writer;
+    update_target_type : Type.t;
+    update_gen_address : writer;
+    update_gen_mark : writer;
+    update_gen_clock : writer option;
+  }
+
+let gen_update metainfo generator ppf () =
+  let gen_body = generator.update_gen_body in
+  let target_type = generator.update_target_type in
+  let gen_address = generator.update_gen_address in
+  let gen_mark = generator.update_gen_mark in
+  let gen_clock = generator.update_gen_clock in
+
+  let markcall_writer  =
+    match target_type with
+    | TBool | TInt | TFloat -> None
+    | TState (file, module_id) ->
+       if Hashset.mem metainfo.typedata.enum_types target_type then
+         None
+       else
+         let writer ppf () =
+           fprintf ppf "@[<h>mark_%a(%a, %a);@]"
+             gen_tstate_typename (file, module_id) gen_address () gen_mark ()
+         in
+         Some writer
+    | TId (file, type_id) ->
+       if Hashset.mem metainfo.typedata.enum_types target_type then
+         None
+       else
+         let writer ppf () =
+           fprintf ppf "@[<h>mark_%a(%a, %a);@]"
+             gen_tid_typename (file, type_id) gen_address () gen_mark ()
+         in
+         Some writer
+    | TTuple types ->
+       let writer ppf () =
+         fprintf ppf "@[<h>mark_%a(%a, %a);@]"
+           gen_ttuple_typename types gen_address () gen_mark ()
+       in
+       Some writer
+    | _ -> assert false
+  in
+
+  fprintf ppf "@[<v>";
+  gen_body ppf ();
+  begin
+    match markcall_writer with
+    | Some writer -> fprintf ppf "@,%a" writer ()
+    | None -> ()
+  end;
+  begin
+    match gen_clock with
+    | Some writer -> fprintf ppf "@,%a" writer ()
+    | None -> ()
+  end;
+  fprintf ppf "@]"
+
+

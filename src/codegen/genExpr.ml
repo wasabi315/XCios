@@ -15,14 +15,12 @@ let make_tmpvar_name () =
 type codegen_ctx =
   | CTXGlobalConst
   | CTXModuleConst
-  (* attribute, node id *)
-  | CTXModuleNode of nattr * string
-  (* state_id *)
-  | CTXStateConst of string
-  (* state_id, attribute, node_id *)
-  | CTXStateNode of string * nattr * string
-  (* state_id *)
-  | CTXSwitch of string
+  | CTXModuleNode of nattr * string         (* attribute, node id *)
+  | CTXModuleNewnodeIn
+  | CTXStateConst of string                 (* state_id *)
+  | CTXStateNode of string * nattr * string (* state_id, attribute, node_id *)
+  | CTXStateNewnodeIn of string             (* state_id *)
+  | CTXSwitch of string                     (* state_id *)
 
 let gen_literal ppf = function
   | LTrue -> pp_print_string ppf "1"
@@ -68,7 +66,7 @@ let get_pattern_conds_binds metainfo gen_target pattern =
           rec_f gen_subtarget pattern conds_binds
         ) (conds, binds) patterns_with_position
     in
-      
+
     let f_valuecons cons_id subpat =
       let conds =
         if Hashset.mem singleton_types tpat then conds else
@@ -91,7 +89,7 @@ let get_pattern_conds_binds metainfo gen_target pattern =
          rec_f gen_subtarget subpat (conds, binds)
       | _ -> assert false
     in
-    
+
     let f_statecons cons_id subpat =
       let conds =
         if Hashset.mem singleton_types tpat then conds else
@@ -177,6 +175,13 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
         | _ -> assert false
       in
 
+      let f_enumtype cons_tag =
+        let gen_expr ppf () =
+          pp_print_int ppf cons_tag
+        in
+        (body_writers, gen_expr)
+      in
+
       let f_valuecons file type_id =
         let gen_expr ppf () =
           fprintf ppf "%a(%a)"
@@ -185,7 +190,7 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
         in
         (body_writers, gen_expr)
       in
-      
+
       let f_statecons file module_id tvalue =
         let (body_writers, gen_args) =
           match tvalue with
@@ -210,7 +215,7 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
              (gen_prepare_args :: body_writers, gen_args)
           | _ -> assert false
         in
-        
+
         let gen_expr ppf () =
           fprintf ppf "%a(%a)"
             gen_tstate_consname (file, module_id, cons_id)
@@ -219,12 +224,17 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
         (body_writers, gen_expr)
       in
 
-      match idinfo with
-      | ValueCons (file, _, TId (_, type_id)) ->
-         f_valuecons file type_id
-      | StateCons (file, module_id, tvalue) ->
-         f_statecons file module_id tvalue
-      | _ -> assert false
+      let enum_types = metainfo.typedata.enum_types in
+      let tag_table = Hashtbl.find metainfo.typedata.cons_tag tast in
+      if Hashset.mem enum_types tast then
+        f_enumtype (Idmap.find cons_id tag_table)
+      else
+        match idinfo with
+        | ValueCons (file, _, TId (_, type_id)) ->
+           f_valuecons file type_id
+        | StateCons (file, module_id, tvalue) ->
+           f_statecons file module_id tvalue
+        | _ -> assert false
     in
 
     let f_tuple es =
@@ -251,7 +261,7 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
     let f_retain () =
 
       let gen_expr ppf () =
-        
+
         let f_module_node nattr node_id =
           match nattr with
           | OutputNode | NormalNode ->
@@ -270,14 +280,15 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
         in
 
         match codegen_ctx with
-        | CTXGlobalConst | CTXModuleConst | CTXStateConst _ -> assert false
+        | CTXGlobalConst | CTXModuleConst | CTXModuleNewnodeIn
+          | CTXStateConst _ | CTXStateNewnodeIn _ -> assert false
         | CTXModuleNode (nattr, node_id) ->
            f_module_node nattr node_id
         | CTXStateNode (state_id, nattr, node_id) ->
            f_state_node state_id nattr node_id
         | CTXSwitch _ -> fprintf ppf "memory->state"
       in
-      
+
       (body_writers, gen_expr)
     in
 
@@ -294,32 +305,35 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
 
         let f_state_const () =
           match codegen_ctx with
-          | CTXStateConst state_id | CTXStateNode (state_id, _, _)
-            | CTXSwitch state_id ->
+          | CTXStateConst state_id | CTXStateNewnodeIn state_id
+            | CTXStateNode (state_id, _, _) | CTXSwitch state_id ->
              fprintf ppf "memory->statebody.%s.%s" state_id id
           | _ -> assert false
         in
 
         let f_state_param () =
           match codegen_ctx with
-          | CTXStateConst state_id | CTXStateNode (state_id, _, _)
-            | CTXSwitch state_id ->
+          | CTXStateConst state_id | CTXStateNewnodeIn state_id
+            | CTXStateNode (state_id, _, _) | CTXSwitch state_id ->
              fprintf ppf "memory->state->params.%s.%s" state_id id
           | _ -> assert false
         in
 
         let f_node nattr =
           match codegen_ctx, nattr with
-          | CTXModuleNode _, _ ->
+          | CTXModuleNewnodeIn, _ | CTXModuleNode _, _ ->
              fprintf ppf "memory->%s[curren_side]" id
           | CTXStateNode (state_id, _, _), NormalNode
+            | CTXStateNewnodeIn state_id, NormalNode
             | CTXSwitch state_id, NormalNode ->
              fprintf ppf "memory->statebody.%s.%s[current_side]" state_id id
-          | CTXStateNode _, _ | CTXSwitch _, _ ->
+          | CTXStateNode _, _
+            | CTXStateNewnodeIn _, _
+            | CTXSwitch _, _ ->
              fprintf ppf "memory->%s[current_side]" id
           | _ -> assert false
         in
-        
+
         match idinfo with
         | LocalId _ -> pp_print_string ppf id
         | ConstId (file, _) -> gen_global_constname ppf (file, id)
@@ -340,12 +354,15 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
         | NodeId (nattr, _), ALast ->
            begin
              match codegen_ctx, nattr with
-             | CTXModuleNode _, _ ->
+             | CTXModuleNode _, _ | CTXModuleNewnodeIn, _ ->
                 fprintf ppf "memory->%s[!curren_side]" id
              | CTXStateNode (state_id, _, _), NormalNode
+               | CTXStateNewnodeIn state_id, NormalNode
                | CTXSwitch state_id, NormalNode ->
                 fprintf ppf "memory->statebody.%s.%s[!current_side]" state_id id
-             | CTXStateNode _, _ | CTXSwitch _, _ ->
+             | CTXStateNode _, _
+               | CTXStateNewnodeIn _, _
+               | CTXSwitch _, _ ->
                 fprintf ppf "memory->%s[!current_side]" id
              | _ -> assert false
            end
@@ -379,7 +396,7 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
       let (thenbody_writers, gen_then) = rec_f ethen [] in
       let (elsebody_writers, gen_else) = rec_f eelse [] in
       let ret_varname = make_tmpvar_name () in
-      
+
       let gen_body_then ppf () =
         fprintf ppf "@[<v>";
         if thenbody_writers = [] then () else
@@ -395,7 +412,7 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
         fprintf ppf "%a = %a" pp_print_string ret_varname gen_else ();
         fprintf ppf "@]"
       in
-      
+
       let gen_body ppf () =
         fprintf ppf "@[<v>";
         fprintf ppf "%a %a;"
@@ -476,11 +493,11 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
 
         (gen_body :: body_writers, gen_expr)
       in
-          
+
       let f_multiple_branch branchs =
 
         let ret_varname = make_tmpvar_name () in
-      
+
         let gen_condexpr ppf conds =
           let pp_print_condsep ppf () =
             fprintf ppf "@ &&"
@@ -499,7 +516,7 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
           fprintf ppf "@]"
         in
 
-        let gen_body ppf () = 
+        let gen_body ppf () =
           let branch_size = List.length branchs in
           fprintf ppf "@[<v>";
           fprintf ppf "%a@," gen_body_head ();
@@ -525,7 +542,7 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
             ) branchs;
           fprintf ppf "@]"
         in
-        
+
         let gen_expr ppf () =
           pp_print_string ppf ret_varname
         in
