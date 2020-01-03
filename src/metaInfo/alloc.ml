@@ -2,6 +2,32 @@ open Syntax
 open Type
 open MetaInfo
 
+let merge_alloc_amount f amount1 amount2 =
+  let amount2 = Hashtbl.copy amount2 in
+  Hashtbl.fold (fun t val1 amount2 ->
+      match Hashtbl.find_opt amount2 t with
+      | Some(val2) -> Hashtbl.replace amount2 t (f val1 val2); amount2
+      | None -> Hashtbl.add amount2 t val1; amount2
+    ) amount1 amount2
+
+let alloc_amount_union amount1 amount2 =
+  merge_alloc_amount max amount1 amount2
+
+let alloc_amount_sum amount1 amount2 =
+  merge_alloc_amount (+) amount1 amount2
+
+exception AllocAmountDiffError
+let alloc_amount_diff amount1 amount2 =
+  let amount1 = Hashtbl.copy amount1 in
+  Hashtbl.fold (fun t val2 amount1 ->
+      match Hashtbl.find_opt amount1 t with
+      | Some val1 ->
+         let sub = val1 - val2 in
+         if sub < 0 then raise AllocAmountDiffError else
+           Hashtbl.replace amount1 t sub; amount1
+      | None -> raise AllocAmountDiffError
+    ) amount2 amount1
+
 let cache_sizeof_type : (Type.t, alloc_amount) Hashtbl.t =
   Hashtbl.create 20
 
@@ -205,30 +231,31 @@ let calc_req_begin all_data entry_file =
      alloc_amount_empty () |> visit_smodule entry_file def
   | _ -> assert false
 
-let get_free_table all_data node_to_type nodelife =
+let get_free_table all_data node_to_type lifetime =
 
-  let get_total_free_amount free_ids =
-    alloc_amount_empty ()
-    |> Idset.fold (fun id amount ->
-           let sizeof_type = Idmap.find id node_to_type in
-           add_sizeof_type all_data sizeof_type amount
-         ) free_ids
+  let update_free_table clock t table =
+    match Intmap.find_opt clock table with
+    | Some amount ->
+       let free_amount = add_sizeof_type all_data t amount in
+       Intmap.add clock free_amount table
+    | None ->
+       let free_amount = get_sizeof_type all_data t in
+       Intmap.add clock free_amount table
   in
 
-  let ref_life_to_free_table ref_life =
-    to_timetable ref_life |> Intmap.map get_total_free_amount
-  in
+  Intmap.empty
+  |> Idmap.fold (fun id clock_opt free_table ->
+         let t = Idmap.find id node_to_type in
+         match clock_opt with
+         | Some clock -> update_free_table clock t free_table
+         | None -> free_table
+       ) lifetime.free_current
+  |> Idmap.fold (fun id clock free_table ->
+         let t = Idmap.find id node_to_type in
+         update_free_table clock t free_table
+       ) lifetime.free_last
 
-  let curref_table = ref_life_to_free_table nodelife.curref_life in
-  let lastref_table = ref_life_to_free_table nodelife.lastref_life in
-  Intmap.merge (fun _ v_cur v_last ->
-      match v_cur, v_last with
-      | Some amount1, Some amount2 -> Some (alloc_amount_sum amount1 amount2)
-      | Some amount, None | None, Some amount -> Some amount
-      | None, None -> None
-    ) curref_table lastref_table
-
-let get_module_free_table all_data xfrp_module nodelife =
+let get_module_free_table all_data xfrp_module lifetime =
   let node_to_type =
     Idmap.empty
     |> List.fold_right (fun (id, _, t) table ->
@@ -243,9 +270,9 @@ let get_module_free_table all_data xfrp_module nodelife =
              ) table newnode.newnode_binds
          ) xfrp_module.module_newnodes
   in
-  get_free_table all_data node_to_type nodelife
+  get_free_table all_data node_to_type lifetime
 
-let get_state_free_table all_data xfrp_smodule state_id nodelife =
+let get_state_free_table all_data xfrp_smodule state_id lifetime =
   let state = Idmap.find state_id xfrp_smodule.smodule_states in
   let (_, tstate) = state.state_switch in
   let node_to_type =
@@ -263,11 +290,9 @@ let get_state_free_table all_data xfrp_smodule state_id nodelife =
          ) state.state_newnodes
     |> Idmap.add "switch" tstate
   in
-  get_free_table all_data node_to_type nodelife
+  get_free_table all_data node_to_type lifetime
 
-let calc_alloc_amount all_data entry_file metainfo =
-  let timestamp = metainfo.lifetime.timestamp in
-  let nodelifes = metainfo.lifetime.nodelifes in
+let calc_alloc_amount all_data metainfo =
 
   let update_req_amount current expr req_amount =
     get_req_expr all_data expr
@@ -298,33 +323,54 @@ let calc_alloc_amount all_data entry_file metainfo =
   and visit_node_init current node req_amount =
     visit_init current node.node_init req_amount
 
-  and visit_node_body current node req_amount =
-    update_req_amount current node.node_body req_amount
-
-  and visit_newnode newnode (current, req_amount) =
+  and visit_node timestamp free_table node (now, current, req_amount) =
     let req_amount =
-      req_amount
-      |> List.fold_right (update_req_amount current) newnode.newnode_margs
-      |> List.fold_right (update_req_amount current) newnode.newnode_inputs
+      update_req_amount current node.node_body req_amount
     in
-    let instance_name = conc_id ["instance"; newnode.newnode_id] in
-    match newnode.newnode_module with
-    | (id, ModuleCons (file, _, _, _)) ->
-       let filedata = Idmap.find file all_data in
-       begin
-         match Idmap.find id filedata.xfrp_all with
-         | XFRPModule m ->
-            visit_module instance_name m (current, req_amount)
-         | XFRPSModule sm ->
-            visit_smodule instance_name sm (current, req_amount)
-         | _ -> assert false
-       end
-    | _ -> assert false
+    let current =
+      current
+      |> add_sizeof_type all_data node.node_type
+      |> free_noderef free_table now
+    in
+    let now = Idmap.find node.node_id timestamp in
+    (now, current, req_amount)
 
-  and visit_header_node current (_, init, _) req_expr =
-    visit_init current init req_expr
+  and visit_newnode timestamp free_table newnode (now, current, req_amount) =
+    let req_amount =
+      List.fold_right (update_req_amount current)
+        (List.rev newnode.newnode_margs) req_amount
+    in
+    let (current, req_amount) =
+      List.fold_right (fun expr (current, req_amount) ->
+          let (_, texpr) = expr in
+          let req_amount = update_req_amount current expr req_amount in
+          let current = add_sizeof_type all_data texpr current in
+          (current, req_amount)
+        ) (List.rev newnode.newnode_inputs) (current, req_amount)
+    in
+    let now = now + 1 in
+    let current = free_noderef free_table now current in
+    let (current, req_amount) =
+      match newnode.newnode_module with
+      | (id, ModuleCons (file, _, _, _)) ->
+         let filedata = Idmap.find file all_data in
+         begin
+           match Idmap.find id filedata.xfrp_all with
+           | XFRPModule m ->
+              visit_module file m (current, req_amount)
+           | XFRPSModule sm ->
+              visit_smodule file sm (current, req_amount)
+           | _ -> assert false
+         end
+      | _ -> assert false
+    in
+    let now = Idmap.find newnode.newnode_id timestamp in
+    (now, current, req_amount)
 
-  and visit_module instance_name xfrp_module (current, req_amount) =
+  and visit_header_node current (_, init, _) req_amount =
+    visit_init current init req_amount
+
+  and visit_module file xfrp_module (current, req_amount) =
     let req_amount =
       req_amount
       |> List.fold_right (visit_header_node current) xfrp_module.module_in
@@ -332,64 +378,62 @@ let calc_alloc_amount all_data entry_file metainfo =
       |> idmap_fold_values (visit_local_const current) xfrp_module.module_consts
       |> idmap_fold_values (visit_node_init current) xfrp_module.module_nodes
     in
-    let nodelife = Idmap.find instance_name nodelifes in
-    let free_table =
-      get_module_free_table all_data xfrp_module nodelife
+    let module_info =
+      let module_id = xfrp_module.module_id in
+      match Hashtbl.find metainfo.moduledata (file, module_id) with
+      | ModuleInfo info -> info
+      | _ -> assert false
     in
-    List.fold_left (fun (current, req_amount) id ->
-        match Idmap.find id xfrp_module.module_all with
-        | MNode node ->
-           let req_amount = visit_node_body current node req_amount in
-           let global_name = conc_id [instance_name; node.node_id] in
-           let now = Idmap.find global_name timestamp in
-           let current =
-             current
-             |> add_sizeof_type all_data node.node_type
-             |> free_noderef free_table now
-           in
-           (current, req_amount)
-        | MNewnode def -> visit_newnode def (current, req_amount)
-        | _ -> assert false
-      ) (current, req_amount) xfrp_module.module_update_ord
+    let lifetime =
+      module_info.module_lifetime
+    in
+    let timestamp = lifetime.timestamp in
+    let free_table =
+      get_module_free_table all_data xfrp_module lifetime
+    in
+    let (_, current, req_amount) =
+      List.fold_left (fun (now, current, req_amount) id ->
+          match Idmap.find id xfrp_module.module_all with
+          | MNode node ->
+             visit_node timestamp free_table node (now, current, req_amount)
+          | MNewnode def ->
+             visit_newnode timestamp free_table def (now, current, req_amount)
+          | _ -> assert false
+        ) (2, current, req_amount) xfrp_module.module_update_ord
+    in
+    let clockperiod = module_info.module_clockperiod in
+    let current = free_noderef free_table clockperiod current in
+    (current, req_amount)
 
-  and visit_state state_name free_table state (current, req_amount) =
+  and visit_state timestamp free_table state (current, req_amount) =
     let req_amount =
       req_amount
       |> idmap_fold_values (visit_local_const current) state.state_consts
       |> idmap_fold_values (visit_node_init current) state.state_nodes
     in
-    let (current, req_amount) =
-      List.fold_left (fun (current, req_amount) id ->
+    let (_, current, req_amount) =
+      List.fold_left (fun (now, current, req_amount) id ->
         match Idmap.find id state.state_all with
         | SNode node ->
-           let req_amount = visit_node_body current node req_amount in
-           let global_name = conc_id [state_name; node.node_id] in
-           let now = Idmap.find global_name timestamp in
-           let current =
-             current
-             |> add_sizeof_type all_data node.node_type
-             |> free_noderef free_table now
-           in
-           (current, req_amount)
-        | SNewnode def -> visit_newnode def (current, req_amount)
+           visit_node timestamp free_table node (now, current, req_amount)
+        | SNewnode def ->
+           visit_newnode timestamp free_table def (now, current, req_amount)
         | _ -> assert false
-        ) (current, req_amount) state.state_update_ord
+        ) (2, current, req_amount) state.state_update_ord
     in
     let req_amount =
       update_req_amount current state.state_switch req_amount
     in
     let (_, tstate) = state.state_switch in
-    let clock_switch =
-      Idmap.find (conc_id [state_name; "switch"]) timestamp
-    in
+    let now = Idmap.find "switch" timestamp in
     let current =
       current
       |> add_sizeof_type all_data tstate
-      |> free_noderef free_table clock_switch
+      |> free_noderef free_table now
     in
     (current, req_amount)
 
-  and visit_smodule instance_name xfrp_smodule (current, req_amount) =
+  and visit_smodule file xfrp_smodule (current, req_amount) =
     let req_amount =
       req_amount
       |> List.fold_right (visit_header_node current) xfrp_smodule.smodule_in
@@ -398,16 +442,26 @@ let calc_alloc_amount all_data entry_file metainfo =
       |> update_req_amount current xfrp_smodule.smodule_init
       |> idmap_fold_values (visit_local_const current) xfrp_smodule.smodule_consts
     in
+    let smodule_info =
+      let smodule_id = xfrp_smodule.smodule_id in
+      match Hashtbl.find metainfo.moduledata (file, smodule_id) with
+      | SModuleInfo info -> info
+      | _ -> assert false
+    in
+    let state_lifetime =
+      smodule_info.state_lifetime
+    in
+    let clockperiod = smodule_info.smodule_clockperiod in
     idmap_fold_values (fun state (next, req_amount) ->
-        let state_name = conc_id [instance_name; state.state_id] in
-        let node_life = Idmap.find state_name nodelifes in
+        let lifetime = Idmap.find state.state_id state_lifetime in
+        let timestamp = lifetime.timestamp in
         let free_table =
-          get_state_free_table
-            all_data xfrp_smodule state.state_id node_life
+          get_state_free_table all_data xfrp_smodule state.state_id lifetime
         in
         let (next', req_amount) =
-          visit_state state_name free_table state (current, req_amount)
+          visit_state timestamp free_table state (current, req_amount)
         in
+        let next' = free_noderef free_table clockperiod next' in
         let next = alloc_amount_union next next' in
         (next, req_amount)
       ) xfrp_smodule.smodule_states (alloc_amount_empty (), req_amount)
@@ -419,8 +473,8 @@ let calc_alloc_amount all_data entry_file metainfo =
       ) (alloc_amount_empty (), alloc_amount_empty ())
       metainfo.all_elements.all_consts
   in
+  let entry_file = metainfo.entry_file in
   let entry_filedata = Idmap.find entry_file all_data in
-  let main_instance_name = "instance_#0" in
   let current =
     calc_req_begin all_data entry_file
     |> alloc_amount_sum current
@@ -428,12 +482,12 @@ let calc_alloc_amount all_data entry_file metainfo =
   match Idmap.find "Main" entry_filedata.xfrp_all with
   | XFRPModule m ->
      let (_, req_amount) =
-       visit_module main_instance_name m (current, req_amount)
+       visit_module entry_file m (current, req_amount)
      in
      { metainfo with alloc_amount = req_amount }
   | XFRPSModule sm ->
      let (_, req_amount) =
-       visit_smodule main_instance_name sm (current, req_amount)
+       visit_smodule entry_file sm (current, req_amount)
      in
      { metainfo with alloc_amount = req_amount }
   | _ -> assert false

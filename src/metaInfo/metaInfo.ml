@@ -11,16 +11,15 @@ let pp_intmap pp_contents ppf intmap =
   pp_list_comma pp_binds ppf (Intmap.to_seq intmap |> List.of_seq)
 
 type timetable = Idset.t Intmap.t
-type clockinfo = int Idmap.t
 
-let to_timetable clockinfo =
+let to_timetable int_idmap =
   let update id time revmap =
     Intmap.update time (function
         | Some s -> Some (Idset.add id s)
         | None -> Some (Idset.singleton id)
       ) revmap
   in
-  Idmap.fold update clockinfo Intmap.empty
+  Idmap.fold update int_idmap Intmap.empty
 
 type all_elements =
   {
@@ -62,47 +61,97 @@ let pp_all_elements ppf all_elements =
     (get_list_printer pp_all_funs_elem) all_funs;
   fprintf ppf "@]"
 
-let all_elements_empty =
-  { all_modules = []; all_consts = []; all_funs = [] }
-
-type nodelife =
-  {
-    curref_life  : clockinfo;
-    lastref_life : clockinfo;
-  }
-
-let pp_nodelife ppf nodelife =
-  fprintf ppf "@[<v>curref_life:@;<0 2>";
-  fprintf ppf "@[<hov>%a@]@;" (pp_idmap pp_print_int) nodelife.curref_life;
-  fprintf ppf "lastref_life:@;<0 2>";
-  fprintf ppf "@[<hov>%a@]@]" (pp_idmap pp_print_int) nodelife.lastref_life
-
-let nodelife_empty = { curref_life = Idmap.empty; lastref_life = Idmap.empty }
-
 type lifetime =
   {
-    clockperiod : int;
     timestamp : int Idmap.t;
-    nodelifes : nodelife Idmap.t;
+    free_current : (int option) Idmap.t;
+    free_last : int Idmap.t;
   }
-
 let pp_lifetime ppf lifetime =
+  let pp_free_current_elem ppf elem =
+    (pp_opt
+       pp_print_int
+       (fun ppf () ->
+         pp_print_string ppf "not freed"))
+      ppf elem
+  in
   let pp_timetable_row ppf ids =
     fprintf ppf "@[<hov>%a@]" pp_idset ids
   in
-  fprintf ppf "@[<v>clockperiod: %a@;" pp_print_int lifetime.clockperiod;
+  fprintf ppf "@[<v>";
   fprintf ppf "timestamp:@;<0 2>";
   fprintf ppf "@[<v>%a@]@;"
     (pp_intmap pp_timetable_row) (to_timetable lifetime.timestamp);
-  fprintf ppf "nodelifes:@;<0 2>";
-  fprintf ppf "@[<v>%a@]@]" (pp_idmap pp_nodelife) lifetime.nodelifes
+  fprintf ppf "curref_life:@;<0 2>";
+  fprintf ppf "@[<hov>%a@]@;"
+    (pp_idmap pp_free_current_elem) lifetime.free_current;
+  fprintf ppf "lastref_life:@;<0 2>";
+  fprintf ppf "@[<hov>%a@]"
+    (pp_idmap pp_print_int) lifetime.free_last;
+  fprintf ppf "@]"
 
-let lifetime_empty =
+let pp_signature ppf signature =
+  (pp_print_list (fun ppf (id, t) ->
+      fprintf ppf "%a : %a"
+        pp_print_string id Type.pp_t t
+     ) ~pp_sep:pp_print_commaspace)
+    ppf signature
+
+type module_info =
   {
-    clockperiod = 0;
-    timestamp = Idmap.empty;
-    nodelifes = Idmap.empty
+    module_clockperiod : int;
+    module_param_sig : (identifier * Type.t) list;
+    module_in_sig : (identifier * Type.t) list;
+    module_out_sig : (identifier * Type.t) list;
+    module_lifetime : lifetime;
   }
+
+let pp_module_info ppf module_info =
+  fprintf ppf "@[<v>";
+  fprintf ppf "clockperiod: %a"
+    pp_print_int module_info.module_clockperiod;
+  fprintf ppf "@,param_sig: @[<h>%a@]"
+    pp_signature module_info.module_param_sig;
+  fprintf ppf "@,in_sig: @[<h>%a@]"
+    pp_signature module_info.module_in_sig;
+  fprintf ppf "@,out_sig: @[<h>%a@]"
+    pp_signature module_info.module_out_sig;
+  fprintf ppf "@,life_time:@;<0 2>%a"
+    pp_lifetime module_info.module_lifetime;
+  fprintf ppf "@]"
+
+type smodule_info =
+  {
+    smodule_clockperiod : int;
+    smodule_param_sig : (identifier * Type.t) list;
+    smodule_in_sig : (identifier * Type.t) list;
+    smodule_out_sig : (identifier * Type.t) list;
+    state_lifetime : lifetime Idmap.t;
+  }
+
+let pp_smodule_info ppf smodule_info =
+  fprintf ppf "@[<v>";
+  fprintf ppf "clockperiod: %a"
+    pp_print_int smodule_info.smodule_clockperiod;
+  fprintf ppf "@,param_sig: @[<h>%a@]"
+    pp_signature smodule_info.smodule_param_sig;
+  fprintf ppf "@,in_sig: @[<h>%a@]"
+    pp_signature smodule_info.smodule_in_sig;
+  fprintf ppf "@,out_sig: @[<h>%a@]"
+    pp_signature smodule_info.smodule_out_sig;
+  fprintf ppf "@,life_time:@;<0 2>@[<v>%a@]"
+    (pp_idmap pp_lifetime) smodule_info.state_lifetime;
+  fprintf ppf "@]"
+
+type moduledata_elem =
+  | ModuleInfo of module_info
+  | SModuleInfo of smodule_info
+
+let pp_moduledata_elem ppf = function
+  | ModuleInfo info ->
+     fprintf ppf "@[<v 2>Module:@,%a@]" pp_module_info info
+  | SModuleInfo info ->
+     fprintf ppf "@[<v 2>SModule:@,%a@]" pp_smodule_info info
 
 type alloc_amount = (Type.t, int) Hashtbl.t
 
@@ -111,39 +160,6 @@ let pp_alloc_amount ppf alloc_amount =
     fprintf ppf "%a -> %a" Type.pp_t t pp_print_int size
   in
   pp_print_hashtbl pp_binds ppf alloc_amount ~pp_sep:pp_print_commaspace
-
-let alloc_amount_empty () =
-  Hashtbl.create 20
-
-let alloc_amount_singleton t =
-  let amount = alloc_amount_empty () in
-  Hashtbl.add t 1 amount; amount
-
-let merge_alloc_amount f amount1 amount2 =
-  let amount2 = Hashtbl.copy amount2 in
-  Hashtbl.fold (fun t val1 amount2 ->
-      match Hashtbl.find_opt amount2 t with
-      | Some(val2) -> Hashtbl.replace amount2 t (f val1 val2); amount2
-      | None -> Hashtbl.add amount2 t val1; amount2
-    ) amount1 amount2
-
-let alloc_amount_union amount1 amount2 =
-  merge_alloc_amount max amount1 amount2
-
-let alloc_amount_sum amount1 amount2 =
-  merge_alloc_amount (+) amount1 amount2
-
-exception AllocAmountDiffError
-let alloc_amount_diff amount1 amount2 =
-  let amount1 = Hashtbl.copy amount1 in
-  Hashtbl.fold (fun t val2 amount1 ->
-      match Hashtbl.find_opt amount1 t with
-      | Some val1 ->
-         let sub = val1 - val2 in
-         if sub < 0 then raise AllocAmountDiffError else
-           Hashtbl.replace amount1 t sub; amount1
-      | None -> raise AllocAmountDiffError
-    ) amount2 amount1
 
 type typedata =
   {
@@ -154,17 +170,6 @@ type typedata =
     tuple_types : (Type.t list) list;
     nonenum_tstate_defs : (string * xfrp_smodule) list;
     tstate_param_ids : (Type.t, (string list) Idmap.t) Hashtbl.t;
-  }
-
-let typedata_empty () =
-  {
-    enum_types = Hashset.create 20;
-    singleton_types = Hashset.create 20;
-    cons_tag = Hashtbl.create 20;
-    nonenum_tid_defs = [];
-    tuple_types = [];
-    nonenum_tstate_defs = [];
-    tstate_param_ids = Hashtbl.create 20;
   }
 
 let pp_typedata ppf typedata =
@@ -238,31 +243,54 @@ let pp_typedata ppf typedata =
 
 type metainfo =
   {
+    entry_file : string;
     all_elements : all_elements;
-    lifetime : lifetime;
+    moduledata : (string * string, moduledata_elem) Hashtbl.t;
     alloc_amount : alloc_amount;
     typedata : typedata;
   }
+
 let pp_metainfo ppf metainfo =
-  fprintf ppf "@[<v 2>metainfo:@;";
-  fprintf ppf "@[<v>all_elements: {@;<0 2>";
-  fprintf ppf "%a@;" pp_all_elements metainfo.all_elements;
-  fprintf ppf "}@]";
-  fprintf ppf "@[<v>lifetime: {@;<0 2>";
-  fprintf ppf "%a@;" pp_lifetime metainfo.lifetime;
-  fprintf ppf "}@]@;";
-  fprintf ppf "@[<v>alloc_amount: {@;<0 2>";
-  fprintf ppf "@[<hov>%a@]@;" pp_alloc_amount metainfo.alloc_amount;
-  fprintf ppf "}@]";
-  fprintf ppf "@[<v>typedata: {@;<0 2>";
-  fprintf ppf "%a@;" pp_typedata metainfo.typedata;
-  fprintf ppf "}@]";
+  let pp_moduledata ppf moduledata =
+    pp_print_hashtbl (fun ppf ((file, module_id), elem) ->
+        fprintf ppf "%a:%a -> @[<v>%a@]"
+          pp_print_string file
+          pp_print_string module_id
+          pp_moduledata_elem elem
+      ) ppf moduledata
+  in
+  fprintf ppf "@[<v>";
+  fprintf ppf "entry_file: %s" metainfo.entry_file;
+  fprintf ppf "@,all_elements:@;<0 2>@[%a@]" pp_all_elements metainfo.all_elements;
+  fprintf ppf "@,moduledata:@;<0 2>@[<v>%a@]" pp_moduledata metainfo.moduledata;
+  fprintf ppf "@,alloc_amount:@;<0 2>@[%a@]" pp_alloc_amount metainfo.alloc_amount;
+  fprintf ppf "@,typedata:@;<0 2>@[%a@]" pp_typedata metainfo.typedata;
   fprintf ppf "@]"
 
-let metainfo_empty () =
+let all_elements_empty =
   {
+    all_modules = []; all_consts = []; all_funs = [];
+  }
+
+let alloc_amount_empty () =
+  Hashtbl.create 20
+
+let typedata_empty () =
+  {
+    enum_types = Hashset.create 20;
+    singleton_types = Hashset.create 20;
+    cons_tag = Hashtbl.create 20;
+    nonenum_tid_defs  = [];
+    tuple_types = [];
+    nonenum_tstate_defs = [];
+    tstate_param_ids = Hashtbl.create 20;
+  }
+
+let metainfo_empty entry_file =
+  {
+    entry_file = entry_file;
     all_elements = all_elements_empty;
-    lifetime = lifetime_empty;
+    moduledata = Hashtbl.create 20;
     alloc_amount = alloc_amount_empty ();
     typedata = typedata_empty ();
   }

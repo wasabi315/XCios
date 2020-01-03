@@ -61,9 +61,14 @@ let gen_global_consts ppf metainfo =
     fprintf ppf "@,%a" (pp_print_list gen_single) all_consts
 
 let generate ppf (entry_file, metainfo) =
+  let toplevel_clockperiod =
+    match Hashtbl.find metainfo.moduledata (entry_file, "Main") with
+    | ModuleInfo info -> info.module_clockperiod
+    | SModuleInfo info -> info.smodule_clockperiod
+  in
   fprintf ppf "@[<v>";
   fprintf ppf "@[<h>int clock;@]";
-  fprintf ppf "@,@[<h>int period = %d;@]" metainfo.lifetime.clockperiod;
+  fprintf ppf "@,@[<h>int period = %d;@]" toplevel_clockperiod;
   fprintf ppf "@,@[<h>int current_side = 0;@]";
   gen_global_consts ppf metainfo;
   fprintf ppf "@,@[<h>%a memory;@]" gen_module_memory_type (entry_file, "Main");

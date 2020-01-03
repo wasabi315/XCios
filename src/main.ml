@@ -67,10 +67,10 @@ let get_metainfo entry_file (all_data, file_ord) =
   in
   let used_materials = GatherUsed.gather all_data entry_file in
   let metainfo =
-    metainfo_empty ()
+    metainfo_empty entry_file
     |> AllElements.get_all_elements all_data file_ord used_materials
-    |> Lifetime.fill_lifetime all_data entry_file
-    |> Alloc.calc_alloc_amount all_data entry_file
+    |> ModuleData.calc_moduledata
+    |> Alloc.calc_alloc_amount all_data
     |> TypeData.calc_typedata all_data file_ord
   in
   metainfo
