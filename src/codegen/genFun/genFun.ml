@@ -1,11 +1,15 @@
 open Extension.Format
 open CodegenUtil
+open GenTypeFun
+open GenMaterialFun
+open GenModuleFun
 
 let generate ppf metainfo =
   let fun_writers =
     []
-    |> GenTypeFun.define_type_fun metainfo
-    |> GenElementFun.define_element_fun metainfo
+    |> define_type_fun metainfo
+    |> define_material_fun metainfo
+    |> define_module_fun metainfo
   in
   let (prototype_writers, definition_writers) = List.split fun_writers in
   let prototype_writers = List.rev prototype_writers in

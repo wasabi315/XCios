@@ -519,3 +519,4 @@ let define_type_fun metainfo fun_writers=
        (List.rev tuple_types)
   |> List.fold_right (define_tstate_fun metainfo)
        (List.rev nonenum_tstate_defs)
+

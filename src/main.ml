@@ -75,18 +75,6 @@ let get_metainfo entry_file (all_data, file_ord) =
   in
   metainfo
 
-let generate_main entry_file metainfo =
-  printf "@[<v>" ;
-  printf "%a" GenDataType.generate metainfo;
-  printf "@,%a" GenMemory.generate metainfo;
-  printf "@,%a" GenGlobal.generate (entry_file, metainfo);
-  printf "@,%a" GenFun.generate metainfo;
-  printf "@]"
-
-let codegen entry_file metainfo =
-  printf "%a@." pp_metainfo metainfo;
-  generate_main entry_file metainfo
-
 let compile path =
   try
     let basename = Filename.basename path in
@@ -97,7 +85,7 @@ let compile path =
     let dir = Filename.dirname path in
     let () = Sys.chdir dir in
     let file = Filename.remove_extension basename in
-    gather_filedata file |> get_metainfo file |> codegen file
+    gather_filedata file |> get_metainfo file |> Codegen.codegen
   with
   | ParseError msg | FileError msg
     -> printf "Compile Error : %s" msg;

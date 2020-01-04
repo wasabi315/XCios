@@ -47,7 +47,7 @@ let visit_expr clock self_id expr lifetime =
        let () = assert (self_id != "") in (* for newnode input *)
        update_free_last self_id (clock + 1) lifetime
     | EId (id, NodeId _) -> update_free_current id (clock + 1) lifetime
-    | EId (_, StateParam _) -> update_free_last "switch" (clock + 1) lifetime
+    | EId (_, StateParam _) -> update_free_last "state" (clock + 1) lifetime
     | EId _ -> lifetime
     | EAnnot ((id, NodeId _), _) -> update_free_last id (clock + 1) lifetime
     | EAnnot _ -> assert false
@@ -162,9 +162,9 @@ and visit_module file def moduledata =
   moduledata
 
 and visit_switch expr (clock, lifetime) =
-  let lifetime = visit_expr clock "switch" expr lifetime in
+  let lifetime = visit_expr clock "state" expr lifetime in
   let clock = clock + 1 in
-  let lifetime = update_timestamp "switch" clock lifetime in
+  let lifetime = update_timestamp "state" clock lifetime in
   (clock, lifetime)
 
 and visit_state moduledata def lifetime =
@@ -184,7 +184,7 @@ and visit_state moduledata def lifetime =
   |> visit_switch def.state_switch
 
 and visit_state_init lifetime =
-  update_free_last "switch" 2 lifetime
+  update_free_last "state" 2 lifetime
 
 and visit_smodule file def moduledata =
   let lifetime =

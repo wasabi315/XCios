@@ -1,4 +1,3 @@
 (library
  (name codegen)
- (libraries ast metainfo dependency extension)
- (wrapped false))
+ (libraries ast metainfo extension codegenUtil genFun))

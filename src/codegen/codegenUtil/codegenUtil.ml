@@ -121,64 +121,64 @@ let gen_tstate_consname ppf (file, module_id, cons_id) =
     gen_tstate_typename (file, module_id)
     pp_print_string cons_id
 
-type update_generator =
-  {
-    update_gen_body : writer;
-    update_target_type : Type.t;
-    update_gen_address : writer;
-    update_gen_mark : writer;
-    update_gen_clock : writer option;
-  }
+let gen_module_init ppf () =
+  fprintf ppf "memory->init"
+  
+let gen_state_init state_id ppf () =
+  fprintf ppf "memory->statebody.%s.init" state_id
 
-let gen_update metainfo generator ppf () =
-  let gen_body = generator.update_gen_body in
-  let target_type = generator.update_target_type in
-  let gen_address = generator.update_gen_address in
-  let gen_mark = generator.update_gen_mark in
-  let gen_clock = generator.update_gen_clock in
+let gen_module_node_address ppf (_nattr, node_id) =
+  fprintf ppf "memory->%s" node_id
+  
+let gen_state_node_address state_id ppf (nattr, node_id) =
+    match nattr with
+    | InputNode -> assert false
+    | SharedNode | OutputNode ->
+       fprintf ppf "memory->%s" node_id
+    | NormalNode ->
+       fprintf ppf "memory->statebody.%s.%s"
+         state_id node_id
 
-  let markcall_writer  =
-    match target_type with
-    | TBool | TInt | TFloat -> None
-    | TState (file, module_id) ->
-       if Hashset.mem metainfo.typedata.enum_types target_type then
-         None
-       else
-         let writer ppf () =
-           fprintf ppf "@[<h>mark_%a(%a, %a);@]"
-             gen_tstate_typename (file, module_id) gen_address () gen_mark ()
-         in
-         Some writer
-    | TId (file, type_id) ->
-       if Hashset.mem metainfo.typedata.enum_types target_type then
-         None
-       else
-         let writer ppf () =
-           fprintf ppf "@[<h>mark_%a(%a, %a);@]"
-             gen_tid_typename (file, type_id) gen_address () gen_mark ()
-         in
-         Some writer
-    | TTuple types ->
+let get_mark_writer metainfo target_type gen_address gen_life =
+  match target_type with
+  | TBool | TInt | TFloat -> None
+  | TState (file, module_id) ->
+     if Hashset.mem metainfo.typedata.enum_types target_type then
+       None
+     else
        let writer ppf () =
          fprintf ppf "@[<h>mark_%a(%a, %a);@]"
-           gen_ttuple_typename types gen_address () gen_mark ()
+           gen_tstate_typename (file, module_id) gen_address () gen_life ()
        in
        Some writer
-    | _ -> assert false
-  in
-
+  | TId (file, type_id) ->
+     if Hashset.mem metainfo.typedata.enum_types target_type then
+       None
+     else
+       let writer ppf () =
+         fprintf ppf "@[<h>mark_%a(%a, %a);@]"
+           gen_tid_typename (file, type_id) gen_address () gen_life ()
+       in
+       Some writer
+  | TTuple types ->
+     let writer ppf () =
+       fprintf ppf "@[<h>mark_%a(%a, %a);@]"
+         gen_ttuple_typename types gen_address () gen_life ()
+     in
+     Some writer
+  | _ -> assert false
+  
+let gen_update gen_body gen_mark_opt gen_tick_opt ppf () =
   fprintf ppf "@[<v>";
   gen_body ppf ();
   begin
-    match markcall_writer with
+    match gen_mark_opt with
     | Some writer -> fprintf ppf "@,%a" writer ()
     | None -> ()
   end;
   begin
-    match gen_clock with
+    match gen_tick_opt with
     | Some writer -> fprintf ppf "@,%a" writer ()
     | None -> ()
   end;
   fprintf ppf "@]"
-
-

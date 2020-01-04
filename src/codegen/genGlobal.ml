@@ -60,7 +60,8 @@ let gen_global_consts ppf metainfo =
   if all_consts = [] then () else
     fprintf ppf "@,%a" (pp_print_list gen_single) all_consts
 
-let generate ppf (entry_file, metainfo) =
+let generate ppf metainfo =
+  let entry_file = metainfo.entry_file in
   let toplevel_clockperiod =
     match Hashtbl.find metainfo.moduledata (entry_file, "Main") with
     | ModuleInfo info -> info.module_clockperiod

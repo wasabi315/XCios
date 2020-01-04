@@ -288,7 +288,7 @@ let get_state_free_table all_data xfrp_smodule state_id lifetime =
                Idmap.add id t table
              ) table newnode.newnode_binds
          ) state.state_newnodes
-    |> Idmap.add "switch" tstate
+    |> Idmap.add "state" tstate
   in
   get_free_table all_data node_to_type lifetime
 
@@ -425,7 +425,7 @@ let calc_alloc_amount all_data metainfo =
       update_req_amount current state.state_switch req_amount
     in
     let (_, tstate) = state.state_switch in
-    let now = Idmap.find "switch" timestamp in
+    let now = Idmap.find "state" timestamp in
     let current =
       current
       |> add_sizeof_type all_data tstate

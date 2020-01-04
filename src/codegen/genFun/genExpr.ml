@@ -575,3 +575,49 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
   let (body_writers, gen_expr) = rec_f expr [] in
   let body_writers = List.rev body_writers in
   (body_writers, gen_expr)
+
+let gen_body_expr body_writers gen_lastline ppf () =
+  fprintf ppf "@[<v>";
+  if body_writers = [] then () else
+    fprintf ppf "%a@," (exec_all_writers ()) body_writers;
+  fprintf ppf "%a" gen_lastline ();
+  fprintf ppf "@]"
+
+type updatefun_generator =
+  {
+    updatefun_ctx : codegen_ctx;
+    updatefun_body : expression;
+    updatefun_gen_funname : writer;
+    updatefun_gen_memorytype : writer;
+    updatefun_gen_address : writer;
+  }
+
+let define_updatefun metainfo generator fun_writers =
+  let fundef_ctx = generator.updatefun_ctx in
+  let body_expr = generator.updatefun_body in
+  let gen_funname = generator.updatefun_gen_funname in
+  let gen_memorytype = generator.updatefun_gen_memorytype in
+  let gen_address = generator.updatefun_gen_address in
+  let (body_writers, gen_expr) =
+    get_expr_generator metainfo fundef_ctx body_expr
+  in
+
+  let gen_prototype ppf () =
+    fprintf ppf "%a(%a*);"
+      gen_funname () gen_memorytype ()
+  in
+
+  let gen_body_lastline ppf () =
+    fprintf ppf "@[<2>%a =@ @[%a@];@]" gen_address () gen_expr ()
+  in
+
+  let gen_definition ppf () =
+    gen_codeblock
+      (fun ppf () ->
+        fprintf ppf "%a(@[<h>%a* memory@])"
+          gen_funname () gen_memorytype ())
+      (gen_body_expr body_writers gen_body_lastline)
+      ppf ()
+  in
+
+  (gen_prototype, gen_definition) :: fun_writers
