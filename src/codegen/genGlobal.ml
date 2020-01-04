@@ -37,16 +37,19 @@ let gen_type_globals ppf metainfo =
 
   let nonenum_tid_defs = metainfo.typedata.nonenum_tid_defs in
   let tuple_types = metainfo.typedata.tuple_types in
-  let nonenum_tstate_defs = metainfo.typedata.nonenum_tstate_defs in
+  let tstate_defs = metainfo.typedata.tstate_defs in
+  let print_all printer =
+    pp_print_list printer ~pp_sep:pp_print_cut2
+  in
   if nonenum_tid_defs = [] then () else
-    fprintf ppf "@,%a"
-      (pp_print_list gen_tid) nonenum_tid_defs;
+    fprintf ppf "@,@,%a"
+      (print_all gen_tid) nonenum_tid_defs;
   if tuple_types = [] then () else
-    fprintf ppf "@,%a"
-      (pp_print_list gen_ttuple) tuple_types;
-  if nonenum_tstate_defs = [] then () else
-    fprintf ppf "@,%a"
-      (pp_print_list gen_tstate) nonenum_tstate_defs
+    fprintf ppf "@,@,%a"
+      (print_all gen_ttuple) tuple_types;
+  if tstate_defs = [] then () else
+    fprintf ppf "@,@,%a"
+      (print_all gen_tstate) tstate_defs
 
 let gen_global_consts ppf metainfo =
 
@@ -72,5 +75,6 @@ let generate ppf metainfo =
   fprintf ppf "@,@[<h>int period = %d;@]" toplevel_clockperiod;
   fprintf ppf "@,@[<h>int current_side = 0;@]";
   gen_global_consts ppf metainfo;
-  fprintf ppf "@,@[<h>%a memory;@]" gen_module_memory_type (entry_file, "Main");
-  gen_type_globals ppf metainfo
+  gen_type_globals ppf metainfo;
+  fprintf ppf "@,@,@[<h>%a memory;@]" gen_module_memory_type (entry_file, "Main");
+  fprintf ppf "@]"

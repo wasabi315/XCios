@@ -10,14 +10,6 @@ let calc_typedata all_data file_ord metainfo =
     let tstate = TState (file, module_name) in
     let filedata = Idmap.find file all_data in
     let xfrp_smodule = Idmap.find module_name filedata.xfrp_smodules in
-    let is_enum =
-      Idmap.for_all (fun _ state ->
-          state.state_params = []
-        ) xfrp_smodule.smodule_states
-    in
-    let () =
-      if is_enum then Hashset.add typedata.enum_types tstate else ()
-    in
     let num_states = Idmap.cardinal xfrp_smodule.smodule_states in
     let () =
       if num_states = 1 then
@@ -94,14 +86,11 @@ let calc_typedata all_data file_ord metainfo =
       ) metainfo.alloc_amount []
   in
 
-  let get_nonenum_tstate_defs metainfo =
+  let get_tstate_defs metainfo =
     List.fold_left (fun targets (file, module_or_smodule) ->
         match module_or_smodule with
         | XFRPModule _ -> targets
-        | XFRPSModule sm ->
-           let tstate = TState (file, sm.smodule_id) in
-           let is_enum = Hashset.mem metainfo.typedata.enum_types tstate in
-           if not is_enum then (file, sm) :: targets else targets
+        | XFRPSModule sm -> (file, sm) :: targets
         | _ -> assert false
       ) [] metainfo.all_elements.all_modules
     |> List.rev
@@ -121,12 +110,12 @@ let calc_typedata all_data file_ord metainfo =
   in
   let nonenum_tid_defs = get_nonenum_tid_defs metainfo in
   let tuple_types = get_tuple_types metainfo in
-  let nonenum_tstate_defs = get_nonenum_tstate_defs metainfo in
+  let tstate_defs = get_tstate_defs metainfo in
   let typedata =
     {
       metainfo.typedata with nonenum_tid_defs = nonenum_tid_defs;
                              tuple_types = tuple_types;
-                             nonenum_tstate_defs = nonenum_tstate_defs;
+                             tstate_defs = tstate_defs;
     }
   in
   { metainfo with typedata = typedata }

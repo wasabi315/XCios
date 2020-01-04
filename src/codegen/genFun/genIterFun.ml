@@ -1,5 +1,6 @@
 open Extension.Format
 open Syntax
+open Type
 open CodegenUtil
 open MetaInfo
 
@@ -55,19 +56,24 @@ let gen_iterbody_header_init metainfo file module_id ppf (node_id, node_type) =
     gen_global_modulename ppf (file, module_id)
   in
   let gen_update_body ppf () =
-    fprintf ppf "header_init_%a_%a(memory);"
-      gen_prefix () pp_print_string node_id
+    fprintf ppf "@[<h>header_init_%a_%a(memory);@]"
+      gen_prefix () pp_print_string node_id;
   in
   let gen_address ppf () =
     fprintf ppf "memory->%s[!current_side]" node_id
   in
   let gen_life ppf () =
-    fprintf ppf "clock + 2"
+    fprintf ppf "entry + 2"
   in
   let gen_mark_opt =
     get_mark_writer metainfo node_type gen_address gen_life
   in
-  (gen_update gen_update_body gen_mark_opt None) ppf ()
+  fprintf ppf "@[<v>";
+  fprintf ppf "if (memory->init) {@;<0 2>";
+  fprintf ppf "@[<v>%a@]@,"
+    (gen_update gen_update_body gen_mark_opt None) ();
+  fprintf ppf "}";
+  fprintf ppf "@]"
 
 type iterbody_genereator =
   {
@@ -133,7 +139,7 @@ let gen_iterbody_initlast metainfo generator ppf node =
     fprintf ppf "@]"
   in
   let gen_address ppf () =
-    gen_node_address ppf (node_attr, node_id)
+    fprintf ppf "%a[!current_side]" gen_node_address (node_attr, node_id)
   in
   let gen_life ppf () =
     fprintf ppf "entry + %d" (Idmap.find node_id lifetime.free_last)
@@ -161,6 +167,7 @@ let gen_life_node_current lifetime node_id ppf () =
   | None -> fprintf ppf "entry + 1 + period"
 
 let gen_iterbody_node metainfo generator ppf node =
+  let node_attr = node.node_attr in
   let node_id = node.node_id in
   let node_type = node.node_type in
   let lifetime = generator.iterbody_lifetime in
@@ -168,10 +175,10 @@ let gen_iterbody_node metainfo generator ppf node =
   let gen_node_address = generator.iterbody_gen_node_address in
 
   let gen_update_body ppf () =
-    fprintf ppf "update_%a_%a(memory)" gen_prefix () pp_print_string node_id
+    fprintf ppf "update_%a_%a(memory);" gen_prefix () pp_print_string node_id
   in
   let gen_address ppf () =
-    gen_node_address ppf (node.node_attr, node_id)
+    fprintf ppf "%a[current_side]" gen_node_address (node_attr, node_id)
   in
   let gen_life =
     gen_life_node_current lifetime node_id
@@ -203,13 +210,13 @@ let gen_iterbody_newnode metainfo generator ppf newnode =
   let gen_node_address = generator.iterbody_gen_node_address in
 
   let gen_update_body ppf () =
-    fprintf ppf "update_%a_%a(memory)"
+    fprintf ppf "update_%a_%a(memory);"
       gen_prefix () gen_newnode_field newnode
   in
 
   let get_bind_mark_writer (nattr, node_id, t) =
     let gen_address ppf () =
-      gen_node_address ppf (nattr, node_id)
+      fprintf ppf "%a[current_side]" gen_node_address (nattr, node_id)
     in
     let gen_life =
       gen_life_node_current lifetime node_id
@@ -386,6 +393,7 @@ let define_module_update_fun metainfo (file, xfrp_module) fun_writers =
         fprintf ppf "@,%a" gen_body_init_last init_nodedefs;
       fprintf ppf "@,clock = entry + 2;";
       fprintf ppf "@,%a" gen_body_main ();
+      fprintf ppf "@,memory->init = 0;";
       fprintf ppf "@]"
     in
 
@@ -414,16 +422,14 @@ let define_smodule_update_fun metainfo (file, xfrp_smodule) fun_writers =
         gen_funname () gen_module_memory_type (file, module_id)
     in
 
+    let tstate = TState (file, module_id) in
     let module_consts = idmap_value_list xfrp_smodule.smodule_consts in
     let header_nodes =
       xfrp_smodule.smodule_in
       @ xfrp_smodule.smodule_out
       @ xfrp_smodule.smodule_shared
     in
-    let init_header_nodes =
-      get_init_header_nodes header_nodes
-      |> List.cons ("state", Type.TState (file, module_id))
-    in
+    let init_header_nodes = get_init_header_nodes header_nodes in
     let states = idmap_value_list xfrp_smodule.smodule_states in
 
     let gen_body_module_const ppf consts =
@@ -440,22 +446,67 @@ let define_smodule_update_fun metainfo (file, xfrp_smodule) fun_writers =
       (pp_print_list gen_iterbody_header_init) ppf init_header_nodes;
     in
 
+    let gen_body_header_init_state ppf () =
+      let gen_update_body ppf () =
+        fprintf ppf "@[<h>header_init_%a_state(memory);@]"
+          gen_global_modulename (file, module_id);
+      in
+      let gen_address ppf () =
+        fprintf ppf "memory->state"
+      in
+      let gen_life ppf () =
+        fprintf ppf "entry + 2"
+      in
+      let gen_mark_opt =
+        get_mark_writer metainfo tstate gen_address gen_life
+      in
+      fprintf ppf "@[<v>";
+      fprintf ppf "if (memory->init) {@;<0 2>";
+      fprintf ppf "@[<v>%a@]@,"
+        (gen_update gen_update_body gen_mark_opt None) ();
+      fprintf ppf "}";
+      fprintf ppf "@]";
+    in
+
     let gen_body_state ppf state =
       let state_id = state.state_id in
+      let state_consts = idmap_value_list state.state_consts in
       let state_nodes = state.state_nodes in
       let init_nodedefs = get_init_nodedefs state_nodes in
-      let remark_writers =
+      let lifetime =
         let smodule_info =
           match Hashtbl.find metainfo.moduledata (file, module_id) with
           | SModuleInfo info -> info
           | _ -> assert false
         in
-        let lifetime = Idmap.find state_id smodule_info.state_lifetime in
+        Idmap.find state_id smodule_info.state_lifetime
+      in
+      let remark_writers =
         get_remark_writers metainfo lifetime init_header_nodes init_nodedefs
+      in
+
+      let gen_state_body_state_const ppf state_consts=
+        let gen_iterbody_const =
+          gen_iterbody_state_const metainfo file module_id state_id
+        in
+        (pp_print_list gen_iterbody_const) ppf state_consts
       in
 
       let gen_state_body_remark ppf remark_writers =
         (exec_all_writers ()) ppf remark_writers;
+      in
+
+      let gen_state_body_state_remark ppf () =
+        let life = Idmap.find "state" lifetime.free_last in
+        let gen_address ppf () =
+          fprintf ppf "memory->state"
+        in
+        let gen_life ppf () =
+          fprintf ppf "entry + %d" life
+        in
+        match get_mark_writer metainfo tstate gen_address gen_life with
+        | Some writer -> writer ppf ()
+        | None -> assert false
       in
 
       let gen_state_body_init_last ppf init_nodedefs =
@@ -481,18 +532,47 @@ let define_smodule_update_fun metainfo (file, xfrp_smodule) fun_writers =
         (pp_print_list gen_single) ppf state.state_update_ord
       in
 
+      let gen_state_body_switch ppf () =
+        let gen_update_body ppf () =
+          fprintf ppf "update_%a_state(memory);"
+            gen_global_statename (file, module_id, state_id)
+        in
+        let gen_address ppf () =
+          fprintf ppf "memory->state"
+        in
+        let gen_life ppf () =
+          fprintf ppf "entry + clock + 1"
+        in
+        let gen_mark_opt =
+          get_mark_writer metainfo tstate gen_address gen_life
+        in
+        let gen_tick ppf () =
+          fprintf ppf "clock = entry + %d;"
+            (Idmap.find "state" lifetime.timestamp)
+        in
+        (gen_update gen_update_body gen_mark_opt (Some gen_tick)) ppf ()
+      in
+
       fprintf ppf "@[<v>";
+      fprintf ppf "if (memory->state->fresh) {@;<0 2>";
+      fprintf ppf "memory->statebody.%s.init = 1;@," state_id;
+      fprintf ppf "}";
+      fprintf ppf "@,memory->state->fresh = 0;";
       if remark_writers = [] then () else
-        fprintf ppf "%a@," gen_state_body_remark remark_writers;
+        fprintf ppf "@,%a" gen_state_body_remark remark_writers;
+      fprintf ppf "@,%a" gen_state_body_state_remark ();
+      if state_consts = [] then () else
+        fprintf ppf "@,%a" gen_state_body_state_const state_consts;
       if init_nodedefs = [] then () else
-        fprintf ppf "%a@," gen_state_body_init_last init_nodedefs;
-      fprintf ppf "clock = entry + 2;";
+        fprintf ppf "@,%a" gen_state_body_init_last init_nodedefs;
+      fprintf ppf "@,clock = entry + 2;";
       fprintf ppf "@,%a" gen_state_body_main ();
+      fprintf ppf "@,%a" gen_state_body_switch ();
+      fprintf ppf "@,memory->statebody.%s.init = 0;" state_id;
       fprintf ppf "@]"
     in
 
     let gen_body_state_branch ppf () =
-      let tstate = Type.TState (file, module_id) in
       let tag_table =
         Hashtbl.find metainfo.typedata.cons_tag tstate
       in
@@ -526,8 +606,10 @@ let define_smodule_update_fun metainfo (file, xfrp_smodule) fun_writers =
         fprintf ppf "@,%a" gen_body_module_const module_consts;
       if init_header_nodes = [] then () else
         fprintf ppf "@,%a" gen_body_header_init init_header_nodes;
+      fprintf ppf "@,%a" gen_body_header_init_state ();
       fprintf ppf "@,clock = entry + 1;";
       fprintf ppf "@,%a" gen_body_state_branch ();
+      fprintf ppf "@,memory->init = 0;";
       fprintf ppf "@]"
     in
 

@@ -42,7 +42,7 @@ let gen_tid metainfo ppf (file, typedef) =
     fprintf ppf "@]"
   in
 
-  (gen_codeblock gen_tid_head gen_tid_body) ppf ()
+  fprintf ppf "%a;" (gen_codeblock gen_tid_head gen_tid_body) ()
 
 let gen_ttuple metainfo ppf types =
 
@@ -65,7 +65,7 @@ let gen_ttuple metainfo ppf types =
     fprintf ppf "@]"
   in
 
-  (gen_codeblock gen_ttuple_head gen_ttuple_body) ppf ()
+  fprintf ppf "%a;" (gen_codeblock gen_ttuple_head gen_ttuple_body) ()
 
 let gen_tstate metainfo ppf (file, xfrp_smodule) =
   let typedata = metainfo.typedata in
@@ -87,12 +87,8 @@ let gen_tstate metainfo ppf (file, xfrp_smodule) =
   in
 
 
-  let gen_param_union ppf states =
+  let gen_param_union ppf states_with_params =
 
-    let states_with_params =
-      idmap_value_list states
-      |> List.filter (fun state -> state.state_params != [])
-    in
 
     let gen_param_union_body ppf () =
       fprintf ppf "@[<v>";
@@ -109,27 +105,38 @@ let gen_tstate metainfo ppf (file, xfrp_smodule) =
   in
 
   let gen_tstate_body ppf () =
+    let states_with_params =
+      idmap_value_list xfrp_smodule.smodule_states
+      |> List.filter (fun state -> state.state_params != [])
+    in
     fprintf ppf "@[<v>";
     fprintf ppf "@[<h>int mark;@]";
+    fprintf ppf "@,@[<h>int fresh;@]";
     if Hashset.mem typedata.singleton_types tstate then () else
       fprintf ppf "@,@[<h>int tag;@]";
-    fprintf ppf "@,"; gen_param_union ppf xfrp_smodule.smodule_states;
+    if states_with_params = [] then () else
+      fprintf ppf "@,%a" gen_param_union states_with_params;
     fprintf ppf "@]"
   in
 
-  (gen_codeblock gen_tstate_head gen_tstate_body) ppf ()
+  fprintf ppf "%a;" (gen_codeblock gen_tstate_head gen_tstate_body) ()
 
 let generate ppf metainfo =
   let nonenum_tid_defs = metainfo.typedata.nonenum_tid_defs in
   let tuple_types = metainfo.typedata.tuple_types in
-  let nonenum_tstate_defs = metainfo.typedata.nonenum_tstate_defs in
+  let tstate_defs = metainfo.typedata.tstate_defs in
+  let print_all printer =
+    pp_print_list printer ~pp_sep:pp_print_cut2
+  in
+  fprintf ppf "@[<v>";
   if nonenum_tid_defs = [] then () else
-    fprintf ppf "%a@,"
-      (pp_print_list (gen_tid metainfo)) nonenum_tid_defs;
+    fprintf ppf "%a@,@,"
+      (print_all (gen_tid metainfo)) nonenum_tid_defs;
   if tuple_types = [] then () else
-    fprintf ppf "%a@,"
-      (pp_print_list (gen_ttuple metainfo)) tuple_types;
-  if nonenum_tstate_defs = [] then () else
+    fprintf ppf "%a@,@,"
+      (print_all (gen_ttuple metainfo)) tuple_types;
+  if tstate_defs = [] then () else
     fprintf ppf "%a"
-      (pp_print_list (gen_tstate metainfo)) nonenum_tstate_defs
+      (print_all (gen_tstate metainfo)) tstate_defs;
+  fprintf ppf "@]"
 

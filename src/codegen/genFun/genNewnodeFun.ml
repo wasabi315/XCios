@@ -169,7 +169,10 @@ let define_newnode_fun metainfo generator fun_writers =
           fprintf ppf "%a@," gen_body_param params;
         if inputs = [] then () else
           fprintf ppf "%a@," gen_body_input inputs;
-        fprintf ppf "update_%a(&(%a));"
+        fprintf ppf "if (%a) {@;<0 2>" gen_init ();
+        fprintf ppf "%a.init = 1;@," gen_instance_address ();
+        fprintf ppf "}";
+        fprintf ppf "@,update_%a(&(%a));"
           gen_global_modulename (file, module_id)
           gen_instance_address ();
         if outputs = [] then () else

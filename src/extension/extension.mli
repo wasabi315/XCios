@@ -41,6 +41,9 @@ module Format : sig
   (** Print comma and space break hint *)
   val pp_print_commaspace : unit printer
 
+  (** Print cut break hint twice *)
+  val pp_print_cut2 : unit printer
+
   (** A pretty printter for Hashtable *)
   val pp_print_hashtbl : ?pp_sep: unit printer ->
                          ('a * 'b) printer ->

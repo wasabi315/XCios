@@ -43,6 +43,9 @@ module Format = struct
   let pp_print_commaspace ppf () =
     fprintf ppf ",@ "
 
+  let pp_print_cut2 ppf () =
+    fprintf ppf "@,@,"
+
   let pp_print_hashtbl ?(pp_sep = pp_print_cut) pp_key_value ppf table =
     let binds =
       Hashtbl.fold (fun k v binds ->

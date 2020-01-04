@@ -111,7 +111,27 @@ let define_state_fun metainfo file module_id state fun_writers =
     define_newnode_fun metainfo generator fun_writers
   in
 
+  let define_state_switch_fun expr fun_writers =
+    let gen_funname ppf () =
+      fprintf ppf "static void update_%s_state" global_statename
+    in
+    let gen_address ppf () =
+      fprintf ppf "memory->state";
+    in
+    let generator =
+      {
+        updatefun_ctx = CTXSwitch state_id;
+        updatefun_body = expr;
+        updatefun_gen_funname = gen_funname;
+        updatefun_gen_memorytype = gen_memorytype;
+        updatefun_gen_address = gen_address;
+      }
+    in
+    define_updatefun metainfo generator fun_writers
+  in
+
   fun_writers
   |> idmap_fold_values define_state_const_fun state.state_consts
   |> idmap_fold_values define_state_node_fun state.state_nodes
   |> idmap_fold_values define_state_newnode_fun state.state_newnodes
+  |> define_state_switch_fun state.state_switch

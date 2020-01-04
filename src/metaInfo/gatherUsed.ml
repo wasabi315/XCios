@@ -99,6 +99,7 @@ and visit_module all_data file def used =
 and visit_state all_data def used =
   visit_module_materials
     all_data def.state_consts def.state_nodes def.state_newnodes used
+  |> update_used all_data def.state_switch
 
 and visit_smodule all_data file def used =
   let global_name = conc_id [file; "smodule"; def.smodule_id] in
@@ -107,6 +108,7 @@ and visit_smodule all_data file def used =
   |> List.fold_right (visit_header_node all_data) def.smodule_in
   |> List.fold_right (visit_header_node all_data) def.smodule_out
   |> List.fold_right (visit_header_node all_data) def.smodule_shared
+  |> update_used all_data def.smodule_init
   |> Idmap.fold (fun _ def used ->
          update_used all_data def.const_body used
        ) def.smodule_consts

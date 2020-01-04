@@ -48,7 +48,7 @@ let define_global_fun metainfo (file, fundef) fun_writers =
       pp_print_list (gen_value_type metainfo) ~pp_sep:pp_print_commaspace
     in
     let (_, paramtypes) = List.split fundef.fun_params in
-    fprintf ppf "%a(@[<h>%a@])"
+    fprintf ppf "%a(@[<h>%a@]);"
       gen_funname () param_printer paramtypes
   in
 

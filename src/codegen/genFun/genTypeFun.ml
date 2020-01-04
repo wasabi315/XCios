@@ -73,7 +73,7 @@ let define_tid_conses metainfo (file, typedef) fun_writers =
           in
           fprintf ppf "x->tag = %d;@," tag
         end;
-      fprintf ppf "x->value->%s = value;" cons_id;
+      fprintf ppf "x->value.%s = value;" cons_id;
       fprintf ppf "@]"
     in
 
@@ -186,29 +186,23 @@ let define_tstate_conses metainfo (file, xfrp_smodule) fun_writers =
     let gen_definition_body_core ppf () =
       let typedata = metainfo.typedata in
       let is_singleton = Hashset.mem typedata.singleton_types tstate in
-      let writers = [] in
-      let writers =
-        if is_singleton then writers else
-          begin
-            let tag =
-              Hashtbl.find typedata.cons_tag tstate |> Idmap.find state_id
-            in
-            let f ppf () =
-              fprintf ppf "x->tag = %d;" tag
-            in
-            f :: writers
-          end
-      in
-      let writers =
-        List.fold_left (fun writers (param_id, _)->
-            let f ppf () =
-              fprintf ppf "x->params->%s->%s = %s;" state_id param_id param_id
-            in
-            f :: writers
-          ) writers state_params
-      in
       fprintf ppf "@[<v>";
-      (exec_all_writers ()) ppf (List.rev writers);
+      fprintf ppf "x->fresh = 1;";
+      if is_singleton then () else
+        begin
+          let tag =
+            Hashtbl.find typedata.cons_tag tstate
+            |> Idmap.find state_id
+          in
+          fprintf ppf "@,x->tag = %d;" tag
+        end;
+      if state_params = [] then () else
+        begin
+          let gen_param_assign ppf (param_id, _) =
+            fprintf ppf "x->params.%s.%s = %s;" state_id param_id param_id
+          in
+          fprintf ppf "@,%a" (pp_print_list gen_param_assign) state_params
+        end;
       fprintf ppf "@]"
     in
 
@@ -279,7 +273,7 @@ let define_gcfun typename gen_recmark_opt gen_recfree_opt fun_writers =
 
     (gen_codeblock
        (fun ppf () ->
-         fprintf ppf "@[<h>static void %a(struct %a* x)@]"
+         fprintf ppf "@[<h>%a(struct %a* x)@]"
            gen_funname_free () pp_print_string typename)
        gen_freefun_definition_body) ppf ()
   in
@@ -314,11 +308,11 @@ let define_tid_gcfun metainfo (file, typedef) fun_writers =
   in
 
   let gen_funcall_mark ppf (cons_id, vtypename) =
-    fprintf ppf "mark_%s(x->value->%s, mark);" vtypename cons_id
+    fprintf ppf "mark_%s(x->value.%s, mark);" vtypename cons_id
   in
 
   let gen_funcall_free ppf (cons_id, vtypename) =
-    fprintf ppf "free_%s(x->value->%s);" vtypename cons_id
+    fprintf ppf "free_%s(x->value.%s);" vtypename cons_id
   in
 
   let (gen_recmark_opt, gen_recfree_opt) =
@@ -511,12 +505,12 @@ let define_tstate_fun metainfo (file, xfrp_smodule) fun_writers =
 let define_type_fun metainfo fun_writers=
   let nonenum_tid_defs = metainfo.typedata.nonenum_tid_defs in
   let tuple_types = metainfo.typedata.tuple_types in
-  let nonenum_tstate_defs = metainfo.typedata.nonenum_tstate_defs in
+  let tstate_defs = metainfo.typedata.tstate_defs in
   fun_writers
   |> List.fold_right (define_tid_fun metainfo)
        (List.rev nonenum_tid_defs)
   |> List.fold_right (define_ttuple_fun metainfo)
        (List.rev tuple_types)
   |> List.fold_right (define_tstate_fun metainfo)
-       (List.rev nonenum_tstate_defs)
+       (List.rev tstate_defs)
 

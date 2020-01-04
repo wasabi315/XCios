@@ -168,7 +168,7 @@ type typedata =
     cons_tag : (Type.t, int Idmap.t) Hashtbl.t;
     nonenum_tid_defs : (string * typedef) list;
     tuple_types : (Type.t list) list;
-    nonenum_tstate_defs : (string * xfrp_smodule) list;
+    tstate_defs : (string * xfrp_smodule) list;
     tstate_param_ids : (Type.t, (string list) Idmap.t) Hashtbl.t;
   }
 
@@ -203,16 +203,17 @@ let pp_typedata ppf typedata =
     (list_printer pp_elem) ppf tuple_types
   in
 
-  let pp_nonenum_tstate_defs ppf nonenum_tstate_defs =
+  let pp_tstate_defs ppf tstate_defs =
     let pp_elem ppf (file, xfrp_smodule) =
       fprintf ppf "%s:%s" file xfrp_smodule.smodule_id
     in
-    (list_printer pp_elem) ppf nonenum_tstate_defs
+    (list_printer pp_elem) ppf tstate_defs
   in
 
   let pp_tstate_param_ids ppf tstate_param_ids =
     let pp_params ppf param_ids =
-      (list_printer pp_print_string) ppf param_ids
+      fprintf ppf "@[<h>(%a)@]"
+      (list_printer pp_print_string) param_ids
     in
     let pp_elem ppf (tstate, param_ids_table) =
       fprintf ppf "%a -> @[<v>%a@]"
@@ -233,9 +234,9 @@ let pp_typedata ppf typedata =
     pp_nonenum_tid_defs typedata.nonenum_tid_defs;
   fprintf ppf "@,tuple_types:";
   fprintf ppf "@;<0 2>@[<hov>%a@]" pp_tuple_types typedata.tuple_types;
-  fprintf ppf "@,nonenum_tstate_defs:";
+  fprintf ppf "@,tstate_defs:";
   fprintf ppf "@;<0 2>@[<hov>%a@]"
-    pp_nonenum_tstate_defs typedata.nonenum_tstate_defs;
+    pp_tstate_defs typedata.tstate_defs;
   fprintf ppf "@,tstate_param_ids:";
   fprintf ppf "@;<0 2>@[<hov>%a@]"
     pp_tstate_param_ids typedata.tstate_param_ids;
@@ -282,7 +283,7 @@ let typedata_empty () =
     cons_tag = Hashtbl.create 20;
     nonenum_tid_defs  = [];
     tuple_types = [];
-    nonenum_tstate_defs = [];
+    tstate_defs = [];
     tstate_param_ids = Hashtbl.create 20;
   }
 

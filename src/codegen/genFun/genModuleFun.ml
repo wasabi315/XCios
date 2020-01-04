@@ -165,6 +165,32 @@ let define_module_fun_module metainfo file xfrp_module fun_writers =
 
 let define_module_fun_smodule metainfo file xfrp_smodule fun_writers =
   let module_id = xfrp_smodule.smodule_id in
+  let global_modulename =
+    asprintf "%a" gen_global_modulename (file, module_id)
+  in
+
+  let define_smodule_state_init_fun fun_writers =
+    let gen_funname ppf () =
+      fprintf ppf "static void header_init_%s_state" global_modulename
+    in
+    let gen_memorytype ppf () =
+      gen_module_memory_type ppf (file, module_id)
+    in
+    let gen_address ppf () =
+      fprintf ppf "memory->state"
+    in
+    let generator =
+      {
+        updatefun_ctx = CTXModuleConst;
+        updatefun_body = xfrp_smodule.smodule_init;
+        updatefun_gen_funname = gen_funname;
+        updatefun_gen_memorytype = gen_memorytype;
+        updatefun_gen_address = gen_address;
+      }
+    in
+    define_updatefun metainfo generator fun_writers
+  in
+
   fun_writers
   |> List.fold_right
        (define_header_init_fun metainfo file module_id)
@@ -175,6 +201,7 @@ let define_module_fun_smodule metainfo file xfrp_smodule fun_writers =
   |> List.fold_right
        (define_header_init_fun metainfo file module_id)
        (List.rev xfrp_smodule.smodule_shared)
+  |> define_smodule_state_init_fun
   |> idmap_fold_values
        (define_module_const_fun metainfo file module_id)
        xfrp_smodule.smodule_consts

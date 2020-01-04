@@ -20,16 +20,28 @@ let gen_normal_node metainfo ppf node =
        (gen_value_type metainfo) node.node_type pp_print_string node.node_id
   | _ -> ()
 
-let gen_newnode _metainfo ppf newnode =
+let gen_newnode metainfo ppf newnode =
+
+  let gen_normal_bind_node ppf (_, node_id, node_type) =
+    fprintf ppf "@[<h>%a %a[2];@]"
+      (gen_value_type metainfo) node_type pp_print_string node_id
+  in
+
   let (file, module_name) =
     match newnode.newnode_module with
     | (id, (ModuleCons (file, _, _, _))) -> (file, id)
     | _ -> assert false
   in
   let file = String.capitalize_ascii file in
+  let normal_bind_nodes =
+    List.filter (fun (nattr, _, _) -> nattr = NormalNode) newnode.newnode_binds
+  in
   fprintf ppf "@[<h>%a %a;@]"
     gen_module_memory_type (file, module_name)
-    gen_newnode_field newnode
+    gen_newnode_field newnode;
+  if normal_bind_nodes = [] then () else
+    fprintf ppf "@,%a"
+      (pp_print_list gen_normal_bind_node) normal_bind_nodes
 
 let filter_normal_nodes nodes =
   List.filter (fun node ->
@@ -70,7 +82,7 @@ let gen_module metainfo ppf (file, xfrp_module) =
     fprintf ppf "@]"
   in
 
-  (gen_codeblock gen_head gen_body) ppf ()
+  fprintf ppf "%a;" (gen_codeblock gen_head gen_body) ()
 
 let gen_state metainfo ppf (file, module_name, state) =
 
@@ -96,7 +108,7 @@ let gen_state metainfo ppf (file, module_name, state) =
     fprintf ppf "@]"
   in
 
-  (gen_codeblock gen_head gen_body) ppf ()
+  fprintf ppf "%a;" (gen_codeblock gen_head gen_body) ()
 
 let gen_smodule metainfo ppf (file, xfrp_smodule) =
 
@@ -144,14 +156,20 @@ let gen_smodule metainfo ppf (file, xfrp_smodule) =
     fprintf ppf "@]"
   in
 
+  let gen_module_memory ppf () =
+    fprintf ppf "%a;" (gen_codeblock gen_head gen_body) ()
+  in
+
   let file_module_state_list =
     idmap_value_list xfrp_smodule.smodule_states
     |>  List.map (fun state -> (file, xfrp_smodule.smodule_id, state))
   in
+  let gen_all_state_memory =
+    pp_print_list (gen_state metainfo) ~pp_sep:pp_print_cut2
+  in
   fprintf ppf "@[<v>";
-  fprintf ppf "%a@,%a"
-    (pp_print_list (gen_state metainfo)) file_module_state_list
-    (gen_codeblock gen_head gen_body) ();
+  fprintf ppf "%a@,@,%a"
+    gen_all_state_memory file_module_state_list gen_module_memory ();
   fprintf ppf "@]"
 
 let generate ppf metainfo =
@@ -163,4 +181,5 @@ let generate ppf metainfo =
     | _ -> assert false
   in
 
-  (pp_print_list gen_single_module) ppf metainfo.all_elements.all_modules
+  (pp_print_list gen_single_module ~pp_sep:pp_print_cut2)
+    ppf metainfo.all_elements.all_modules

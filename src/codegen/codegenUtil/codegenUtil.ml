@@ -143,14 +143,11 @@ let get_mark_writer metainfo target_type gen_address gen_life =
   match target_type with
   | TBool | TInt | TFloat -> None
   | TState (file, module_id) ->
-     if Hashset.mem metainfo.typedata.enum_types target_type then
-       None
-     else
-       let writer ppf () =
-         fprintf ppf "@[<h>mark_%a(%a, %a);@]"
-           gen_tstate_typename (file, module_id) gen_address () gen_life ()
-       in
-       Some writer
+     let writer ppf () =
+       fprintf ppf "@[<h>mark_%a(%a, %a);@]"
+         gen_tstate_typename (file, module_id) gen_address () gen_life ()
+     in
+     Some writer
   | TId (file, type_id) ->
      if Hashset.mem metainfo.typedata.enum_types target_type then
        None

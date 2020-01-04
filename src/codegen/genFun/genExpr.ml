@@ -30,6 +30,7 @@ let gen_literal ppf = function
   | LUnit -> assert false
 
 let get_pattern_conds_binds metainfo gen_target pattern =
+  let enum_types = metainfo.typedata.enum_types in
   let singleton_types = metainfo.typedata.singleton_types in
   let cons_tag = metainfo.typedata.cons_tag in
   let tstate_param_ids = metainfo.typedata.tstate_param_ids in
@@ -74,7 +75,10 @@ let get_pattern_conds_binds metainfo gen_target pattern =
             Hashtbl.find cons_tag tpat |> Idmap.find cons_id
           in
           let gen_cond ppf () =
-          fprintf ppf "%a->tag == %a" gen_target () pp_print_int tag
+            if Hashset.mem enum_types tpat then
+              fprintf ppf "%a == %a" gen_target () pp_print_int tag
+            else
+              fprintf ppf "%a->tag == %a" gen_target () pp_print_int tag
           in
           gen_cond :: conds
       in
@@ -175,20 +179,24 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
         | _ -> assert false
       in
 
-      let f_enumtype cons_tag =
-        let gen_expr ppf () =
-          pp_print_int ppf cons_tag
-        in
-        (body_writers, gen_expr)
-      in
-
       let f_valuecons file type_id =
-        let gen_expr ppf () =
-          fprintf ppf "%a(%a)"
-            gen_tid_consname (file, type_id, cons_id)
-            gen_value ()
-        in
-        (body_writers, gen_expr)
+        let enum_types = metainfo.typedata.enum_types in
+        if Hashset.mem enum_types tast then
+          begin
+            let tag_table = Hashtbl.find metainfo.typedata.cons_tag tast in
+            let cons_tag = Idmap.find cons_id tag_table in
+            let gen_expr ppf () =
+              pp_print_int ppf cons_tag
+            in
+            (body_writers, gen_expr)
+          end
+        else
+          let gen_expr ppf () =
+            fprintf ppf "%a(%a)"
+              gen_tid_consname (file, type_id, cons_id)
+              gen_value ()
+          in
+          (body_writers, gen_expr)
       in
 
       let f_statecons file module_id tvalue =
@@ -224,17 +232,12 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
         (body_writers, gen_expr)
       in
 
-      let enum_types = metainfo.typedata.enum_types in
-      let tag_table = Hashtbl.find metainfo.typedata.cons_tag tast in
-      if Hashset.mem enum_types tast then
-        f_enumtype (Idmap.find cons_id tag_table)
-      else
-        match idinfo with
-        | ValueCons (file, _, TId (_, type_id)) ->
-           f_valuecons file type_id
-        | StateCons (file, module_id, tvalue) ->
-           f_statecons file module_id tvalue
-        | _ -> assert false
+      match idinfo with
+      | ValueCons (file, _, TId (_, type_id)) ->
+         f_valuecons file type_id
+      | StateCons (file, module_id, tvalue) ->
+         f_statecons file module_id tvalue
+      | _ -> assert false
     in
 
     let f_tuple es =
@@ -242,7 +245,7 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
         List.fold_left (fun (body_writers, generators) expr ->
             let (body_writers, gen_expr) = rec_f expr body_writers in
             (body_writers, gen_expr :: generators)
-          ) ([], []) es
+          ) (body_writers, []) es
       in
       let generators = List.rev generators in
       let (_, type_list) = List.split es in
@@ -322,7 +325,7 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
         let f_node nattr =
           match codegen_ctx, nattr with
           | CTXModuleNewnodeIn, _ | CTXModuleNode _, _ ->
-             fprintf ppf "memory->%s[curren_side]" id
+             fprintf ppf "memory->%s[current_side]" id
           | CTXStateNode (state_id, _, _), NormalNode
             | CTXStateNewnodeIn state_id, NormalNode
             | CTXSwitch state_id, NormalNode ->
@@ -395,13 +398,16 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
       let (testbody_writers, gen_test) = rec_f etest [] in
       let (thenbody_writers, gen_then) = rec_f ethen [] in
       let (elsebody_writers, gen_else) = rec_f eelse [] in
+      let testbody_writers = List.rev testbody_writers in
+      let thenbody_writers = List.rev thenbody_writers in
+      let elsebody_writers = List.rev elsebody_writers in
       let ret_varname = make_tmpvar_name () in
 
       let gen_body_then ppf () =
         fprintf ppf "@[<v>";
         if thenbody_writers = [] then () else
           fprintf ppf "%a@," (exec_all_writers ()) thenbody_writers;
-        fprintf ppf "%a = %a" pp_print_string ret_varname gen_then ();
+        fprintf ppf "%a = %a;" pp_print_string ret_varname gen_then ();
         fprintf ppf "@]"
       in
 
@@ -409,7 +415,7 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
         fprintf ppf "@[<v>";
         if elsebody_writers = [] then () else
           fprintf ppf "%a@," (exec_all_writers ()) elsebody_writers;
-        fprintf ppf "%a = %a" pp_print_string ret_varname gen_else ();
+        fprintf ppf "%a = %a;" pp_print_string ret_varname gen_else ();
         fprintf ppf "@]"
       in
 
@@ -440,14 +446,14 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
         List.fold_left (fun body_writers binder ->
             let (var_id, _) = binder.binder_id in
             let (_, var_type) = binder.binder_body in
-            let (body_writers, gen_expr) =
+            let (body_writers, gen_bexpr) =
               rec_f binder.binder_body body_writers
             in
             let gen_vardecl ppf () =
-              fprintf ppf "%a %a = %a"
+              fprintf ppf "%a %a = %a;"
                 (gen_value_type metainfo) var_type
                 pp_print_string var_id
-                gen_expr ()
+                gen_bexpr ()
             in
             gen_vardecl :: body_writers
           ) body_writers binders
@@ -458,6 +464,7 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
     let f_case target branchs =
       let (_, ttarget) = target in
       let (tbody_writers, gen_texpr) = rec_f target [] in
+      let tbody_writers = List.rev tbody_writers in
       let target_varname = make_tmpvar_name () in
 
       let gen_body_head ppf () =
@@ -478,6 +485,7 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
       let f_single_branch branch =
         let pattern = branch.branch_pat in
         let (pbody_writers, gen_expr) = rec_f branch.branch_body [] in
+        let pbody_writers = List.rev pbody_writers in
         let (_, binds) =
           get_pattern_conds_binds metainfo gen_target pattern
         in
@@ -527,6 +535,7 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
               let (pbody_writers, gen_pret) =
                 rec_f branch.branch_body []
               in
+              let pbody_writers = List.rev pbody_writers in
               let (conds, binds) =
                 get_pattern_conds_binds metainfo gen_target pattern
               in
