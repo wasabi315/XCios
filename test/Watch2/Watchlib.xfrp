@@ -1,0 +1,25 @@
+public type Time = Time of (Int, Int, Int)
+
+public type OptTime = SomeT of Time | NoneT
+
+public fun incTime(time : Time) =
+  case time of
+    Time(23, 59, 59) -> Time(0, 0, 0);
+    Time(h, 59, 59) -> Time(h+1, 0, 0);
+    Time(h, m, 59) -> Time(h, m+1, 0);
+    Time(h, m, s) -> Time(h, m, s+1);
+
+public fun addTime(time : Time, dh : Int, dm : Int, ds : Int) =
+  case time of
+    Time(h,m,s) -> Time((h + dh) % 24, (m + dm) % 60, (s + ds) % 60);
+
+public type Button = Button of (Bool,Bool,Bool)
+
+public fun buttonA(button : Button) =
+  case button of Button(a, _, _) -> a;
+
+public fun buttonB(button : Button) =
+  case button of Button(_, b, _) -> b;
+
+public fun buttonC(button : Button) =
+  case button of Button(_, _, c) -> c;

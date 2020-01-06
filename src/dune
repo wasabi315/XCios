@@ -3,16 +3,14 @@
   (flags (:standard -warn-error -A))))
 
 (executable
- (name main))
-
-(ocamllex lexer)
-
-(menhir
- (modules parser))
+ (name main)
+ (libraries
+  extension ast parser
+  infer metainfo codegen))
 
 (alias
  (name runtest)
  (deps (source_tree %{project_root}/test))
  (action (progn
-          (run ./main.exe %{project_root}/test/Test1.xfrp)
-          (run ./main.exe %{project_root}/test/Test2.xfrp))))
+          (run ./main.exe %{project_root}/test/Watch/Main.xfrp)
+          (run ./main.exe %{project_root}/test/Watch2/WatchMain.xfrp))))

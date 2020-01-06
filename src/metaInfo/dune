@@ -1,0 +1,4 @@
+(library
+ (name metainfo)
+ (libraries ast dependency extension)
+ (wrapped false))

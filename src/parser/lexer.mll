@@ -14,9 +14,12 @@
         "out",          OUT;
         "use",          USE;
         "init",         INIT;
+        "public",       PUBLIC;
+        "shared",       SHARED;
         "const",        CONST;
         "type",         TYPE;
         "fun",          FUN;
+        "newnode",      NEWNODE;
         "node",         NODE;
         "state",        STATE;
         "switch",       SWITCH;
@@ -36,24 +39,24 @@
 let space = [' ' '\r' '\t']+
 let newline = '\r' | '\n' | "\r\n"
 let id = ['A'-'Z' 'a'-'z' '_']['A'-'Z' 'a'-'z' '0'-'9' '_']*
-let digits = ['+''-']?['0'-'9']+
-let fliteral = ['+''-']?(['0'-'9']+ '.' ['0'-'9']* | '.' ['0'-'9']+)
+let digits = ['0'-'9']+
+let fliteral = ['0'-'9']+ '.' ['0'-'9']* | '.' ['0'-'9']+
 
 (* longest match -> earlier rule *)
 rule read = parse
   | space   { read lexbuf }
   | newline { Lexing.new_line lexbuf; read lexbuf }
   | '#'     { read_comment lexbuf; read lexbuf }
-  | '['     { LBRACKET }
-  | ']'     { RBRACKET }
   | '{'     { LBRACE }
   | '}'     { RBRACE }
   | '('     { LPAREN }
   | ')'     { RPAREN }
   | ','     { COMMA }
   | ':'     { COLON }
+  | ';'     { SEMICOLON }
   | '@'     { AT }
-  | "->"    { ARROW }
+  | "->"    { RARROW }
+  | "<-"    { LARROW }
   | '+'     { PLUS }
   | '-'     { MINUS }
   | '*'     { ASTERISK }
@@ -92,8 +95,8 @@ rule read = parse
           if 'A' <= s.[0] && s.[0] <= 'Z' then UID s else ID s
     }
   | "()"     { UNIT }
-  | digits   { INT (Lexing.lexeme lexbuf)}
-  | fliteral { FLOAT (Lexing.lexeme lexbuf)}
+  | digits   { INT (Lexing.lexeme lexbuf |> int_of_string)}
+  | fliteral { FLOAT (Lexing.lexeme lexbuf |> float_of_string)}
   | eof      { EOF }
   | _        { assert false }
 and read_comment = parse

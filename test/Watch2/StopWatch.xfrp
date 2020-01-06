@@ -1,0 +1,43 @@
+use Watchlib
+
+public switchmodule StopWatch {
+  in button : Button,
+     dt : Int
+  out stopWatch(Time(0,0,0)) : Time,
+      exit : Bool
+  init Stop
+
+  state Stop {
+    out node stopWatch =
+      if buttonA(button) then
+        Time(0,0,0)
+      else Retain
+
+    out node exit = buttonC(button)
+
+    switch:
+      if buttonB(button) then
+        Run
+      else Retain
+  }
+
+  state Run {
+    node counterSW(0) =
+      (counterSW@last + dt) % 1000
+     
+    node pulseSW =
+      counterSW@last > counterSW
+
+    out node stopWatch =
+      if pulseSW then
+        incTime(stopWatch@last)
+      else Retain
+
+    out node exit = False
+
+    switch:
+      if buttonB(button) then
+        Stop
+      else Retain
+  }
+}

@@ -1,0 +1,59 @@
+use Watchlib, StopWatch
+
+type SetPos = Hour | Min | Sec
+
+public switchmodule Watch {
+  in button : Button,
+     curTime : Time,
+     dt : Int
+  out display(Time(0,0,0)) : Time,
+      curTimeUpdate : OptTime
+  init DisplayMode
+
+  state DisplayMode {
+    out node display = curTime
+    out node curTimeUpdate = NoneT
+
+    switch:
+      if buttonA(button) then
+        SetMode(Hour)
+      else if buttonC(button) then
+        StopWatchMode
+      else Retain
+  }
+
+  state SetMode(pos : SetPos) {
+    const dh = case pos of Hour -> 1; _ -> 0;
+    const dm = case pos of Min -> 1; _ -> 0;
+    const ds = case pos of Sec -> 1; _ -> 0;
+
+    out node display =
+      if buttonB(button) then
+        addTime(display@last, dh, dm, ds)
+      else Retain
+
+    out node curTimeUpdate =
+      case pos of
+        Sec -> if buttonA(button) then
+                 SomeT(display)
+               else NoneT;
+        _ -> NoneT;
+
+    switch:
+      if buttonA(button) then
+        case pos of
+          Hour -> SetMode(Min);
+          Min -> SetMode(Sec);
+          Sec -> DisplayMode;
+      else Retain
+  }
+
+  state StopWatchMode {
+    newnode out display, exit = StopWatch <- button, dt
+
+    out node curTimeUpdate = NoneT
+
+    switch:
+      if exit then DisplayMode else Retain
+  }
+}

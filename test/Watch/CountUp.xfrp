@@ -1,0 +1,31 @@
+use TimerIO
+
+public switchmodule CountUp {
+  in button(ButtonPressed(False,False,False)) : ButtonPressed,
+     pulse1s(False) : Bool
+  out display(Display(0,0,0)) : Display,
+      next(False) : Bool
+  init Stop
+
+  state Stop {
+    out node display =
+      if ofA(button) then Display(0,0,0) else display@last
+
+    out node next = ofC(button)
+
+    switch :
+      if ofB(button) then Run else Retain
+  }
+
+  state Run {
+    out node display =
+      if pulse1s then
+        incrementTime(display@last)
+      else display@last
+
+    out node next = False
+
+    switch :
+      if ofB(button) then Stop else Retain
+  }
+}

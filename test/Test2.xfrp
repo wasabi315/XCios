@@ -1,52 +1,52 @@
-switchmodule Test2
-in   clock(0)   : Int,
-     di         : Float
-out  ctime(0)   : Int,
-     otime(0)   : Int,
-     fan(False) : Bool
-use Std
-init FanOff
-
 fun hoge(x,y) = x == y
 
-state FanOff {
-  node ctime = ctime@last
+switchmodule Main {
+  in   clock(0)   : Int,
+       di         : Float
+  out  ctime(0)   : Int,
+       otime(0)   : Int,
+       fan(False) : Bool
+  init FanOff
 
-  node otime = 0
+  state FanOff {
+    out node ctime = ctime@last
 
-  node fan = False
+    out node otime = 0
 
-  switch :
-    if di >=. 75.5 then FanOn(clock)
-    else Retain
-}
+    out node fan = False
 
-state FanOn(begin : Int) {
-  node ctime =
-    let dt = clock - clock@last in
-    ctime@last + dt
+    switch :
+      if di >=. 75.5 then FanOn(clock)
+      else Retain
+  }
 
-  node otime = clock - begin
+  state FanOn(begin : Int) {
+    out node ctime =
+      let dt = clock - clock@last in
+      ctime@last + dt
 
-  node fan = True
+    out node otime = clock - begin
 
-  switch :
-    if di <=. 74.5 then FanOff
-    else if otime > 7200 then FanSleep
-    else Retain
-}
+    out node fan = True
 
-state FanSleep {
-  node ctime = ctime@last
+    switch :
+      if di <=. 74.5 then FanOff
+      else if otime > 7200 then FanSleep
+      else Retain
+  }
 
-  node otime = 0
+  state FanSleep {
+    out node ctime = ctime@last
 
-  node fan = False
+    out node otime = 0
 
-  node init[1800] timer =
-    let dt = clock - clock@last in
-    timer@last - dt
+    out node fan = False
 
-  switch :
-    if timer <= 0 then FanOff else Retain
+    node timer(1800) =
+      let dt = clock - clock@last in
+      timer@last - dt
+
+    switch :
+      if timer <= 0 then FanOff else Retain
+  }
 }

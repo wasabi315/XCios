@@ -1,0 +1,32 @@
+use Watch,Watchlib
+
+module Main {
+  in pressedA : Bool,
+     pressedB : Bool,
+     pressedC : Bool,
+     elapsed(0) : Int
+  out hour : Int, min : Int, sec : Int
+
+  node button = Button(pressedA, pressedB, pressedC)
+
+  node dt = elapsed - elapsed@last
+
+  newnode display, curTimeUpdate =
+    Watch <- button, curTime@last, dt
+
+  out node hour = case display of Time(h, _, _) -> h;
+  out node min = case display of Time(_, m, _) -> m;
+  out node sec = case display of Time(_, _, s) -> s;
+
+  node counterCLK(0) =
+    (counterCLK@last + dt) % 1000
+
+  node pulseCLK = counterCLK@last > counterCLK
+
+  node curTime(Time(0,0,0)) =
+    case curTimeUpdate of
+      SomeT(t) -> t;
+      _ -> if pulseCLK then
+             incTime(curTime@last)
+           else curTime@last;
+}
