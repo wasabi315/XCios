@@ -6,7 +6,7 @@ let generate_main metainfo =
   let ochan = open_out (entry_file ^ ".cpp") in
   let out = formatter_of_out_channel ochan in
   fprintf out "@[<v>";
-  fprintf out "#include <%s.h>" entry_file;
+  fprintf out "#include \"%s.h\"" entry_file;
   fprintf out "@,@,%a" GenDataType.generate metainfo;
   fprintf out "@,@,%a" GenMemory.generate metainfo;
   fprintf out "@,@,%a" GenGlobal.generate metainfo;
@@ -30,5 +30,6 @@ let generate_header metainfo =
   close_out ochan
 
 let codegen metainfo =
+  printf "%a@." pp_metainfo metainfo;
   generate_main metainfo;
   generate_header metainfo

@@ -204,6 +204,7 @@ let gen_activate_fun ppf metainfo =
       end;
     if all_consts = [] then () else
       fprintf ppf "@,%a" (pp_print_list gen_body_const_init) all_consts;
+    fprintf ppf "@,memory.init = 1;";
     fprintf ppf "@,while (1) {@;<0 2>";
     fprintf ppf "@[<v>%a@]@," gen_body_loop ();
     fprintf ppf "}";

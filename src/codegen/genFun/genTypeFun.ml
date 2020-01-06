@@ -42,10 +42,6 @@ let define_tid_conses metainfo (file, typedef) fun_writers =
 
   let define_single_cons cons_id vtype fun_writers =
 
-    let gen_paramtype ppf () =
-      if vtype = TUnit then () else (gen_value_type metainfo) ppf vtype
-    in
-
     let gen_funname ppf () =
       fprintf ppf "static %a %a"
         (gen_value_type metainfo) tid
@@ -53,28 +49,47 @@ let define_tid_conses metainfo (file, typedef) fun_writers =
     in
 
     let gen_prototype ppf () =
+      let gen_prototype_params ppf () =
+        if vtype = TUnit then () else (gen_value_type metainfo) ppf vtype
+      in
       fprintf ppf "@[<h>%a(%a);@]"
-        gen_funname () gen_paramtype ()
+        gen_funname () gen_prototype_params ()
     in
 
     let gen_definition_head ppf () =
-      fprintf ppf "@[<h>%a(%a value)@]"
-        gen_funname () gen_paramtype ()
+      let gen_definition_params ppf () =
+        if vtype = TUnit then () else
+          fprintf ppf "%a value" (gen_value_type metainfo) vtype
+      in
+      fprintf ppf "@[<h>%a(%a)@]"
+        gen_funname () gen_definition_params ()
     in
 
     let gen_definition_body_core ppf () =
       let typedata = metainfo.typedata in
       let is_singleton = Hashset.mem typedata.singleton_types tid in
-      fprintf ppf "@[<v>";
-      if is_singleton then () else
-        begin
-          let tag =
-            Hashtbl.find typedata.cons_tag tid |> Idmap.find cons_id
+      let writers = [] in
+      let writers =
+        if is_singleton then writers else
+          begin
+            let tag =
+              Hashtbl.find typedata.cons_tag tid |> Idmap.find cons_id
+            in
+            let writer ppf () =
+              fprintf ppf "x->tag = %d;" tag
+            in
+            writer :: writers
+          end
+      in
+      let writers =
+        if vtype = TUnit then writers else
+          let writer ppf () =
+            fprintf ppf "x->value.%s = value;" cons_id
           in
-          fprintf ppf "x->tag = %d;@," tag
-        end;
-      fprintf ppf "x->value.%s = value;" cons_id;
-      fprintf ppf "@]"
+          writer :: writers
+      in
+      let writers = List.rev writers in
+      fprintf ppf "@[<v>%a@]" (exec_all_writers ()) writers
     in
 
     let gen_definition_body ppf () =

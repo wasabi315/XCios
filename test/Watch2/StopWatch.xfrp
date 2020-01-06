@@ -3,7 +3,7 @@ use Watchlib
 public switchmodule StopWatch {
   in button : Button,
      dt : Int
-  out stopWatch : Time,
+  out stopWatch(Time(0,0,0)) : Time,
       exit : Bool
   init Stop
 
