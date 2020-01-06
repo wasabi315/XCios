@@ -123,17 +123,16 @@ let gen_tstate_consname ppf (file, module_id, cons_id) =
 
 let gen_module_init ppf () =
   fprintf ppf "memory->init"
-  
+
 let gen_state_init state_id ppf () =
   fprintf ppf "memory->statebody.%s.init" state_id
 
 let gen_module_node_address ppf (_nattr, node_id) =
   fprintf ppf "memory->%s" node_id
-  
+
 let gen_state_node_address state_id ppf (nattr, node_id) =
     match nattr with
-    | InputNode -> assert false
-    | SharedNode | OutputNode ->
+    | InputNode | SharedNode | OutputNode ->
        fprintf ppf "memory->%s" node_id
     | NormalNode ->
        fprintf ppf "memory->statebody.%s.%s"
@@ -164,7 +163,34 @@ let get_mark_writer metainfo target_type gen_address gen_life =
      in
      Some writer
   | _ -> assert false
-  
+
+let get_free_writer metainfo target_type gen_address =
+  match target_type with
+  | TBool | TInt | TFloat -> None
+  | TState (file, module_id) ->
+     let writer ppf () =
+       fprintf ppf "@[<h>free_%a(%a);@]"
+         gen_tstate_typename (file, module_id) gen_address ()
+     in
+     Some writer
+  | TId (file, type_id) ->
+     if Hashset.mem metainfo.typedata.enum_types target_type then
+       None
+     else
+       let writer ppf () =
+         fprintf ppf "@[<h>free_%a(%a);@]"
+           gen_tid_typename (file, type_id) gen_address ()
+       in
+       Some writer
+  | TTuple types ->
+     let writer ppf () =
+       fprintf ppf "@[<h>free_%a(%a);@]"
+         gen_ttuple_typename types gen_address ()
+     in
+     Some writer
+  | _ -> assert false
+
+
 let gen_update gen_body gen_mark_opt gen_tick_opt ppf () =
   fprintf ppf "@[<v>";
   gen_body ppf ();
