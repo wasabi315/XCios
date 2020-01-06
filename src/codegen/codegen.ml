@@ -30,6 +30,5 @@ let generate_header metainfo =
   close_out ochan
 
 let codegen metainfo =
-  printf "%a@." pp_metainfo metainfo;
   generate_main metainfo;
   generate_header metainfo
