@@ -12,4 +12,5 @@
  (name runtest)
  (deps (source_tree %{project_root}/test))
  (action (progn
-          (run ./main.exe %{project_root}/test/Watch/Main.xfrp))))
+          (run ./main.exe %{project_root}/test/Watch/Main.xfrp)
+          (run ./main.exe %{project_root}/test/Watch2/WatchMain.xfrp))))

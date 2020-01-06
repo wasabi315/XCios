@@ -138,6 +138,13 @@ let gen_state_node_address state_id ppf (nattr, node_id) =
        fprintf ppf "memory->statebody.%s.%s"
          state_id node_id
 
+let get_module_sig metainfo file module_id =    
+  match Hashtbl.find metainfo.moduledata (file, module_id) with
+  | ModuleInfo info ->
+     (info.module_param_sig, info.module_in_sig, info.module_out_sig)
+  | SModuleInfo info ->
+     (info.smodule_param_sig, info.smodule_in_sig, info.smodule_out_sig)
+  
 let get_mark_writer metainfo target_type gen_address gen_life =
   match target_type with
   | TBool | TInt | TFloat -> None
@@ -190,7 +197,6 @@ let get_free_writer metainfo target_type gen_address =
      Some writer
   | _ -> assert false
 
-
 let gen_update gen_body gen_mark_opt gen_tick_opt ppf () =
   fprintf ppf "@[<v>";
   gen_body ppf ();
@@ -205,3 +211,4 @@ let gen_update gen_body gen_mark_opt gen_tick_opt ppf () =
     | None -> ()
   end;
   fprintf ppf "@]"
+

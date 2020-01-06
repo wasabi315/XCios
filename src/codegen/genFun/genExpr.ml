@@ -225,7 +225,7 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
         in
 
         let gen_expr ppf () =
-          fprintf ppf "%a(%a)"
+          fprintf ppf "%a(@[<hov>%a@])"
             gen_tstate_consname (file, module_id, cons_id)
             gen_args ()
         in
@@ -250,7 +250,7 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
       let generators = List.rev generators in
       let (_, type_list) = List.split es in
       let gen_expr ppf () =
-        fprintf ppf "%a(@[<h>%a@])"
+        fprintf ppf "%a(@[<hov>%a@])"
           gen_ttuple_consname type_list
           (exec_all_writers () ~pp_sep:pp_print_commaspace) generators
       in
@@ -386,7 +386,7 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
       let gen_expr ppf () =
         match idinfo with
         | FunId (file, _, _) ->
-           fprintf ppf "%a(@[<h>%a@])"
+           fprintf ppf "%a(@[<hov>%a@])"
              gen_global_funname (file, id)
              (exec_all_writers () ~pp_sep:pp_print_commaspace) generators
         | _ -> assert false

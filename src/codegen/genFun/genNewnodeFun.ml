@@ -2,7 +2,6 @@ open Extension.Format
 open Syntax
 open CodegenUtil
 open GenExpr
-open MetaInfo
 
 type newnodefun_generator =
   {
@@ -30,13 +29,7 @@ let define_newnode_fun metainfo generator fun_writers =
     | (module_id, ModuleCons(file, _, _, _)) -> (file, module_id)
     | _ -> assert false
   in
-  let (param_sig, in_sig, out_sig) =
-    match Hashtbl.find metainfo.moduledata (file, module_id) with
-    | ModuleInfo info ->
-       (info.module_param_sig, info.module_in_sig, info.module_out_sig)
-    | SModuleInfo info ->
-       (info.smodule_param_sig, info.smodule_in_sig, info.smodule_out_sig)
-  in
+  let (param_sig, in_sig, out_sig) = get_module_sig metainfo file module_id in
   let params =
     List.map2 (fun (id, t) expr -> (id, t, expr))
       param_sig newnode.newnode_margs

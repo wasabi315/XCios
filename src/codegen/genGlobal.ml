@@ -70,10 +70,11 @@ let generate ppf metainfo =
     | ModuleInfo info -> info.module_clockperiod
     | SModuleInfo info -> info.smodule_clockperiod
   in
+  let iter_period = toplevel_clockperiod + 1 in (* for global const *)
   fprintf ppf "@[<v>";
   fprintf ppf "@[<h>int clock;@]";
-  fprintf ppf "@,@[<h>int period = %d;@]" toplevel_clockperiod;
-  fprintf ppf "@,@[<h>int current_side = 0;@]";
+  fprintf ppf "@,@[<h>int period = %d;@]" iter_period;
+  fprintf ppf "@,@[<h>int current_side;@]";
   gen_global_consts ppf metainfo;
   gen_type_globals ppf metainfo;
   fprintf ppf "@,@,@[<h>%a memory;@]" gen_module_memory_type (entry_file, "Main");
