@@ -639,11 +639,9 @@ let infer_module env tenv def =
     let env =
       env
       |> List.fold_right  (fun (id, _, t) env ->
-           let t = read_typespec tenv 1 t in
            add_env id (NodeId (InputNode, t)) env
            ) in_nodes
       |> List.fold_right (fun (id, _, t) env ->
-             let t = read_typespec tenv 1 t in
              add_env id (NodeId (OutputNode, t)) env
            ) out_nodes
     in
