@@ -153,17 +153,36 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
 
     let f_uni_op op e1 =
       let (body_writers, gen_e1) = rec_f e1 body_writers in
+      let gen_op ppf () =
+        pp_print_string ppf
+          (match op with
+           | UNot -> "!" | UInv -> "~"
+           | UPlus | UFPlus -> "+"
+           | UMinus | UFMinus -> "-")
+      in
       let gen_expr ppf () =
-        fprintf ppf "(%a %a)" pp_uni_op op gen_e1 () in
+        fprintf ppf "(%a %a)" gen_op () gen_e1 () in
       (body_writers, gen_expr)
     in
 
     let f_bin_op op e1 e2 =
       let (body_writers, gen_e1) = rec_f e1 body_writers in
       let (body_writers, gen_e2) = rec_f e2 body_writers in
+      let gen_op ppf () =
+        pp_print_string ppf
+          (match op with
+           | BAdd | BFAdd -> "+" | BSub | BFSub -> "-"
+           | BMul | BFMul -> "*" | BDiv | BFDiv -> "/"  
+           | BMod -> "%" | BShl -> "<<" | BShr -> ">>"
+           | BLt | BFLt -> "<" | BLeq | BFLeq -> "<="
+           | BGt | BFGt -> ">" | BGeq | BFGeq -> ">="
+           | BEq -> "==" | BNeq -> "!="
+           | BLand -> "&&" | BLor -> "||"
+           | BAnd -> "&" | BOr -> "|" | BXor -> "^")
+      in
       let gen_expr ppf () =
         fprintf ppf "(%a %a %a)"
-          gen_e1 () pp_bin_op op gen_e2 ()
+          gen_e1 () gen_op () gen_e2 ()
       in
       (body_writers, gen_expr)
     in
