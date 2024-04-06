@@ -19,9 +19,12 @@
         "const",        CONST;
         "type",         TYPE;
         "fun",          FUN;
+        "mode",         MODE;
+        "accessible",   ACCESSIBLE;
         "newnode",      NEWNODE;
         "node",         NODE;
         "state",        STATE;
+        "with",         WITH;
         "switch",       SWITCH;
         "Retain",       RETAIN;
         "last",         LAST;
@@ -55,6 +58,7 @@ rule read = parse
   | ':'     { COLON }
   | ';'     { SEMICOLON }
   | '@'     { AT }
+  | '\''    { QUOTE }
   | "->"    { RARROW }
   | "<-"    { LARROW }
   | '+'     { PLUS }
@@ -89,10 +93,10 @@ rule read = parse
   | id
     {
       let s = Lexing.lexeme lexbuf in
-        try
-          Hashtbl.find lex_context s
-        with Not_found ->
-          if 'A' <= s.[0] && s.[0] <= 'Z' then UID s else ID s
+      try
+        Hashtbl.find lex_context s
+      with Not_found ->
+        if 'A' <= s.[0] && s.[0] <= 'Z' then UID s else ID s
     }
   | "()"     { UNIT }
   | digits   { INT (Lexing.lexeme lexbuf |> int_of_string)}

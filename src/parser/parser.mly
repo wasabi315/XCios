@@ -40,25 +40,26 @@ let split_smodule_elems elems =
   ) elems ([], [])
 
 let split_file_elems elems =
-  List.fold_right (fun elem (ts, cs, fs, ms, sms) ->
+  List.fold_right (fun elem (ts, mds, cs, fs, ms, sms) ->
     match elem with
-    | XFRPType(d) -> (d::ts, cs, fs, ms, sms)
-    | XFRPConst(d) -> (ts, d::cs, fs, ms, sms)
-    | XFRPFun(d) -> (ts, cs, d::fs, ms, sms)
-    | XFRPModule(d) -> (ts, cs, fs, d::ms, sms)
-    | XFRPSModule(d) -> (ts, cs, fs, ms, d::sms)
-  ) elems ([],[],[],[],[])
+    | XFRPType(d) -> (d::ts, mds, cs, fs, ms, sms)
+    | XFRPMode(d) -> (ts, d::mds, cs, fs, ms, sms)
+    | XFRPConst(d) -> (ts, mds, d::cs, fs, ms, sms)
+    | XFRPFun(d) -> (ts, mds, cs, d::fs, ms, sms)
+    | XFRPModule(d) -> (ts, mds, cs, fs, d::ms, sms)
+    | XFRPSModule(d) -> (ts, mds, cs, fs, ms, d::sms)
+  ) elems ([],[],[],[],[],[])
 %}
 
 %token
 MODULE SWITCHMODULE IN OUT USE INIT PUBLIC SHARED
-CONST TYPE FUN STATE NODE NEWNODE SWITCH
+CONST TYPE FUN MODE ACCESSIBLE STATE NODE NEWNODE WITH SWITCH
 RETAIN LAST IF THEN ELSE LET CASE OF
 TRUE FALSE
 
 %token
 LBRACE RBRACE LPAREN RPAREN
-COMMA COLON SEMICOLON AT LARROW RARROW
+COMMA COLON SEMICOLON AT QUOTE LARROW RARROW
 PLUS MINUS ASTERISK SLASH
 PLUSDOT MINUSDOT ASTERISKDOT SLASHDOT
 TILDE PERCENT XOR OR2 AND2 OR AND
@@ -102,8 +103,9 @@ xfrp:
     EOF
     {
       let () = check_name_conflict_file elems in
-      let (ts, cs, fs, ms, sms) = split_file_elems elems in
+      let (ts, mds, cs, fs, ms, sms) = split_file_elems elems in
       let types = list_to_idmap (fun d -> d.type_id) ts in
+      let modes = list_to_idmap (fun d -> d.mode_id) mds in
       let consts = list_to_idmap (fun d -> d.const_id) cs in
       let funs = list_to_idmap (fun d -> d.fun_id) fs in
       let modules = list_to_idmap (fun d -> d.module_id) ms in
@@ -112,6 +114,7 @@ xfrp:
       {
         xfrp_use = use;
         xfrp_types = types;
+        xfrp_modes = modes;
         xfrp_consts = consts;
         xfrp_funs = funs;
         xfrp_modules = modules;
@@ -128,6 +131,10 @@ xfrp_elem:
   | pub = boption(PUBLIC) def = typedef
     {
       XFRPType({ def with type_pub = pub})
+    }
+  | pub = boption(PUBLIC) def = modedef
+    {
+      XFRPMode({ def with mode_pub = pub})
     }
   | pub = boption(PUBLIC) def = constdef
     {
@@ -174,6 +181,29 @@ variant_def:
       match v with
       | Some x -> (c, x)
       | None -> (c, TUnit)
+    }
+
+(* mode *)
+modedef:
+  | MODE id = UID EQUAL modes = mode_value_defs
+  {
+    let modes , acc_modes = modes in
+    let modes = Idset.of_list modes in
+    let acc_modes = Idset.of_list acc_modes in
+    { mode_pub = false; mode_id = id; mode_vals = modes; mode_acc_vals = acc_modes }
+  }
+
+mode_value_defs:
+  | (* empty *)
+    { [], [] }
+  | mode = UID
+    { [mode], [] }
+  | ACCESSIBLE acc_modes = separated_list(OR, UID)
+    { [], acc_modes }
+  | mode = UID OR modes = mode_value_defs
+    {
+      let modes , acc_modes = modes in
+      mode :: modes, acc_modes
     }
 
 (* function *)
@@ -287,8 +317,8 @@ xfrp_smodule:
           smodule_pub = false;
           smodule_id = id;
           smodule_params = params;
-	  smodule_in = in_nodes;
-	  smodule_out = out_nodes;
+          smodule_in = in_nodes;
+          smodule_out = out_nodes;
           smodule_shared = shared_nodes;
           smodule_init = init;
           smodule_consts = consts;

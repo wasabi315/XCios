@@ -362,6 +362,23 @@ let pp_typedef ppf { type_pub; type_id; type_conses } =
   fprintf ppf "}@]"
 ;;
 
+(* mode *)
+type modedef =
+  { mode_pub : bool
+  ; mode_id : identifier
+  ; mode_vals : Idset.t
+  ; mode_acc_vals : Idset.t
+  }
+
+let pp_modedef ppf { mode_pub; mode_id; mode_vals; mode_acc_vals } =
+  fprintf ppf "@[<v>ModeDef: {@;<0 2>";
+  fprintf ppf "@[<v>id: %a@;" pp_identifier mode_id;
+  fprintf ppf "public: %a@;" pp_print_bool mode_pub;
+  fprintf ppf "mode values: @[%a@]@;" pp_idset mode_vals;
+  fprintf ppf "accessible mode values: @[%a@]@]@;" pp_idset mode_acc_vals;
+  fprintf ppf "}@]"
+;;
+
 (* function *)
 type fundef =
   { fun_pub : bool
@@ -569,6 +586,7 @@ let pp_xfrp_smodule ppf def =
 (* whole program *)
 type xfrp_elem =
   | XFRPType of typedef
+  | XFRPMode of modedef
   | XFRPConst of constdef
   | XFRPFun of fundef
   | XFRPModule of xfrp_module
@@ -576,6 +594,7 @@ type xfrp_elem =
 
 let pp_xfrp_elem ppf = function
   | XFRPType d -> pp_typedef ppf d
+  | XFRPMode d -> pp_modedef ppf d
   | XFRPConst d -> pp_constdef ppf d
   | XFRPFun d -> pp_fundef ppf d
   | XFRPModule d -> pp_xfrp_module ppf d
@@ -584,6 +603,7 @@ let pp_xfrp_elem ppf = function
 
 let xfrp_elem_id = function
   | XFRPType d -> d.type_id
+  | XFRPMode d -> d.mode_id
   | XFRPConst d -> d.const_id
   | XFRPFun d -> d.fun_id
   | XFRPModule d -> d.module_id
@@ -593,6 +613,7 @@ let xfrp_elem_id = function
 type xfrp =
   { xfrp_use : identifier list
   ; xfrp_types : typedef Idmap.t
+  ; xfrp_modes : modedef Idmap.t
   ; xfrp_consts : constdef Idmap.t
   ; xfrp_funs : fundef Idmap.t
   ; xfrp_modules : xfrp_module Idmap.t
@@ -604,6 +625,7 @@ let pp_xfrp ppf def =
   fprintf ppf "@[<v>xfrp: {@;<0 2>";
   fprintf ppf "@[<v>use: @[%a@]@;" (pp_list_comma pp_identifier) def.xfrp_use;
   fprintf ppf "types: @[%a@]@;" (pp_idmap pp_typedef) def.xfrp_types;
+  fprintf ppf "modes: @[%a@]@;" (pp_idmap pp_modedef) def.xfrp_modes;
   fprintf ppf "consts: @[%a@]@;" (pp_idmap pp_constdef) def.xfrp_consts;
   fprintf ppf "funs: @[%a@]@;" (pp_idmap pp_fundef) def.xfrp_funs;
   fprintf ppf "modules: @[%a@]@;" (pp_idmap pp_xfrp_module) def.xfrp_modules;

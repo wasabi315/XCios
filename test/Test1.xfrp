@@ -1,4 +1,7 @@
-module Main {  
+mode GpsMode = Off | accessible LowAcc | HighAcc
+mode DispMode = Off | accessible On
+
+module Main {
   in  tmp : Float,      # temperature sensor
       hmd : Float       # humidity sensor
   out di : Float,       # discomfort index
