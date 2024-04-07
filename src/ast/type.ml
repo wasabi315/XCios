@@ -10,6 +10,7 @@ type t =
   | TId of string * string
   | TTuple of t list
   | TVar of tvar ref
+  | TMode of string * string * t
   | TEmpty (* dummy for optional typespec *)
 
 and tvar =
@@ -28,6 +29,8 @@ let rec pp_t ppf = function
     fprintf ppf "<type Id(%a:%a)>" pp_print_string file pp_print_string type_name
   | TTuple ts -> fprintf ppf "<type (@[<h>%a@])>" (pp_list_comma pp_t) ts
   | TVar { contents = tvar } -> fprintf ppf "<typevar %a>" pp_tvar tvar
+  | TMode (file, mode_name, t) ->
+    fprintf ppf "<type '%a:%a %a>" pp_print_string file pp_print_string mode_name pp_t t
   | TEmpty -> pp_print_string ppf "<type _>"
 
 and pp_tvar ppf = function

@@ -63,6 +63,11 @@ let rec gen_ttuple_typename ppf ts =
   fprintf ppf "Tuple%a" (pp_print_list gen_element_name ~pp_sep:pp_none) ts
 ;;
 
+let gen_mode_name ppf (file, mode_id) =
+  let file = String.capitalize_ascii file in
+  fprintf ppf "Mode%s%s" file mode_id
+;;
+
 let gen_global_constname ppf (file, const_id) =
   let file = String.capitalize_ascii file in
   pp_print_string ppf (conc_id [ file; const_id ])
@@ -73,7 +78,7 @@ let gen_global_funname ppf (file, fun_id) =
   pp_print_string ppf (conc_id [ file; fun_id ])
 ;;
 
-let gen_value_type metainfo ppf t =
+let rec gen_value_type metainfo ppf t =
   let enum_types = metainfo.typedata.enum_types in
   match t with
   | TBool | TInt -> pp_print_string ppf "int"
@@ -89,6 +94,7 @@ let gen_value_type metainfo ppf t =
     then pp_print_string ppf "int"
     else fprintf ppf "struct %a*" gen_tid_typename (file, type_name)
   | TTuple ts -> fprintf ppf "struct %a*" gen_ttuple_typename ts
+  | TMode (_, _, t) -> gen_value_type metainfo ppf t
   | _ -> assert false
 ;;
 

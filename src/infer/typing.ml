@@ -40,6 +40,10 @@ let rec adjust_level id level = function
 (* Unify type `t1` and `t2`. *)
 let rec unify t1 t2 =
   match t1, t2 with
+  | TMode ("", _, _), _ | _, TMode ("", _, _) -> assert false
+  | TMode (file1, mname1, t1), TMode (file2, mname2, t2) ->
+    if file1 = file2 && mname1 = mname2 then unify t1 t2 else raise_imcompatible t1 t2
+  | TMode (_, _, t1), t2 | t1, TMode (_, _, t2) -> unify t1 t2
   | TBool, TBool | TInt, TInt | TFloat, TFloat | TUnit, TUnit -> t1
   | TEmpty, _
   | _, TEmpty
@@ -104,8 +108,15 @@ let instantiate level t =
 
 let rec read_typespec tenv level = function
   | TEmpty -> gen_tvar_free level
+  | TMode ("", mode, t) ->
+    (match Idmap.find_opt mode tenv.ms with
+     | Some file ->
+       let t' = read_typespec tenv level t in
+       TMode (file, mode, t')
+     | None -> raise_err_pp (fun ppf -> fprintf ppf "Unknown : %a" pp_print_string mode))
+  | TMode (_, _, _) -> assert false
   | TId ("", name) ->
-    (match Idmap.find_opt name tenv with
+    (match Idmap.find_opt name tenv.ts with
      | Some file -> TId (file, name)
      | None -> raise_err_pp (fun ppf -> fprintf ppf "Unknown : %a" pp_print_string name))
   | TId (_, _) -> assert false
@@ -122,6 +133,7 @@ let rec is_concrete = function
   | TTuple ts -> List.for_all is_concrete ts
   | TVar { contents = TVBound t } -> is_concrete t
   | TVar _ -> false
+  | TMode (_, _, t) -> is_concrete t
   | TEmpty -> assert false
 ;;
 
@@ -792,6 +804,19 @@ let infer_smodule env tenv file def =
 ;;
 
 let infer (other_progs : xfrp Idmap.t) (file : string) (prog : xfrp) : xfrp =
+  let register_modevals file def env : env =
+    env
+    |> List.fold_right
+         (fun v env ->
+           let entry = ModeValue (file, false) in
+           add_env v entry env)
+         def.mode_vals
+    |> List.fold_right
+         (fun v env ->
+           let entry = ModeValue (file, true) in
+           add_env v entry env)
+         def.mode_acc_vals
+  in
   let register_typeconses file def env : env =
     Idmap.fold
       (fun c tval env ->
@@ -828,6 +853,9 @@ let infer (other_progs : xfrp Idmap.t) (file : string) (prog : xfrp) : xfrp =
     let env =
       env
       |> Idmap.fold
+           (fun _ def env -> if def.mode_pub then register_modevals file def env else env)
+           prog.xfrp_modes
+      |> Idmap.fold
            (fun _ def env ->
              if def.type_pub then register_typeconses file def env else env)
            prog.xfrp_types
@@ -846,10 +874,15 @@ let infer (other_progs : xfrp Idmap.t) (file : string) (prog : xfrp) : xfrp =
            prog.xfrp_smodules
     in
     let tenv =
-      Idmap.fold
-        (fun _ def tenv -> if def.type_pub then add_tenv def.type_id file tenv else tenv)
-        prog.xfrp_types
-        tenv
+      tenv
+      |> Idmap.fold
+           (fun _ def tenv ->
+             if def.mode_pub then add_menv def.mode_id file tenv else tenv)
+           prog.xfrp_modes
+      |> Idmap.fold
+           (fun _ def tenv ->
+             if def.type_pub then add_tenv def.type_id file tenv else tenv)
+           prog.xfrp_types
     in
     env, tenv
   in
@@ -859,7 +892,21 @@ let infer (other_progs : xfrp Idmap.t) (file : string) (prog : xfrp) : xfrp =
         let data = Idmap.find file other_progs in
         use_program file data env_tenv)
       prog.xfrp_use
-      (Idmap.empty, Idmap.empty)
+      (Idmap.empty, { ts = Idmap.empty; ms = Idmap.empty })
+  in
+  let add_file_modes env tenv prog =
+    let all, env, tenv =
+      Idmap.fold
+        (fun id def (all, env, tenv) ->
+          let all = Idmap.add id (XFRPMode def) all in
+          let env = register_modevals file def env in
+          let tenv = add_menv def.mode_id file tenv in
+          all, env, tenv)
+        prog.xfrp_modes
+        (prog.xfrp_all, env, tenv)
+    in
+    let prog = { prog with xfrp_all = all } in
+    prog, env, tenv
   in
   let infer_file_types env tenv prog =
     let type_ord = Dependency.tsort_types prog.xfrp_types in
@@ -930,6 +977,7 @@ let infer (other_progs : xfrp Idmap.t) (file : string) (prog : xfrp) : xfrp =
     prog, env
   in
   let env, tenv = make_env_tenv prog in
+  let prog, env, tenv = add_file_modes env tenv prog in
   let prog, env, tenv = infer_file_types env tenv prog in
   let prog, env = infer_file_materials env tenv prog in
   let prog, _ = infer_file_modules env tenv prog in

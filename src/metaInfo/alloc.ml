@@ -56,6 +56,7 @@ let rec get_sizeof_type all_data t =
        let amount = calc_sizeof_ttuple all_data ts in
        Hashtbl.add cache_sizeof_type t amount;
        amount
+     | TMode (_, _, t) -> get_sizeof_type all_data t
      | _ -> assert false)
 
 and calc_sizeof_tstate all_data file module_id =

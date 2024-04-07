@@ -1,7 +1,11 @@
 open Syntax
 
 type env = idinfo Idmap.t
-type tenv = string Idmap.t
+
+type tenv =
+  { ts : string Idmap.t
+  ; ms : string Idmap.t
+  }
 
 exception NameConflict of identifier
 
@@ -20,5 +24,9 @@ let add_env_shadowing (id : identifier) (entry : idinfo) (env : env) : env =
 ;;
 
 let add_tenv (id : identifier) (file : string) (tenv : tenv) : tenv =
-  add_uniq id file tenv
+  { tenv with ts = add_uniq id file tenv.ts }
+;;
+
+let add_menv (id : identifier) (file : string) (tenv : tenv) : tenv =
+  { tenv with ms = add_uniq id file tenv.ms }
 ;;

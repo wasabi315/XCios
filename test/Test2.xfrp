@@ -1,14 +1,16 @@
+mode OnOff = Off | accessible On
+
 fun hoge(x,y) = x == y
 
 switchmodule Main {
-  in   clock(0)   : Int,
+  in   clock(0)   : 'OnOff Int,
        di         : Float
   out  ctime(0)   : Int,
        otime(0)   : Int,
        fan(False) : Bool
   init FanOff
 
-  state FanOff {
+  state FanOff with clock >= Off {
     out node ctime = ctime@last
 
     out node otime = 0

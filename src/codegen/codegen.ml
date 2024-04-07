@@ -7,6 +7,7 @@ let generate_main metainfo =
   let out = formatter_of_out_channel ochan in
   fprintf out "@[<v>";
   fprintf out "#include \"%s.h\"" entry_file;
+  fprintf out "@,@,%a" GenMode.generate metainfo;
   fprintf out "@,@,%a" GenDataType.generate metainfo;
   fprintf out "@,@,%a" GenMemory.generate metainfo;
   fprintf out "@,@,%a" GenGlobal.generate metainfo;

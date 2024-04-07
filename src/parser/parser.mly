@@ -188,8 +188,6 @@ modedef:
   | MODE id = UID EQUAL modes = mode_value_defs
   {
     let modes , acc_modes = modes in
-    let modes = Idset.of_list modes in
-    let acc_modes = Idset.of_list acc_modes in
     { mode_pub = false; mode_id = id; mode_vals = modes; mode_acc_vals = acc_modes }
   }
 
@@ -227,10 +225,10 @@ fundef:
 
 (* module header *)
 in_node_decl:
-  | IN in_nodes = separated_nonempty_list(COMMA, node_decl) { in_nodes }
+  | IN in_nodes = separated_nonempty_list(COMMA, io_node_decl) { in_nodes }
 
 out_node_decl:
-  | OUT out_nodes = separated_nonempty_list(COMMA, node_decl) { out_nodes }
+  | OUT out_nodes = separated_nonempty_list(COMMA, io_node_decl) { out_nodes }
 
 shared_node_decl:
   | SHARED shared_nodes = separated_list(COMMA, node_decl) { shared_nodes }
@@ -334,6 +332,10 @@ xfrp_smodule:
           raise (Check.Error msg)
     }
 
+mode_annot:
+  | WITH annots = separated_nonempty_list(COMMA, separated_pair(ID, GEQ, UID))
+    { annots }
+
 smodule_elem:
   | def = state { SMState(def) }
   | def = constdef { SMConst(def) }
@@ -341,6 +343,7 @@ smodule_elem:
 state:
   | STATE id = UID
     params = loption(paren(separated_nonempty_list(COMMA, id_and_type)))
+    mode_annot = loption(mode_annot)
     LBRACE
     elems = nonempty_list(state_elem)
     SWITCH COLON switch = expression
@@ -358,6 +361,7 @@ state:
         {
           state_id = id;
           state_params = params;
+          state_mode_annot = mode_annot;
           state_consts = consts;
           state_nodes = nodes;
           state_newnodes = newnodes;
@@ -555,6 +559,13 @@ id_and_type_opt:
         | None -> TEmpty
       in
       (id, t)
+    }
+
+io_node_decl:
+  | id = ID init = paren(expression)? COLON mode = preceded(QUOTE, UID)? t = typespec
+    { match mode with
+      | None -> id, init, t
+      | Some(mode_id) -> id, init, TMode("", mode_id, t)
     }
 
 node_decl:
