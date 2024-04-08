@@ -30,7 +30,15 @@ let rec pp_t ppf = function
   | TTuple ts -> fprintf ppf "<type (@[<h>%a@])>" (pp_list_comma pp_t) ts
   | TVar { contents = tvar } -> fprintf ppf "<typevar %a>" pp_tvar tvar
   | TMode (file, mode_name, t) ->
-    fprintf ppf "<type '%a:%a %a>" pp_print_string file pp_print_string mode_name pp_t t
+    fprintf
+      ppf
+      "<type Mode(%a:%a) %a>"
+      pp_print_string
+      file
+      pp_print_string
+      mode_name
+      pp_t
+      t
   | TEmpty -> pp_print_string ppf "<type _>"
 
 and pp_tvar ppf = function

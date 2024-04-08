@@ -70,6 +70,7 @@ type idinfo =
   | StateParam of Type.t
   | StateConst of Type.t
   | NodeId of nattr * Type.t
+  | InaccNodeId of identifier
   | ModeValue of string * bool
 
 let pp_idinfo ppf = function
@@ -85,6 +86,7 @@ let pp_idinfo ppf = function
   | StateParam _ -> fprintf ppf "state param"
   | StateConst _ -> fprintf ppf "state const"
   | NodeId (_, _) -> fprintf ppf "node"
+  | InaccNodeId _ -> fprintf ppf "inaccessible node"
   | ModeValue (file, _) -> fprintf ppf "mode value:%a" pp_print_string file
 ;;
 
@@ -112,6 +114,7 @@ let map_idinfo_type (f : Type.t -> Type.t) (idinfo : idinfo) : idinfo =
   | StateParam t -> StateParam (f t)
   | StateConst t -> StateConst (f t)
   | NodeId (attr, t) -> NodeId (attr, f t)
+  | InaccNodeId modev -> InaccNodeId modev
   | ModeValue (file, acc) -> ModeValue (file, acc)
 ;;
 
@@ -386,6 +389,17 @@ let pp_modedef ppf { mode_pub; mode_id; mode_vals; mode_acc_vals } =
   fprintf ppf "}@]"
 ;;
 
+type mode_annot = (identifier * idref) list
+
+let pp_mode_annot ppf annot =
+  fprintf
+    ppf
+    "%a"
+    (pp_list_comma (fun ppf (node, mode) ->
+       fprintf ppf "%a >= %a" pp_identifier node pp_idref mode))
+    annot
+;;
+
 (* function *)
 type fundef =
   { fun_pub : bool
@@ -479,6 +493,7 @@ type xfrp_module =
   ; module_params : (identifier * Type.t) list
   ; module_in : (identifier * expression option * Type.t) list
   ; module_out : (identifier * expression option * Type.t) list
+  ; module_mode_annot : mode_annot
   ; module_consts : constdef Idmap.t
   ; module_nodes : node Idmap.t
   ; module_newnodes : newnode Idmap.t
@@ -493,6 +508,7 @@ let pp_xfrp_module ppf def =
   fprintf ppf "public : %a@;" pp_print_bool def.module_pub;
   fprintf ppf "in: @[%a@]@;" (pp_list_comma pp_node_decl) def.module_in;
   fprintf ppf "out: @[%a@]@;" (pp_list_comma pp_node_decl) def.module_out;
+  fprintf ppf "mode_annot: @[%a@]@;" pp_mode_annot def.module_mode_annot;
   fprintf ppf "consts: @[%a@]@;" (pp_idmap pp_constdef) def.module_consts;
   fprintf ppf "nodes: @[%a@]@;" (pp_idmap pp_node) def.module_nodes;
   fprintf ppf "newnodes: @[%a@]@;" (pp_idmap pp_newnode) def.module_newnodes;
@@ -502,17 +518,6 @@ let pp_xfrp_module ppf def =
 ;;
 
 (* state *)
-type mode_annot = (identifier * identifier) list
-
-let pp_mode_annot ppf annot =
-  fprintf
-    ppf
-    "%a"
-    (pp_list_comma (fun ppf (node, mode) ->
-       fprintf ppf "%a >= %a" pp_identifier node pp_identifier mode))
-    annot
-;;
-
 type state_elem =
   | SNode of node
   | SNewnode of newnode

@@ -10,7 +10,7 @@ switchmodule Main {
        fan(False) : Bool
   init FanOff
 
-  state FanOff with clock >= Off {
+  state FanOff with clock >= On {
     out node ctime = ctime@last
 
     out node otime = 0
@@ -22,7 +22,7 @@ switchmodule Main {
       else Retain
   }
 
-  state FanOn(begin : Int) {
+  state FanOn(begin : Int) with clock >= On {
     out node ctime =
       let dt = clock - clock@last in
       ctime@last + dt
@@ -37,7 +37,7 @@ switchmodule Main {
       else Retain
   }
 
-  state FanSleep {
+  state FanSleep with clock >= On {
     out node ctime = ctime@last
 
     out node otime = 0

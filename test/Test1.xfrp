@@ -1,11 +1,12 @@
-mode GpsMode = Off | accessible LowAcc | HighAcc
-mode DispMode = Off | accessible On
+mode OnOff = Off | accessible On
 
 module Main {
-  in  tmp : Float,      # temperature sensor
-      hmd : Float       # humidity sensor
+  in  tmp : 'OnOff Float,      # temperature sensor
+      hmd : 'OnOff Float       # humidity sensor
   out di : Float,       # discomfort index
       fan(False) : Bool # fan switch
+
+  with tmp >= On, hmd >= Off
 
   # discomfort (temperature-humidity) index
   out node di =

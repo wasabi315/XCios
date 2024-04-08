@@ -233,6 +233,10 @@ out_node_decl:
 shared_node_decl:
   | SHARED shared_nodes = separated_list(COMMA, node_decl) { shared_nodes }
 
+mode_annot:
+  | WITH annots = separated_nonempty_list(COMMA, separated_pair(ID, GEQ, UID))
+    { List.map (fun (id, mode) -> (id, (mode, UnknownId))) annots }
+
 (* module *)
 xfrp_module:
   | MODULE id = UID
@@ -240,6 +244,7 @@ xfrp_module:
     LBRACE
     in_nodes = loption(in_node_decl)
     out_nodes = out_node_decl
+    mode_annot = loption(mode_annot)
     elems = nonempty_list(module_elem)
     RBRACE
     {
@@ -252,13 +257,14 @@ xfrp_module:
         let all = list_to_idmap module_elem_id elems in
         let consts_ord = tsort_consts consts in
         let update_ord = get_update_ord nodes newnodes in
-        let () = check_nodes out_nodes [] nodes newnodes in
+        let () = check_nodes in_nodes out_nodes [] nodes newnodes mode_annot in
         {
           module_pub = false;
           module_id = id;
           module_params = params;
           module_in = in_nodes;
           module_out = out_nodes;
+          module_mode_annot = mode_annot;
           module_consts = consts;
           module_nodes = nodes;
           module_newnodes = newnodes;
@@ -308,7 +314,7 @@ xfrp_smodule:
         let consts_ord = tsort_consts consts in
         let () =
           List.iter (fun st ->
-            check_nodes out_nodes shared_nodes st.state_nodes st.state_newnodes
+            check_nodes in_nodes out_nodes shared_nodes st.state_nodes st.state_newnodes st.state_mode_annot
           ) sts
         in
         {
@@ -331,10 +337,6 @@ xfrp_smodule:
           in
           raise (Check.Error msg)
     }
-
-mode_annot:
-  | WITH annots = separated_nonempty_list(COMMA, separated_pair(ID, GEQ, UID))
-    { annots }
 
 smodule_elem:
   | def = state { SMState(def) }

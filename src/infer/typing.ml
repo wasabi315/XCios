@@ -326,6 +326,15 @@ let rec infer_expression env tenv level (ast, _) =
     | StateParam t
     | StateConst t
     | NodeId (_, t) -> EId idref, t
+    | InaccNodeId modev ->
+      raise_err_pp (fun ppf ->
+        fprintf
+          ppf
+          "%a is inaccessible when its mode is %a"
+          pp_identifier
+          id
+          pp_identifier
+          modev)
     | _ ->
       raise_err_pp (fun ppf ->
         fprintf ppf "invalid identifier reference : %a" pp_identifier id)
@@ -532,6 +541,14 @@ let infer_header_node env tenv (id, init, t) =
     id, Some expr, t
 ;;
 
+let infer_mode_annot env tenv annot =
+  List.map
+    (fun (id, mode) ->
+      let mode = infer_idref env tenv 1 mode in
+      id, mode)
+    annot
+;;
+
 let infer_whole_nodes env tenv nodes newnodes =
   let add_env_node def env =
     match def.node_attr with
@@ -608,6 +625,21 @@ let infer_module env tenv def =
     in
     def, env
   in
+  let infer_module_mode_annot env tenv def =
+    let annot = infer_mode_annot env tenv def.module_mode_annot in
+    let def = { def with module_mode_annot = annot } in
+    let env =
+      List.fold_left
+        (fun env -> function
+          | _, (_, ModeValue (_, true)) -> env
+          | id, (modev, ModeValue (_, false)) ->
+            add_env_shadowing id (InaccNodeId modev) env
+          | _ -> assert false)
+        env
+        annot
+    in
+    def, env
+  in
   let infer_module_consts env tenv def =
     let cs, all, env =
       List.fold_left
@@ -640,6 +672,7 @@ let infer_module env tenv def =
   in
   let def, env = infer_module_params env tenv def in
   let def, env = infer_module_header_nodes env tenv def in
+  let def, env = infer_module_mode_annot env tenv def in
   let def, env = infer_module_consts env tenv def in
   let def, _ = infer_module_nodes env tenv def in
   def
@@ -651,6 +684,21 @@ let infer_state env tenv file mname def =
       (fun (id, t) env -> add_env id (StateParam t) env)
       def.state_params
       env
+  in
+  let infer_state_mode_annot env tenv def =
+    let annot = infer_mode_annot env tenv def.state_mode_annot in
+    let def = { def with state_mode_annot = annot } in
+    let env =
+      List.fold_left
+        (fun env -> function
+          | _, (_, ModeValue (_, true)) -> env
+          | id, (modev, ModeValue (_, false)) ->
+            add_env_shadowing id (InaccNodeId modev) env
+          | _ -> assert false)
+        env
+        annot
+    in
+    def, env
   in
   let infer_state_consts env tenv def =
     let cs, all, env =
@@ -690,6 +738,7 @@ let infer_state env tenv file mname def =
     astsw, t
   in
   let env = make_env def env in
+  let def, env = infer_state_mode_annot env tenv def in
   let def, env = infer_state_consts env tenv def in
   let def, env = infer_state_nodes env tenv def in
   let sw = infer_state_switch env tenv def.state_switch in
