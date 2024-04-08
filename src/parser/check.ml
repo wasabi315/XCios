@@ -84,6 +84,14 @@ let check_nodes in_decls out_decls shared_decls nodes newnodes mode_annot =
       | _ -> None)
     |> Idset.of_list
   in
+  let check_node_init in_decls out_decls =
+    in_decls @ out_decls
+    |> List.iter (function
+      | _, Some _, TMode (_, _, _) ->
+        let msg = Format.asprintf "I/O node with mode cannot have initial value" in
+        raise (Error msg)
+      | _ -> ())
+  in
   let check_header_nodes_defined all_decls all_nodes =
     Idmap.iter
       (fun id decl_attr ->
@@ -94,6 +102,7 @@ let check_nodes in_decls out_decls shared_decls nodes newnodes mode_annot =
             let msg = Format.asprintf "Conflict node attribute : %a" pp_identifier id in
             raise (Error msg))
           else ()
+        | None when decl_attr = OutputNode -> () (* check during typechecking *)
         | None ->
           let msg = Format.asprintf "Header node is not defined : %a" pp_identifier id in
           raise (Error msg))
@@ -127,13 +136,14 @@ let check_nodes in_decls out_decls shared_decls nodes newnodes mode_annot =
     if not (Idset.is_empty unneeded_annots)
     then (
       let msg =
-        Format.asprintf "Unneeded mode annotation : %a" pp_idset unneeded_annots
+        Format.asprintf "Mode annotation on non-I/O node : %a" pp_idset unneeded_annots
       in
       raise (Error msg))
   in
   let all_decls = get_all_declared_nodes out_decls shared_decls in
   let all_nodes = get_all_defined_nodes nodes newnodes in
   let all_nodes_with_mode = get_all_nodes_with_mode in_decls out_decls in
+  check_node_init in_decls out_decls;
   check_header_nodes_defined all_decls all_nodes;
   check_undecl_header_nodes all_nodes all_decls;
   check_mode_annot all_nodes_with_mode mode_annot

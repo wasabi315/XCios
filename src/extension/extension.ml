@@ -2,8 +2,11 @@ module Hashset = struct
   type 'a t = ('a, unit) Hashtbl.t
 
   let create ?(random = false) size = Hashtbl.create size ~random
+  let is_empty s = Hashtbl.length s = 0
   let mem s x = Hashtbl.mem s x
   let add s x = Hashtbl.add s x ()
+  let remove s x = Hashtbl.remove s x
+  let to_list s = Hashtbl.to_seq_keys s |> List.of_seq
 end
 
 module Format = struct

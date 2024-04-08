@@ -2,6 +2,7 @@
 open Syntax
 open Type
 open Env
+open Extension
 open Extension.Format
 
 exception UnifyError of t * t
@@ -499,7 +500,7 @@ let infer_fundef env tenv def =
   { def with fun_params = params; fun_rettype = tret; fun_body = body }
 ;;
 
-let infer_node env tenv def =
+let infer_node env tenv undefined_out_nodes def =
   let t =
     match Idmap.find def.node_id env with
     | NodeId (_, t) -> t
@@ -525,10 +526,13 @@ let infer_node env tenv def =
   in
   let ((_, tbody) as body) = infer_expression_acc env tenv 1 def.node_body in
   let t = unify_resp_lhs_mode t tbody in
+  (match def.node_attr with
+   | OutputNode -> Hashset.remove undefined_out_nodes def.node_id
+   | _ -> ());
   { def with node_init = init; node_body = body; node_type = t }
 ;;
 
-let infer_newnode env tenv def =
+let infer_newnode env tenv undefined_out_nodes def =
   let ((_, midinfo) as mid) = infer_idref env tenv 1 def.newnode_module in
   match midinfo with
   | ModuleCons (_, pts, its, ots) ->
@@ -549,6 +553,11 @@ let infer_newnode env tenv def =
     let binds =
       List.map2 (fun (attr, id, _) t -> attr, id, flatten_type t) def.newnode_binds ots
     in
+    List.iter
+      (function
+       | OutputNode, id, _ -> Hashset.remove undefined_out_nodes id
+       | _ -> ())
+      binds;
     { def with
       newnode_binds = binds
     ; newnode_module = mid
@@ -573,14 +582,22 @@ let infer_header_node env tenv (id, init, t) =
 ;;
 
 let infer_mode_annot env tenv annot =
-  List.map
-    (fun (id, mode) ->
-      let mode = infer_idref env tenv 1 mode in
-      id, mode)
-    annot
+  let undefined_out_nodes = Hashset.create 10 in
+  let annot =
+    List.map
+      (fun (id, mode) ->
+        let mode = infer_idref env tenv 1 mode in
+        (match infer_idref env tenv 1 (id, UnknownId), mode with
+         | (node_id, NodeId (OutputNode, _)), (_, ModeValue (_, true)) ->
+           Hashset.add undefined_out_nodes node_id
+         | _ -> ());
+        id, mode)
+      annot
+  in
+  annot, undefined_out_nodes
 ;;
 
-let infer_whole_nodes env tenv nodes newnodes =
+let infer_whole_nodes env tenv undefined_out_nodes nodes newnodes =
   let add_env_node def env =
     match def.node_attr with
     | NormalNode ->
@@ -626,9 +643,17 @@ let infer_whole_nodes env tenv nodes newnodes =
      You need not dereference types of them.
   *)
   let env = make_env env in
-  let nodes = Idmap.map (infer_node env tenv) nodes in
-  let newnodes = Idmap.map (infer_newnode env tenv) newnodes in
+  let nodes = Idmap.map (infer_node env tenv undefined_out_nodes) nodes in
+  let newnodes = Idmap.map (infer_newnode env tenv undefined_out_nodes) newnodes in
   let nodes = Idmap.map deref_nodedef_type nodes in
+  if not (Hashset.is_empty undefined_out_nodes)
+  then
+    raise_err_pp (fun ppf ->
+      fprintf
+        ppf
+        "undefined output node(s) : %a"
+        (pp_list_comma pp_identifier)
+        (Hashset.to_list undefined_out_nodes));
   nodes, newnodes, env
 ;;
 
@@ -657,7 +682,7 @@ let infer_module env tenv def =
     def, env
   in
   let infer_module_mode_annot env tenv def =
-    let annot = infer_mode_annot env tenv def.module_mode_annot in
+    let annot, undefined_out_nodes = infer_mode_annot env tenv def.module_mode_annot in
     let def = { def with module_mode_annot = annot } in
     let env =
       List.fold_left
@@ -674,7 +699,7 @@ let infer_module env tenv def =
         env
         annot
     in
-    def, env
+    def, env, undefined_out_nodes
   in
   let infer_module_consts env tenv def =
     let cs, all, env =
@@ -692,9 +717,9 @@ let infer_module env tenv def =
     let def = { def with module_consts = cs; module_all = all } in
     def, env
   in
-  let infer_module_nodes env tenv def =
+  let infer_module_nodes env tenv undefined_out_nodes def =
     let nodes, newnodes, env =
-      infer_whole_nodes env tenv def.module_nodes def.module_newnodes
+      infer_whole_nodes env tenv undefined_out_nodes def.module_nodes def.module_newnodes
     in
     let all =
       def.module_all
@@ -708,9 +733,9 @@ let infer_module env tenv def =
   in
   let def, env = infer_module_params env tenv def in
   let def, env = infer_module_header_nodes env tenv def in
-  let def, env = infer_module_mode_annot env tenv def in
+  let def, env, undefined_out_nodes = infer_module_mode_annot env tenv def in
   let def, env = infer_module_consts env tenv def in
-  let def, _ = infer_module_nodes env tenv def in
+  let def, _ = infer_module_nodes env tenv undefined_out_nodes def in
   def
 ;;
 
@@ -722,7 +747,7 @@ let infer_state env tenv file mname def =
       env
   in
   let infer_state_mode_annot env tenv def =
-    let annot = infer_mode_annot env tenv def.state_mode_annot in
+    let annot, undefined_out_nodes = infer_mode_annot env tenv def.state_mode_annot in
     let def = { def with state_mode_annot = annot } in
     let env =
       List.fold_left
@@ -739,7 +764,7 @@ let infer_state env tenv file mname def =
         env
         annot
     in
-    def, env
+    def, env, undefined_out_nodes
   in
   let infer_state_consts env tenv def =
     let cs, all, env =
@@ -757,9 +782,9 @@ let infer_state env tenv file mname def =
     let def = { def with state_consts = cs; state_all = all } in
     def, env
   in
-  let infer_state_nodes env tenv def =
+  let infer_state_nodes env tenv undefined_out_nodes def =
     let nodes, newnodes, env =
-      infer_whole_nodes env tenv def.state_nodes def.state_newnodes
+      infer_whole_nodes env tenv undefined_out_nodes def.state_nodes def.state_newnodes
     in
     let all =
       def.state_all
@@ -779,9 +804,9 @@ let infer_state env tenv file mname def =
     astsw, t
   in
   let env = make_env def env in
-  let def, env = infer_state_mode_annot env tenv def in
+  let def, env, undefined_out_nodes = infer_state_mode_annot env tenv def in
   let def, env = infer_state_consts env tenv def in
-  let def, env = infer_state_nodes env tenv def in
+  let def, env = infer_state_nodes env tenv undefined_out_nodes def in
   let sw = infer_state_switch env tenv def.state_switch in
   { def with state_switch = sw }
 ;;

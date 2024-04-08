@@ -19,21 +19,19 @@ switchmodule Main {
        bar        : 'OnOff Int
   init FanOff
 
-  state FanOff with foo >= Off, bar >= On {
+  state FanOff with foo >= Off, bar >= Off {
     out node ctime = ctime@last
 
     out node otime = 0
 
     out node fan = False
 
-    out node bar = 0
-
     switch :
       if di >=. 75.5 then FanOn(clock)
       else Retain
   }
 
-  state FanOn(begin : Int) with foo >= Off, bar >= On {
+  state FanOn(begin : Int) with foo >= Off, bar >= Off {
     out node ctime =
       let dt = clock - clock@last in
       ctime@last + dt
@@ -41,8 +39,6 @@ switchmodule Main {
     out node otime = clock - begin
 
     out node fan = True
-
-    out node bar = 0
 
     switch :
       if di <=. 74.5 then FanOff

@@ -4,11 +4,19 @@ module Hashset : sig
   (** Hashset.create n creates new empty set with size n *)
   val create : ?random:bool -> int -> 'a t
 
+  (** Hashset.is_empty s tests if s is empty *)
+  val is_empty : 'a t -> bool
+
   (** Hashset.mem tests if x belongs to s *)
   val mem : 'a t -> 'a -> bool
 
   (** Hashset.add s x adds x to s *)
   val add : 'a t -> 'a -> unit
+
+  (** Hashset.remove s x removes x from s*)
+  val remove : 'a t -> 'a -> unit
+
+  val to_list : 'a t -> 'a list
 end
 
 module Format : sig
