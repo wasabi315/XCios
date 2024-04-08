@@ -347,6 +347,13 @@ let rec infer_expression env tenv level (ast, _) =
   let infer_annot idref annot =
     let ((id, idinfo) as idref) = infer_idref env tenv level idref in
     match idinfo with
+    | InaccNodeId (_, TMode (_, _, _)) | NodeId (_, TMode (_, _, _)) ->
+      raise_err_pp (fun ppf ->
+        fprintf
+          ppf
+          "past values of I/O node with mode cannot be accessed: %a"
+          pp_identifier
+          id)
     | NodeId (_, t) -> EAnnot (idref, annot), t
     | _ -> raise_err_pp (fun ppf -> fprintf ppf "expected node : %a" pp_identifier id)
   in

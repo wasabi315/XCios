@@ -88,6 +88,13 @@ let calc_typedata all_data file_ord metainfo =
       metainfo.all_elements.all_modules
     |> List.rev
   in
+  let get_modes all_data =
+    Idmap.fold
+      (fun file xfrp acc ->
+        acc @ List.map (fun (_, def) -> file, def) (Idmap.bindings xfrp.xfrp_modes))
+      all_data
+      []
+  in
   let () =
     Hashtbl.iter
       (fun t _ ->
@@ -101,6 +108,9 @@ let calc_typedata all_data file_ord metainfo =
   let nonenum_tid_defs = get_nonenum_tid_defs metainfo in
   let tuple_types = get_tuple_types metainfo in
   let tstate_defs = get_tstate_defs metainfo in
-  let typedata = { metainfo.typedata with nonenum_tid_defs; tuple_types; tstate_defs } in
+  let modes = get_modes all_data in
+  let typedata =
+    { metainfo.typedata with nonenum_tid_defs; tuple_types; tstate_defs; modes }
+  in
   { metainfo with typedata }
 ;;

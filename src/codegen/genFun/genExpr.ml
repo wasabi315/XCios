@@ -352,6 +352,9 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
         | StateConst _ -> f_state_const ()
         | StateParam _ -> f_state_param ()
         | NodeId (nattr, _) -> f_node nattr
+        | InaccNodeId _ ->
+          Format.printf "InaccNodeId is not supported yet.\n";
+          assert false
         | _ -> assert false
       in
       body_writers, gen_expr

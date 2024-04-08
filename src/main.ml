@@ -52,7 +52,7 @@ let gather_filedata entry_file =
       let ast = parse filename in
       let visit_state, all_data, file_ord_rev = List.fold_right visit ast.xfrp_use acc in
       let data = Typing.infer all_data file ast in
-      Format.printf "%a" pp_xfrp data;
+      Format.printf "%a\n" pp_xfrp data;
       let visit_state = Idmap.add file Visited visit_state in
       let all_data = Idmap.add file data all_data in
       let file_ord_rev = file :: file_ord_rev in
@@ -79,6 +79,7 @@ let get_metainfo entry_file (all_data, file_ord) =
     |> Alloc.calc_alloc_amount all_data
     |> TypeData.calc_typedata all_data file_ord
   in
+  Format.printf "%a\n" pp_metainfo metainfo;
   metainfo
 ;;
 

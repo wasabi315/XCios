@@ -94,7 +94,11 @@ let rec gen_value_type metainfo ppf t =
     then pp_print_string ppf "int"
     else fprintf ppf "struct %a*" gen_tid_typename (file, type_name)
   | TTuple ts -> fprintf ppf "struct %a*" gen_ttuple_typename ts
-  | TMode (_, _, t) -> gen_value_type metainfo ppf t
+  | TMode (file, mode_id, t) ->
+    (* let inner = gen_value_type metainfo in
+       fprintf ppf "WithMode<%a, %a>" gen_mode_name (file, mode_id) inner t *)
+    Format.printf "TMode case for gen_value_type has not been implemented\n";
+    gen_value_type metainfo ppf t
   | _ -> assert false
 ;;
 
@@ -150,7 +154,7 @@ let get_module_sig metainfo file module_id =
   | SModuleInfo info -> info.smodule_param_sig, info.smodule_in_sig, info.smodule_out_sig
 ;;
 
-let get_mark_writer metainfo target_type gen_address gen_life =
+let rec get_mark_writer metainfo target_type gen_address gen_life =
   match target_type with
   | TBool | TInt | TFloat -> None
   | TState (file, module_id) ->
@@ -195,10 +199,13 @@ let get_mark_writer metainfo target_type gen_address gen_life =
         ()
     in
     Some writer
+  | TMode (_, _, t) ->
+    Format.printf "TMode case for get_mark_writer has not been implemented\n";
+    get_mark_writer metainfo t gen_address gen_life
   | _ -> assert false
 ;;
 
-let get_free_writer metainfo target_type gen_address =
+let rec get_free_writer metainfo target_type gen_address =
   match target_type with
   | TBool | TInt | TFloat -> None
   | TState (file, module_id) ->
@@ -225,6 +232,9 @@ let get_free_writer metainfo target_type gen_address =
       fprintf ppf "@[<h>free_%a(%a);@]" gen_ttuple_typename types gen_address ()
     in
     Some writer
+  | TMode (_, _, t) ->
+    Format.printf "TMode case for get_free_writer has not been implemented\n";
+    get_free_writer metainfo t gen_address
   | _ -> assert false
 ;;
 
