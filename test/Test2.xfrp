@@ -2,27 +2,38 @@ mode OnOff = Off | accessible On
 
 fun hoge(x,y) = x == y
 
+module Foo {
+  in  foo : 'OnOff Int
+  out bar : 'OnOff Int
+  with foo >= On, bar >= On
+  out node bar = foo
+}
+
 switchmodule Main {
-  in   clock(0)   : 'OnOff Int,
-       di         : Float
+  in   clock(0)   : Int,
+       di         : Float,
+       foo        : 'OnOff Int
   out  ctime(0)   : Int,
        otime(0)   : Int,
-       fan(False) : Bool
+       fan(False) : Bool,
+       bar        : 'OnOff Int
   init FanOff
 
-  state FanOff with clock >= On {
+  state FanOff with foo >= Off, bar >= On {
     out node ctime = ctime@last
 
     out node otime = 0
 
     out node fan = False
 
+    out node bar = 0
+
     switch :
       if di >=. 75.5 then FanOn(clock)
       else Retain
   }
 
-  state FanOn(begin : Int) with clock >= On {
+  state FanOn(begin : Int) with foo >= Off, bar >= On {
     out node ctime =
       let dt = clock - clock@last in
       ctime@last + dt
@@ -31,13 +42,15 @@ switchmodule Main {
 
     out node fan = True
 
+    out node bar = 0
+
     switch :
       if di <=. 74.5 then FanOff
       else if otime > 7200 then FanSleep
       else Retain
   }
 
-  state FanSleep with clock >= On {
+  state FanSleep with foo >= Off, bar >= Off {
     out node ctime = ctime@last
 
     out node otime = 0
@@ -47,6 +60,8 @@ switchmodule Main {
     node timer(1800) =
       let dt = clock - clock@last in
       timer@last - dt
+
+    newnode out bar = Foo <- foo
 
     switch :
       if timer <= 0 then FanOff else Retain

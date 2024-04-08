@@ -40,10 +40,6 @@ let rec adjust_level id level = function
 (* Unify type `t1` and `t2`. *)
 let rec unify t1 t2 =
   match t1, t2 with
-  | TMode ("", _, _), _ | _, TMode ("", _, _) -> assert false
-  | TMode (file1, mname1, t1), TMode (file2, mname2, t2) ->
-    if file1 = file2 && mname1 = mname2 then unify t1 t2 else raise_imcompatible t1 t2
-  | TMode (_, _, t1), t2 | t1, TMode (_, _, t2) -> unify t1 t2
   | TBool, TBool | TInt, TInt | TFloat, TFloat | TUnit, TUnit -> t1
   | TEmpty, _
   | _, TEmpty
@@ -68,6 +64,14 @@ let rec unify t1 t2 =
     adjust_level id level t;
     r := TVBound t;
     t
+  | TMode ("", _, _), _ | _, TMode ("", _, _) -> assert false
+  | TMode (file1, mname1, t1), TMode (file2, mname2, t2) ->
+    if file1 = file2 && mname1 = mname2
+    then (
+      let t = unify t1 t2 in
+      TMode (file1, mname1, t))
+    else raise_imcompatible t1 t2
+  | TMode (_, _, t1), t2 | t1, TMode (_, _, t2) -> unify t1 t2
   | _, _ -> raise_imcompatible t1 t2
 
 (* Unify type list `ts1` and `ts2`. *)
@@ -77,6 +81,14 @@ and unify_list ts1 ts2 =
   if len1 != len2
   then raise (UnifyError (TTuple ts1, TTuple ts2))
   else List.map2 unify ts1 ts2
+;;
+
+(* If t1 with TMode(...), keep the mode information *)
+let unify_resp_lhs_mode t1 t2 =
+  match t1, unify t1 t2 with
+  | TMode (_, _, _), (TMode (_, _, _) as t) -> t
+  | TMode (file, mode, _), t -> TMode (file, mode, t)
+  | _, t -> t
 ;;
 
 (* Generalize free variables. *)
@@ -267,7 +279,7 @@ let rec infer_pattern env _tenv level (ast, _) =
 
 let rec infer_expression env tenv level (ast, _) =
   let infer_uniop op e1 =
-    let ((_, te1) as e1') = infer_expression env tenv level e1 in
+    let ((_, te1) as e1') = infer_expression_acc env tenv level e1 in
     let ast' = EUniOp (op, e1') in
     match op with
     | UInv | UPlus | UMinus ->
@@ -281,8 +293,8 @@ let rec infer_expression env tenv level (ast, _) =
       ast', TBool
   in
   let infer_binop op e1 e2 =
-    let ((_, te1) as e1') = infer_expression env tenv level e1 in
-    let ((_, te2) as e2') = infer_expression env tenv level e2 in
+    let ((_, te1) as e1') = infer_expression_acc env tenv level e1 in
+    let ((_, te2) as e2') = infer_expression_acc env tenv level e2 in
     let ast' = EBinOp (op, e1', e2') in
     match op with
     | BMul | BDiv | BAdd | BSub | BMod | BShl | BShr | BAnd | BOr | BXor ->
@@ -325,16 +337,8 @@ let rec infer_expression env tenv level (ast, _) =
     | ModuleConst t
     | StateParam t
     | StateConst t
-    | NodeId (_, t) -> EId idref, t
-    | InaccNodeId modev ->
-      raise_err_pp (fun ppf ->
-        fprintf
-          ppf
-          "%a is inaccessible when its mode is %a"
-          pp_identifier
-          id
-          pp_identifier
-          modev)
+    | NodeId (_, t)
+    | InaccNodeId (_, t) -> EId idref, t
     | _ ->
       raise_err_pp (fun ppf ->
         fprintf ppf "invalid identifier reference : %a" pp_identifier id)
@@ -347,7 +351,7 @@ let rec infer_expression env tenv level (ast, _) =
   in
   let infer_variant c v =
     let ((cid, cinfo) as c) = infer_idref env tenv level c in
-    let ((_, tv) as v) = infer_expression env tenv level v in
+    let ((_, tv) as v) = infer_expression_acc env tenv level v in
     let ast = EVariant (c, v) in
     match cinfo with
     | ValueCons (_, tv2, tret) ->
@@ -360,14 +364,14 @@ let rec infer_expression env tenv level (ast, _) =
       raise_err_pp (fun ppf -> fprintf ppf "expected constructor : %a" pp_identifier cid)
   in
   let infer_tuple es =
-    let es' = List.map (infer_expression env tenv level) es in
+    let es' = List.map (infer_expression_acc env tenv level) es in
     let _, tes = List.split es' in
     let ast' = ETuple es' in
     ast', TTuple tes
   in
   let infer_funcall f args =
     let ((fid, finfo) as f) = infer_idref env tenv level f in
-    let args = List.map (infer_expression env tenv level) args in
+    let args = List.map (infer_expression_acc env tenv level) args in
     let _, targs = List.split args in
     let ast = EFuncall (f, args) in
     match finfo with
@@ -380,7 +384,7 @@ let rec infer_expression env tenv level (ast, _) =
   let infer_let binds body =
     let infer_binder (acc, nowenv) { binder_id = id, tid; binder_body = body } =
       let tid = read_typespec tenv level tid in
-      let ((_, tbody) as body') = infer_expression nowenv tenv (level + 1) body in
+      let ((_, tbody) as body') = infer_expression_acc nowenv tenv (level + 1) body in
       let () = generalize level tbody in
       let _ = unify tid tbody in
       let env = add_env_shadowing id (LocalId tbody) nowenv in
@@ -388,14 +392,14 @@ let rec infer_expression env tenv level (ast, _) =
       res :: acc, env
     in
     let binds', newenv = List.fold_left infer_binder ([], env) binds in
-    let ((_, tbody) as body') = infer_expression newenv tenv level body in
+    let ((_, tbody) as body') = infer_expression_acc newenv tenv level body in
     let ast' = ELet (List.rev binds', body') in
     ast', tbody
   in
   let infer_if etest ethen eelse =
-    let ((_, ttest) as etest') = infer_expression env tenv level etest in
-    let ((_, tthen) as ethen') = infer_expression env tenv level ethen in
-    let ((_, telse) as eelse') = infer_expression env tenv level eelse in
+    let ((_, ttest) as etest') = infer_expression_acc env tenv level etest in
+    let ((_, tthen) as ethen') = infer_expression_acc env tenv level ethen in
+    let ((_, telse) as eelse') = infer_expression_acc env tenv level eelse in
     let ast' = EIf (etest', ethen', eelse') in
     let _ = unify ttest TBool in
     let _ = unify tthen telse in
@@ -410,12 +414,12 @@ let rec infer_expression env tenv level (ast, _) =
           newbinds
           env
       in
-      let ((_, tbody) as body') = infer_expression newenv tenv level branch_body in
+      let ((_, tbody) as body') = infer_expression_acc newenv tenv level branch_body in
       let res = { branch_pat = pat'; branch_body = body' } in
       let _ = unify texpr tpat in
       res, tbody
     in
-    let ((_, texpr) as expr') = infer_expression env tenv (level + 1) expr in
+    let ((_, texpr) as expr') = infer_expression_acc env tenv (level + 1) expr in
     let () = generalize level texpr in
     let branchs', tbranchs = List.map (infer_branch texpr) branchs |> List.split in
     let ast' = ECase (expr', branchs') in
@@ -438,6 +442,20 @@ let rec infer_expression env tenv level (ast, _) =
   | EIf (etest, ethen, eelse) -> infer_if etest ethen eelse
   | ELet (binders, body) -> infer_let binders body
   | ECase (e, branchs) -> infer_case e branchs
+
+(* check accessiblity in addition *)
+and infer_expression_acc env tenv level ast =
+  match infer_expression env tenv level ast with
+  | EId (id, InaccNodeId (modev, _)), _ ->
+    raise_err_pp (fun ppf ->
+      fprintf
+        ppf
+        "%a is inaccessible when its mode is %a"
+        pp_identifier
+        id
+        pp_identifier
+        modev)
+  | e -> e
 ;;
 
 let infer_typedef _env tenv def =
@@ -482,7 +500,20 @@ let infer_fundef env tenv def =
 ;;
 
 let infer_node env tenv def =
-  let t = read_typespec tenv 1 def.node_type in
+  let t =
+    match Idmap.find def.node_id env with
+    | NodeId (_, t) -> t
+    | InaccNodeId (modev, _) ->
+      raise_err_pp (fun ppf ->
+        fprintf
+          ppf
+          "%a is inaccessible when its mode is %a"
+          pp_identifier
+          def.node_id
+          pp_identifier
+          modev)
+    | _ -> assert false
+  in
   let env = add_env "Retain" (LocalId t) env in
   let init =
     match def.node_init with
@@ -492,8 +523,8 @@ let infer_node env tenv def =
       Some expr
     | None -> None
   in
-  let ((_, tbody) as body) = infer_expression env tenv 1 def.node_body in
-  let t = unify t tbody in
+  let ((_, tbody) as body) = infer_expression_acc env tenv 1 def.node_body in
+  let t = unify_resp_lhs_mode t tbody in
   { def with node_init = init; node_body = body; node_type = t }
 ;;
 
@@ -633,7 +664,12 @@ let infer_module env tenv def =
         (fun env -> function
           | _, (_, ModeValue (_, true)) -> env
           | id, (modev, ModeValue (_, false)) ->
-            add_env_shadowing id (InaccNodeId modev) env
+            let t =
+              match Idmap.find id env with
+              | NodeId (_, t) -> t
+              | _ -> assert false
+            in
+            add_env_shadowing id (InaccNodeId (modev, t)) env
           | _ -> assert false)
         env
         annot
@@ -693,7 +729,12 @@ let infer_state env tenv file mname def =
         (fun env -> function
           | _, (_, ModeValue (_, true)) -> env
           | id, (modev, ModeValue (_, false)) ->
-            add_env_shadowing id (InaccNodeId modev) env
+            let t =
+              match Idmap.find id env with
+              | NodeId (_, t) -> t
+              | _ -> assert false
+            in
+            add_env_shadowing id (InaccNodeId (modev, t)) env
           | _ -> assert false)
         env
         annot
@@ -733,7 +774,7 @@ let infer_state env tenv file mname def =
   let infer_state_switch env tenv switch_expr : expression =
     let t = TState (file, mname) in
     let env = add_env "Retain" (LocalId t) env in
-    let astsw, tsw = infer_expression env tenv 1 switch_expr |> deref_expr_type in
+    let astsw, tsw = infer_expression_acc env tenv 1 switch_expr |> deref_expr_type in
     let t = unify t tsw in
     astsw, t
   in
