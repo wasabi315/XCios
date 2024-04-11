@@ -34,11 +34,7 @@ let define_state_fun metainfo file module_id state fun_writers =
           fprintf ppf "static void init_%s_%s" global_statename node.node_id
         in
         let gen_address ppf () =
-          fprintf
-            ppf
-            "%a[!current_side]"
-            (gen_state_node_address state_id)
-            (node.node_attr, node.node_id)
+          gen_state_node_last_address state_id ppf (node.node_attr, node.node_id)
         in
         let generator =
           { updatefun_ctx = CTXStateConst state_id
@@ -55,11 +51,10 @@ let define_state_fun metainfo file module_id state fun_writers =
         fprintf ppf "static void update_%s_%s" global_statename node.node_id
       in
       let gen_address ppf () =
-        fprintf
+        gen_state_node_curr_address
+          state_id
           ppf
-          "%a[current_side]"
-          (gen_state_node_address state_id)
-          (node.node_attr, node.node_id)
+          (node.node_attr, node.node_id, node.node_type)
       in
       let ctx = CTXStateNode (state_id, node.node_attr, node.node_id) in
       let generator =
@@ -86,7 +81,7 @@ let define_state_fun metainfo file module_id state fun_writers =
       ; newnodefun_gen_instance_name = gen_instance_name
       ; newnodefun_gen_memorytype = gen_memorytype
       ; newnodefun_gen_init = gen_state_init state_id
-      ; newnodefun_gen_bind_address = gen_state_node_address state_id
+      ; newnodefun_gen_bind_address = gen_state_node_curr_address state_id
       ; newnodefun_ctx_param = CTXStateConst state_id
       ; newnodefun_ctx_input = CTXStateNewnodeIn state_id
       }

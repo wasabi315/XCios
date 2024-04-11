@@ -5,25 +5,16 @@ open Env
 open Extension
 open Extension.Format
 
-exception UnifyError of t * t
 exception TypeError of string
 
 (* Raise type error with given message `msg`. *)
 let raise_err msg = raise (TypeError msg)
 
-(* Raise type error with message printed by `f_pp`. *)
-let raise_err_pp (f_pp : formatter -> unit) =
-  let msg =
-    f_pp str_formatter;
-    flush_str_formatter ()
-  in
-  raise (TypeError msg)
-;;
+(* Raise type error with message. *)
+let raise_err_pp fmt = kasprintf (fun msg -> raise (TypeError msg)) fmt
 
 (* Raise type imcompatible error with `t1` and `t2`. *)
-let raise_imcompatible t1 t2 =
-  raise_err_pp (fun ppf -> fprintf ppf "%a and %a is not compatible" pp_t t1 pp_t t2)
-;;
+let raise_imcompatible t1 t2 = raise_err_pp "%a and %a is not compatible" pp_t t1 pp_t t2
 
 (* Adjusting level of unification target pointed by another free variable
    with `id` and `level`. *)
@@ -80,16 +71,8 @@ and unify_list ts1 ts2 =
   let len1 = List.length ts1 in
   let len2 = List.length ts2 in
   if len1 != len2
-  then raise (UnifyError (TTuple ts1, TTuple ts2))
+  then raise_imcompatible (TTuple ts1) (TTuple ts2)
   else List.map2 unify ts1 ts2
-;;
-
-(* If t1 with TMode(...), keep the mode information *)
-let unify_resp_lhs_mode t1 t2 =
-  match t1, unify t1 t2 with
-  | TMode (_, _, _), (TMode (_, _, _) as t) -> t
-  | TMode (file, mode, _), t -> TMode (file, mode, t)
-  | _, t -> t
 ;;
 
 (* Generalize free variables. *)
@@ -126,12 +109,12 @@ let rec read_typespec tenv level = function
      | Some file ->
        let t' = read_typespec tenv level t in
        TMode (file, mode, t')
-     | None -> raise_err_pp (fun ppf -> fprintf ppf "Unknown : %a" pp_print_string mode))
+     | None -> raise_err_pp "Unknown : %a" pp_print_string mode)
   | TMode (_, _, _) -> assert false
   | TId ("", name) ->
     (match Idmap.find_opt name tenv.ts with
      | Some file -> TId (file, name)
-     | None -> raise_err_pp (fun ppf -> fprintf ppf "Unknown : %a" pp_print_string name))
+     | None -> raise_err_pp "Unknown : %a" pp_print_string name)
   | TId (_, _) -> assert false
   | TTuple ts ->
     let ts' = List.map (read_typespec tenv level) ts in
@@ -232,7 +215,7 @@ let infer_idref env _tenv level (id, _) =
     match Idmap.find_opt id env with
     | Some UnknownId -> assert false
     | Some idinfo -> map_idinfo_type (instantiate level) idinfo
-    | None -> raise_err_pp (fun ppf -> fprintf ppf "Unknown %a" pp_identifier id)
+    | None -> raise_err_pp "Unknown %a" pp_identifier id
   in
   id, idinfo
 ;;
@@ -273,9 +256,7 @@ let rec infer_pattern env _tenv level (ast, _) =
        let _ = unify tp tp2 in
        let res = PVariant (c, p'), tret in
        res, binds
-     | _ ->
-       raise_err_pp (fun ppf ->
-         fprintf ppf "expected value constructor : %a" pp_identifier cid))
+     | _ -> raise_err_pp "expected value constructor : %a" pp_identifier cid)
 ;;
 
 let rec infer_expression env tenv level (ast, _) =
@@ -339,23 +320,19 @@ let rec infer_expression env tenv level (ast, _) =
     | StateParam t
     | StateConst t
     | NodeId (_, t)
-    | InaccNodeId (_, t) -> EId idref, t
-    | _ ->
-      raise_err_pp (fun ppf ->
-        fprintf ppf "invalid identifier reference : %a" pp_identifier id)
+    | InaccNodeId (_, _, t) -> EId idref, t
+    | _ -> raise_err_pp "invalid identifier reference : %a" pp_identifier id
   in
   let infer_annot idref annot =
     let ((id, idinfo) as idref) = infer_idref env tenv level idref in
     match idinfo with
-    | InaccNodeId (_, TMode (_, _, _)) | NodeId (_, TMode (_, _, _)) ->
-      raise_err_pp (fun ppf ->
-        fprintf
-          ppf
-          "past values of I/O node with mode cannot be accessed: %a"
-          pp_identifier
-          id)
+    | InaccNodeId (_, _, TMode (_, _, _)) | NodeId (_, TMode (_, _, _)) ->
+      raise_err_pp
+        "past values of I/O node with mode cannot be accessed: %a"
+        pp_identifier
+        id
     | NodeId (_, t) -> EAnnot (idref, annot), t
-    | _ -> raise_err_pp (fun ppf -> fprintf ppf "expected node : %a" pp_identifier id)
+    | _ -> raise_err_pp "expected node : %a" pp_identifier id
   in
   let infer_variant c v =
     let ((cid, cinfo) as c) = infer_idref env tenv level c in
@@ -368,8 +345,7 @@ let rec infer_expression env tenv level (ast, _) =
     | StateCons (file, mname, tv2) ->
       let _ = unify tv tv2 in
       ast, TState (file, mname)
-    | _ ->
-      raise_err_pp (fun ppf -> fprintf ppf "expected constructor : %a" pp_identifier cid)
+    | _ -> raise_err_pp "expected constructor : %a" pp_identifier cid
   in
   let infer_tuple es =
     let es' = List.map (infer_expression_acc env tenv level) es in
@@ -386,8 +362,7 @@ let rec infer_expression env tenv level (ast, _) =
     | FunId (_, targs2, tret) ->
       let _ = unify_list targs targs2 in
       ast, tret
-    | _ ->
-      raise_err_pp (fun ppf -> fprintf ppf "expected a function : %a" pp_identifier fid)
+    | _ -> raise_err_pp "expected a function : %a" pp_identifier fid
   in
   let infer_let binds body =
     let infer_binder (acc, nowenv) { binder_id = id, tid; binder_body = body } =
@@ -454,15 +429,13 @@ let rec infer_expression env tenv level (ast, _) =
 (* check accessiblity in addition *)
 and infer_expression_acc env tenv level ast =
   match infer_expression env tenv level ast with
-  | EId (id, InaccNodeId (modev, _)), _ ->
-    raise_err_pp (fun ppf ->
-      fprintf
-        ppf
-        "%a is inaccessible when its mode is %a"
-        pp_identifier
-        id
-        pp_identifier
-        modev)
+  | EId (id, InaccNodeId (modev, _, _)), _ ->
+    raise_err_pp
+      "%a is inaccessible when its mode is %a"
+      pp_identifier
+      id
+      pp_identifier
+      modev
   | e -> e
 ;;
 
@@ -478,9 +451,7 @@ let infer_constdef env tenv def =
   in
   let t = unify t tbody in
   if not (is_concrete t)
-  then
-    raise_err_pp (fun ppf ->
-      fprintf ppf "type of constant is not concrete : %a" pp_identifier def.const_id)
+  then raise_err_pp "type of constant is not concrete : %a" pp_identifier def.const_id
   else { def with const_body = body; const_type = t }
 ;;
 
@@ -511,15 +482,13 @@ let infer_node env tenv undefined_out_nodes def =
   let t =
     match Idmap.find def.node_id env with
     | NodeId (_, t) -> t
-    | InaccNodeId (modev, _) ->
-      raise_err_pp (fun ppf ->
-        fprintf
-          ppf
-          "%a is inaccessible when its mode is %a"
-          pp_identifier
-          def.node_id
-          pp_identifier
-          modev)
+    | InaccNodeId (modev, _, _) ->
+      raise_err_pp
+        "%a is inaccessible when its mode is %a"
+        pp_identifier
+        def.node_id
+        pp_identifier
+        modev
     | _ -> assert false
   in
   let env = add_env "Retain" (LocalId t) env in
@@ -532,7 +501,13 @@ let infer_node env tenv undefined_out_nodes def =
     | None -> None
   in
   let ((_, tbody) as body) = infer_expression_acc env tenv 1 def.node_body in
-  let t = unify_resp_lhs_mode t tbody in
+  let t =
+    (* Keep mode information *)
+    match t, unify t tbody with
+    | TMode (_, _, _), (TMode (_, _, _) as t) -> t
+    | TMode (file, mode, _), t -> TMode (file, mode, t)
+    | _, t -> t
+  in
   (match def.node_attr with
    | OutputNode -> Hashset.remove undefined_out_nodes def.node_id
    | _ -> ());
@@ -549,6 +524,15 @@ let infer_newnode env tenv undefined_out_nodes def =
     let inputs = List.map (fun e -> infer_expression env tenv 1 e) def.newnode_inputs in
     let _, its2 = List.split inputs in
     let _ = unify_list its its2 in
+    (* If an input node of the instance expects type TMode(...), the actual input should also have type TMode(...) *)
+    List.iter2
+      (fun t1 t2 ->
+        match t1, t2 with
+        | TMode (_, _, _), TMode (_, _, _) -> ()
+        | (TMode (_, _, _) as t1), t2 -> raise_imcompatible t1 t2
+        | _ -> ())
+      its
+      its2;
     let ots2 =
       def.newnode_binds
       |> List.fold_left (fun acc (_, _, t) -> read_typespec tenv 1 t :: acc) []
@@ -563,6 +547,11 @@ let infer_newnode env tenv undefined_out_nodes def =
     List.iter
       (function
        | OutputNode, id, _ -> Hashset.remove undefined_out_nodes id
+       | (NormalNode | SharedNode), id, TMode _ ->
+         raise_err_pp
+           "output nodes with mode cannot be bound to normal/shared nodes: %a"
+           pp_identifier
+           id
        | _ -> ())
       binds;
     { def with
@@ -571,9 +560,7 @@ let infer_newnode env tenv undefined_out_nodes def =
     ; newnode_margs = margs
     ; newnode_inputs = inputs
     }
-  | _ ->
-    raise_err_pp (fun ppf ->
-      fprintf ppf "expected module : %a" pp_identifier def.newnode_id)
+  | _ -> raise_err_pp "expected module : %a" pp_identifier def.newnode_id
 ;;
 
 let infer_param _env tenv (id, t) = id, read_typespec tenv 1 t
@@ -638,9 +625,7 @@ let infer_whole_nodes env tenv undefined_out_nodes nodes newnodes =
     let body = deref_expr_type def.node_body in
     let () =
       if not (is_concrete t)
-      then
-        raise_err_pp (fun ppf ->
-          fprintf ppf "type of node is not concrete : %a" pp_identifier def.node_id)
+      then raise_err_pp "type of node is not concrete : %a" pp_identifier def.node_id
       else ()
     in
     { def with node_type = t; node_init = init; node_body = body }
@@ -655,12 +640,10 @@ let infer_whole_nodes env tenv undefined_out_nodes nodes newnodes =
   let nodes = Idmap.map deref_nodedef_type nodes in
   if not (Hashset.is_empty undefined_out_nodes)
   then
-    raise_err_pp (fun ppf ->
-      fprintf
-        ppf
-        "undefined output node(s) : %a"
-        (pp_list_comma pp_identifier)
-        (Hashset.to_list undefined_out_nodes));
+    raise_err_pp
+      "undefined output node(s) : %a"
+      (pp_list_comma pp_identifier)
+      (Hashset.to_list undefined_out_nodes);
   nodes, newnodes, env
 ;;
 
@@ -696,12 +679,12 @@ let infer_module env tenv def =
         (fun env -> function
           | _, (_, ModeValue (_, true)) -> env
           | id, (modev, ModeValue (_, false)) ->
-            let t =
+            let attr, t =
               match Idmap.find id env with
-              | NodeId (_, t) -> t
+              | NodeId (attr, t) -> attr, t
               | _ -> assert false
             in
-            add_env_shadowing id (InaccNodeId (modev, t)) env
+            add_env_shadowing id (InaccNodeId (modev, attr, t)) env
           | _ -> assert false)
         env
         annot
@@ -761,12 +744,12 @@ let infer_state env tenv file mname def =
         (fun env -> function
           | _, (_, ModeValue (_, true)) -> env
           | id, (modev, ModeValue (_, false)) ->
-            let t =
+            let attr, t =
               match Idmap.find id env with
-              | NodeId (_, t) -> t
+              | NodeId (attr, t) -> attr, t
               | _ -> assert false
             in
-            add_env_shadowing id (InaccNodeId (modev, t)) env
+            add_env_shadowing id (InaccNodeId (modev, attr, t)) env
           | _ -> assert false)
         env
         annot

@@ -2,13 +2,25 @@ open Extension.Format
 open Syntax
 open CodegenUtil
 open MetaInfo
+open Type
 
 let gen_param metainfo ppf (id, t) =
   fprintf ppf "@[<h>%a %a;@]" (gen_value_type metainfo) t pp_print_string id
 ;;
 
-let gen_header_node metainfo ppf (id, _, t) =
-  fprintf ppf "@[<h>%a %a[2];@]" (gen_value_type metainfo) t pp_print_string id
+let gen_header_node metainfo ppf = function
+  | id, _, TMode (file, mode_id, t) ->
+    fprintf
+      ppf
+      "@[<h>WithMode<%a, %a> %a;@]"
+      gen_mode_name
+      (file, mode_id)
+      (gen_value_type metainfo)
+      t
+      pp_print_string
+      id
+  | id, _, t ->
+    fprintf ppf "@[<h>%a %a[2];@]" (gen_value_type metainfo) t pp_print_string id
 ;;
 
 let gen_local_const metainfo ppf const =

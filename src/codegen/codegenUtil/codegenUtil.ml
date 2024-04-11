@@ -94,11 +94,7 @@ let rec gen_value_type metainfo ppf t =
     then pp_print_string ppf "int"
     else fprintf ppf "struct %a*" gen_tid_typename (file, type_name)
   | TTuple ts -> fprintf ppf "struct %a*" gen_ttuple_typename ts
-  | TMode (file, mode_id, t) ->
-    (* let inner = gen_value_type metainfo in
-       fprintf ppf "WithMode<%a, %a>" gen_mode_name (file, mode_id) inner t *)
-    Format.printf "TMode case for gen_value_type has not been implemented\n";
-    gen_value_type metainfo ppf t
+  | TMode (_, _, t) -> gen_value_type metainfo ppf t
   | _ -> assert false
 ;;
 
@@ -142,10 +138,35 @@ let gen_module_init ppf () = fprintf ppf "memory->init"
 let gen_state_init state_id ppf () = fprintf ppf "memory->statebody.%s.init" state_id
 let gen_module_node_address ppf (_nattr, node_id) = fprintf ppf "memory->%s" node_id
 
+let gen_module_node_curr_address ppf (_nattr, node_id, ty) =
+  match ty with
+  | TMode _ -> fprintf ppf "memory->%s.value" node_id
+  | _ -> fprintf ppf "memory->%s[current_side]" node_id
+;;
+
+let gen_module_node_last_address ppf (_nattr, node_id) =
+  fprintf ppf "memory->%s[!current_side]" node_id
+;;
+
 let gen_state_node_address state_id ppf (nattr, node_id) =
   match nattr with
   | InputNode | SharedNode | OutputNode -> fprintf ppf "memory->%s" node_id
   | NormalNode -> fprintf ppf "memory->statebody.%s.%s" state_id node_id
+;;
+
+let gen_state_node_curr_address state_id ppf (nattr, node_id, ty) =
+  match nattr, ty with
+  | (InputNode | OutputNode), TMode _ -> fprintf ppf "memory->%s.value" node_id
+  | _, TMode _ -> assert false
+  | (InputNode | SharedNode | OutputNode), _ ->
+    fprintf ppf "memory->%s[current_side]" node_id
+  | NormalNode, _ -> fprintf ppf "memory->statebody.%s.%s[current_side]" state_id node_id
+;;
+
+let gen_state_node_last_address state_id ppf (nattr, node_id) =
+  match nattr with
+  | InputNode | SharedNode | OutputNode -> fprintf ppf "memory->%s[!current_side]" node_id
+  | NormalNode -> fprintf ppf "memory->statebody.%s.%s[!current_side]" state_id node_id
 ;;
 
 let get_module_sig metainfo file module_id =
@@ -199,9 +220,7 @@ let rec get_mark_writer metainfo target_type gen_address gen_life =
         ()
     in
     Some writer
-  | TMode (_, _, t) ->
-    Format.printf "TMode case for get_mark_writer has not been implemented\n";
-    get_mark_writer metainfo t gen_address gen_life
+  | TMode (_, _, t) -> get_mark_writer metainfo t gen_address gen_life
   | _ -> assert false
 ;;
 
@@ -232,9 +251,7 @@ let rec get_free_writer metainfo target_type gen_address =
       fprintf ppf "@[<h>free_%a(%a);@]" gen_ttuple_typename types gen_address ()
     in
     Some writer
-  | TMode (_, _, t) ->
-    Format.printf "TMode case for get_free_writer has not been implemented\n";
-    get_free_writer metainfo t gen_address
+  | TMode (_, _, t) -> get_free_writer metainfo t gen_address
   | _ -> assert false
 ;;
 

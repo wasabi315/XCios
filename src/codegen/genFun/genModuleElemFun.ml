@@ -56,7 +56,9 @@ let define_module_elem_fun metainfo (file, xfrp_module) fun_writers =
         let gen_funname ppf () =
           fprintf ppf "static void init_%s_%s" global_modulename node.node_id
         in
-        let gen_address ppf () = fprintf ppf "memory->%s[!current_side]" node.node_id in
+        let gen_address ppf () =
+          gen_module_node_last_address ppf (node.node_attr, node.node_id)
+        in
         let generator =
           { updatefun_ctx = CTXModuleConst
           ; updatefun_body = expr
@@ -71,7 +73,9 @@ let define_module_elem_fun metainfo (file, xfrp_module) fun_writers =
       let gen_funname ppf () =
         fprintf ppf "static void update_%s_%s" global_modulename node.node_id
       in
-      let gen_address ppf () = fprintf ppf "memory->%s[current_side]" node.node_id in
+      let gen_address ppf () =
+        gen_module_node_curr_address ppf (node.node_attr, node.node_id, node.node_type)
+      in
       let generator =
         { updatefun_ctx = CTXModuleNode (node.node_attr, node.node_id)
         ; updatefun_body = node.node_body
@@ -94,7 +98,7 @@ let define_module_elem_fun metainfo (file, xfrp_module) fun_writers =
       ; newnodefun_gen_instance_name = gen_instance_name
       ; newnodefun_gen_memorytype = gen_memorytype
       ; newnodefun_gen_init = gen_module_init
-      ; newnodefun_gen_bind_address = gen_module_node_address
+      ; newnodefun_gen_bind_address = gen_module_node_curr_address
       ; newnodefun_ctx_param = CTXModuleConst
       ; newnodefun_ctx_input = CTXModuleNewnodeIn
       }

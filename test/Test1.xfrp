@@ -1,21 +1,31 @@
 mode OnOff = Off | accessible On
 
-module Main {
-  in  tmp : 'OnOff Float,      # temperature sensor
-      hmd : 'OnOff Float       # humidity sensor
-  out di : Float,       # discomfort index
-      fan(False) : Bool # fan switch
+module Id {
+  in input : 'OnOff (Float, Float)
+  out output : (Float, Float)
 
-  with tmp >= On, hmd >= Off
+  with input >= On
+  out node output = input
+}
+
+module Main {
+  in  tmphmd : 'OnOff (Float, Float)
+  out fan : 'OnOff (Float, Bool)
+
+  with tmphmd >= Off, fan >= On
+
+  newnode tmphmd1 = Id <- tmphmd
+  node tmp = case tmphmd1 of (t, _) -> t;
+  node hmd = case tmphmd1 of (_, h) -> h;
 
   # discomfort (temperature-humidity) index
-  out node di =
+  node di =
     0.81 *. tmp +. 0.01 *. hmd *. (0.99 *. tmp -. 14.3) +. 46.3
 
   # hysteresis offset
-  node ho = if fan@last then 0.5 else 0.5
+  node ho = if fanSwitch@last then 0.5 else 0.5
 
   # fan switch
-  out node fan = di >=. (- 75.0 +. ho)
+  out node fan = (di, di >=. (- 75.0 +. ho))
+  node fanSwitch(False) = case fan of (_, b) -> b;
 }
-

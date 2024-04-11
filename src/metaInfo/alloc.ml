@@ -184,6 +184,7 @@ let calc_req_begin all_data entry_file =
     | _ -> assert false
   and visit_param (_, t) req_begin = add_sizeof_type all_data t req_begin
   and visit_header_node (_, init, _) req_begin = visit_init init req_begin
+  and visit_top_input (_, _, t) req_begin = add_sizeof_type all_data t req_begin
   and visit_module _file xfrp_module req_begin =
     req_begin
     |> List.fold_right visit_param xfrp_module.module_params
@@ -213,9 +214,16 @@ let calc_req_begin all_data entry_file =
          xfrp_smodule.smodule_states
   in
   let filedata = Idmap.find entry_file all_data in
-  match Idmap.find "Main" filedata.xfrp_all with
-  | XFRPModule def -> alloc_amount_empty () |> visit_module entry_file def
-  | XFRPSModule def -> alloc_amount_empty () |> visit_smodule entry_file def
+  let main = Idmap.find "Main" filedata.xfrp_all in
+  match main with
+  | XFRPModule def ->
+    alloc_amount_empty ()
+    |> List.fold_right visit_top_input def.module_in
+    |> visit_module entry_file def
+  | XFRPSModule def ->
+    alloc_amount_empty ()
+    |> List.fold_right visit_top_input def.smodule_in
+    |> visit_smodule entry_file def
   | _ -> assert false
 ;;
 

@@ -9,7 +9,7 @@ type newnodefun_generator =
   ; newnodefun_gen_instance_name : writer
   ; newnodefun_gen_memorytype : writer
   ; newnodefun_gen_init : writer
-  ; newnodefun_gen_bind_address : (nattr * string) printer
+  ; newnodefun_gen_bind_address : (nattr * string * Type.t) printer
   ; newnodefun_ctx_param : codegen_ctx
   ; newnodefun_ctx_input : codegen_ctx
   }
@@ -44,8 +44,12 @@ let define_newnode_fun metainfo generator fun_writers =
   let gen_param_address param_id ppf () =
     fprintf ppf "%a.%a" gen_instance_address () pp_print_string param_id
   in
-  let gen_input_address input_id ppf () =
-    fprintf ppf "%a.%a[current_side]" gen_instance_address () pp_print_string input_id
+  let gen_input_address input_id ty ppf () =
+    match ty with
+    | Type.TMode (_, _, _) ->
+      fprintf ppf "%a.%a.value" gen_instance_address () pp_print_string input_id
+    | _ ->
+      fprintf ppf "%a.%a[current_side]" gen_instance_address () pp_print_string input_id
   in
   let define_param_fun (param_id, _, expr) fun_writers =
     let gen_funname ppf () =
@@ -61,19 +65,28 @@ let define_newnode_fun metainfo generator fun_writers =
     in
     define_updatefun metainfo generator fun_writers
   in
-  let define_input_fun (input_id, _, expr) fun_writers =
-    let gen_funname ppf () =
-      fprintf ppf "static void input_%a_%a" gen_instance_name () pp_print_string input_id
-    in
-    let generator =
-      { updatefun_ctx = ctx_input
-      ; updatefun_body = expr
-      ; updatefun_gen_funname = gen_funname
-      ; updatefun_gen_memorytype = gen_memorytype
-      ; updatefun_gen_address = gen_input_address input_id
-      }
-    in
-    define_updatefun metainfo generator fun_writers
+  let define_input_fun (input_id, ty, expr) fun_writers =
+    match snd expr with
+    | Type.TMode (_, _, _) -> fun_writers
+    | _ ->
+      let gen_funname ppf () =
+        fprintf
+          ppf
+          "static void input_%a_%a"
+          gen_instance_name
+          ()
+          pp_print_string
+          input_id
+      in
+      let generator =
+        { updatefun_ctx = ctx_input
+        ; updatefun_body = expr
+        ; updatefun_gen_funname = gen_funname
+        ; updatefun_gen_memorytype = gen_memorytype
+        ; updatefun_gen_address = gen_input_address input_id ty
+        }
+      in
+      define_updatefun metainfo generator fun_writers
   in
   let define_updatefun fun_writers =
     let gen_funname ppf () = fprintf ppf "static void update_%a" gen_instance_name () in
@@ -105,30 +118,52 @@ let define_newnode_fun metainfo generator fun_writers =
         (pp_print_list gen_single) ppf params
       in
       let gen_body_input ppf inputs =
-        let gen_single ppf (input_id, t, _) =
+        let gen_single ppf (input_id, ty, _) =
           let gen_body ppf () =
-            fprintf
-              ppf
-              "@[<h>input_%a_%a(memory);@]"
-              gen_instance_name
-              ()
-              pp_print_string
-              input_id
+            match ty with
+            | Type.TMode (_, _, _) -> ()
+            | _ ->
+              fprintf
+                ppf
+                "@[<h>input_%a_%a(memory);@]"
+                gen_instance_name
+                ()
+                pp_print_string
+                input_id
           in
-          let gen_address ppf () = (gen_input_address input_id) ppf () in
+          let gen_address ppf () = (gen_input_address input_id ty) ppf () in
           let gen_life ppf () = fprintf ppf "clock + 2" in
-          let gen_mark_opt = get_mark_writer metainfo t gen_address gen_life in
+          let gen_mark_opt =
+            match ty, get_mark_writer metainfo ty gen_address gen_life with
+            | Type.TMode (file, mode_id, _), Some writer ->
+              let writer ppf () =
+                let gen_head ppf () =
+                  fprintf
+                    ppf
+                    "if (%a_is_accessible(%a.%a.mode[current_side]))"
+                    gen_mode_name
+                    (file, mode_id)
+                    gen_instance_address
+                    ()
+                    pp_print_string
+                    input_id
+                in
+                gen_codeblock gen_head writer ppf ()
+              in
+              Some writer
+            | _, writer -> writer
+          in
           (gen_update gen_body gen_mark_opt None) ppf ()
         in
         (pp_print_list gen_single) ppf inputs
       in
       let gen_body_output ppf outputs =
-        let gen_single ppf (from_id, nattr, to_id, _) =
+        let gen_single ppf (from_id, nattr, to_id, ty) =
           fprintf
             ppf
-            "%a[current_side] = %a.%a[current_side];"
+            "%a = %a.%a[current_side];"
             gen_bind_address
-            (nattr, to_id)
+            (nattr, to_id, ty)
             gen_instance_address
             ()
             pp_print_string

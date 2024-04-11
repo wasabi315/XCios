@@ -333,15 +333,17 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
           | CTXSwitch state_id -> fprintf ppf "memory->state->params.%s.%s" state_id id
           | _ -> assert false
         in
-        let f_node nattr =
-          match codegen_ctx, nattr with
-          | CTXModuleNewnodeIn, _ | CTXModuleNode _, _ ->
+        let f_node nattr ty =
+          match codegen_ctx, nattr, ty with
+          | CTXModuleNewnodeIn, _, TMode (_, _, _) | CTXModuleNode _, _, TMode (_, _, _)
+            -> fprintf ppf "memory->%s.value" id
+          | CTXModuleNewnodeIn, _, _ | CTXModuleNode _, _, _ ->
             fprintf ppf "memory->%s[current_side]" id
-          | CTXStateNode (state_id, _, _), NormalNode
-          | CTXStateNewnodeIn state_id, NormalNode
-          | CTXSwitch state_id, NormalNode ->
+          | CTXStateNode (state_id, _, _), NormalNode, _
+          | CTXStateNewnodeIn state_id, NormalNode, _
+          | CTXSwitch state_id, NormalNode, _ ->
             fprintf ppf "memory->statebody.%s.%s[current_side]" state_id id
-          | CTXStateNode _, _ | CTXStateNewnodeIn _, _ | CTXSwitch _, _ ->
+          | CTXStateNode _, _, _ | CTXStateNewnodeIn _, _, _ | CTXSwitch _, _, _ ->
             fprintf ppf "memory->%s[current_side]" id
           | _ -> assert false
         in
@@ -351,7 +353,7 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
         | ModuleParam _ | ModuleConst _ -> f_module_value ()
         | StateConst _ -> f_state_const ()
         | StateParam _ -> f_state_param ()
-        | NodeId (nattr, _) -> f_node nattr
+        | NodeId (nattr, ty) -> f_node nattr ty
         | InaccNodeId _ ->
           Format.printf "InaccNodeId is not supported yet.\n";
           assert false

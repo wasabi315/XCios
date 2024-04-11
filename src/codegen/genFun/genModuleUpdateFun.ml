@@ -61,7 +61,8 @@ type iterbody_genereator =
   { iterbody_lifetime : lifetime
   ; iterbody_gen_prefix : writer
   ; iterbody_gen_init : writer
-  ; iterbody_gen_node_address : (nattr * string) printer
+  ; iterbody_gen_node_curr_address : (nattr * string * Type.t) printer
+  ; iterbody_gen_node_last_address : (nattr * string) printer
   }
 
 let get_module_iterbody_generator metainfo file module_id =
@@ -77,7 +78,8 @@ let get_module_iterbody_generator metainfo file module_id =
   { iterbody_lifetime = lifetime
   ; iterbody_gen_prefix = gen_prefix
   ; iterbody_gen_init = gen_module_init
-  ; iterbody_gen_node_address = gen_module_node_address
+  ; iterbody_gen_node_curr_address = gen_module_node_curr_address
+  ; iterbody_gen_node_last_address = gen_module_node_last_address
   }
 ;;
 
@@ -94,7 +96,8 @@ let get_state_iterbody_generator metainfo file module_id state_id =
   { iterbody_lifetime = lifetime
   ; iterbody_gen_prefix = gen_prefix
   ; iterbody_gen_init = gen_state_init state_id
-  ; iterbody_gen_node_address = gen_state_node_address state_id
+  ; iterbody_gen_node_curr_address = gen_state_node_curr_address state_id
+  ; iterbody_gen_node_last_address = gen_state_node_last_address state_id
   }
 ;;
 
@@ -105,7 +108,7 @@ let gen_iterbody_initlast metainfo generator ppf node =
   let lifetime = generator.iterbody_lifetime in
   let gen_prefix = generator.iterbody_gen_prefix in
   let gen_init = generator.iterbody_gen_init in
-  let gen_node_address = generator.iterbody_gen_node_address in
+  let gen_node_last_address = generator.iterbody_gen_node_last_address in
   let gen_update_body ppf () =
     fprintf ppf "@[<v>";
     fprintf ppf "if (%a) {@;<0 2>" gen_init ();
@@ -113,9 +116,7 @@ let gen_iterbody_initlast metainfo generator ppf node =
     fprintf ppf "}";
     fprintf ppf "@]"
   in
-  let gen_address ppf () =
-    fprintf ppf "%a[!current_side]" gen_node_address (node_attr, node_id)
-  in
+  let gen_address ppf () = gen_node_last_address ppf (node_attr, node_id) in
   let gen_life ppf () =
     fprintf ppf "entry + %d" (Idmap.find node_id lifetime.free_last)
   in
@@ -139,15 +140,29 @@ let gen_iterbody_node metainfo generator ppf node =
   let node_type = node.node_type in
   let lifetime = generator.iterbody_lifetime in
   let gen_prefix = generator.iterbody_gen_prefix in
-  let gen_node_address = generator.iterbody_gen_node_address in
+  let gen_node_curr_address = generator.iterbody_gen_node_curr_address in
   let gen_update_body ppf () =
     fprintf ppf "update_%a_%a(memory);" gen_prefix () pp_print_string node_id
   in
-  let gen_address ppf () =
-    fprintf ppf "%a[current_side]" gen_node_address (node_attr, node_id)
-  in
+  let gen_address ppf () = gen_node_curr_address ppf (node_attr, node_id, node_type) in
   let gen_life = gen_life_node_current lifetime node_id in
-  let gen_mark_opt = get_mark_writer metainfo node_type gen_address gen_life in
+  let gen_mark_opt =
+    match node_type, get_mark_writer metainfo node_type gen_address gen_life with
+    | TMode (file, mode_id, _), Some writer ->
+      let writer ppf () =
+        let gen_head ppf () =
+          fprintf
+            ppf
+            "if (%a_is_accessible(memory->%s.mode[current_side]))"
+            gen_mode_name
+            (file, mode_id)
+            node_id
+        in
+        gen_codeblock gen_head writer ppf ()
+      in
+      Some writer
+    | _, writer -> writer
+  in
   let gen_tick ppf () =
     fprintf ppf "clock = entry + %d;" (Idmap.find node_id lifetime.timestamp)
   in
@@ -167,16 +182,28 @@ let gen_state_iterbody_node metainfo file module_id state_id ppf node =
 let gen_iterbody_newnode metainfo generator ppf newnode =
   let lifetime = generator.iterbody_lifetime in
   let gen_prefix = generator.iterbody_gen_prefix in
-  let gen_node_address = generator.iterbody_gen_node_address in
+  let gen_node_curr_address = generator.iterbody_gen_node_curr_address in
   let gen_update_body ppf () =
     fprintf ppf "update_%a_%a(memory);" gen_prefix () gen_newnode_field newnode
   in
   let get_bind_mark_writer (nattr, node_id, t) =
-    let gen_address ppf () =
-      fprintf ppf "%a[current_side]" gen_node_address (nattr, node_id)
-    in
+    let gen_address ppf () = gen_node_curr_address ppf (nattr, node_id, t) in
     let gen_life = gen_life_node_current lifetime node_id in
-    get_mark_writer metainfo t gen_address gen_life
+    match t, get_mark_writer metainfo t gen_address gen_life with
+    | TMode (file, mode_id, _), Some writer ->
+      let writer ppf () =
+        let gen_head ppf () =
+          fprintf
+            ppf
+            "if (%a_is_accessible(memory->%s.mode[current_side]))"
+            gen_mode_name
+            (file, mode_id)
+            node_id
+        in
+        gen_codeblock gen_head writer ppf ()
+      in
+      Some writer
+    | _, writer -> writer
   in
   let gen_marks =
     List.fold_left
@@ -236,9 +263,29 @@ let get_init_nodedefs nodes =
 let get_input_remark_writers metainfo lifetime input_nodes =
   List.fold_left
     (fun writers (node_id, _, node_type) ->
-      let gen_address ppf () = fprintf ppf "memory->%s[current_side]" node_id in
+      let gen_address ppf () =
+        match node_type with
+        | TMode _ -> fprintf ppf "memory->%s.value" node_id
+        | _ -> fprintf ppf "memory->%s[current_side]" node_id
+      in
       let gen_life ppf () = gen_life_node_current lifetime node_id ppf () in
-      let mark_writer_opt = get_mark_writer metainfo node_type gen_address gen_life in
+      let mark_writer_opt =
+        match node_type, get_mark_writer metainfo node_type gen_address gen_life with
+        | Type.TMode (file, mode_id, _), Some writer ->
+          let writer ppf () =
+            let gen_head ppf () =
+              fprintf
+                ppf
+                "if (%a_is_accessible(memory->%s.mode[current_side]))"
+                gen_mode_name
+                (file, mode_id)
+                node_id
+            in
+            gen_codeblock gen_head writer ppf ()
+          in
+          Some writer
+        | _, writer -> writer
+      in
       match mark_writer_opt with
       | Some writer -> writer :: writers
       | None -> writers)

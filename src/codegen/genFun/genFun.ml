@@ -4,10 +4,12 @@ open GenTypeFun
 open GenMaterialFun
 open GenModuleFun
 open GenGlobalFun
+open GenModeFun
 
 let generate ppf metainfo =
   let fun_writers =
     []
+    |> define_is_accessibles metainfo
     |> define_type_fun metainfo
     |> define_material_fun metainfo
     |> define_module_fun metainfo
