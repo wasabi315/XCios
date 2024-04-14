@@ -126,7 +126,7 @@ let define_module_free_fun metainfo (file, xfrp_module) fun_writers =
           lifetime
           (fun ppf (nattr, id, ty) ->
             match ty with
-            | TMode _ -> fprintf ppf "memory->%s.value" id
+            | TMode _ -> fprintf ppf "memory->%s->value" id
             | _ -> fprintf ppf "%a[current_side]" gen_module_node_address (nattr, id))
           all_nodes
       in
@@ -210,7 +210,7 @@ let define_smodule_free_fun metainfo (file, xfrp_smodule) fun_writers =
           lifetime
           (fun ppf (nattr, id, ty) ->
             match ty with
-            | TMode _ -> fprintf ppf "memory->%s.value" id
+            | TMode _ -> fprintf ppf "memory->%s->value" id
             | _ ->
               fprintf
                 ppf

@@ -153,7 +153,7 @@ let gen_iterbody_node metainfo generator ppf node =
         let gen_head ppf () =
           fprintf
             ppf
-            "if (%a_is_accessible(memory->%s.mode[current_side]))"
+            "if (%a_is_accessible(memory->%s->mode[current_side]))"
             gen_mode_name
             (file, mode_id)
             node_id
@@ -195,7 +195,7 @@ let gen_iterbody_newnode metainfo generator ppf newnode =
         let gen_head ppf () =
           fprintf
             ppf
-            "if (%a_is_accessible(memory->%s.mode[current_side]))"
+            "if (%a_is_accessible(memory->%s->mode[current_side]))"
             gen_mode_name
             (file, mode_id)
             node_id
@@ -265,7 +265,7 @@ let get_input_remark_writers metainfo lifetime input_nodes =
     (fun writers (node_id, _, node_type) ->
       let gen_address ppf () =
         match node_type with
-        | TMode _ -> fprintf ppf "memory->%s.value" node_id
+        | TMode _ -> fprintf ppf "memory->%s->value" node_id
         | _ -> fprintf ppf "memory->%s[current_side]" node_id
       in
       let gen_life ppf () = gen_life_node_current lifetime node_id ppf () in
@@ -276,7 +276,7 @@ let get_input_remark_writers metainfo lifetime input_nodes =
             let gen_head ppf () =
               fprintf
                 ppf
-                "if (%a_is_accessible(memory->%s.mode[current_side]))"
+                "if (%a_is_accessible(memory->%s->mode[current_side]))"
                 gen_mode_name
                 (file, mode_id)
                 node_id

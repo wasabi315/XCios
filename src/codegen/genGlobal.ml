@@ -55,12 +55,30 @@ let gen_global_consts ppf metainfo =
   if all_consts = [] then () else fprintf ppf "@,%a" (pp_print_list gen_single) all_consts
 ;;
 
+let gen_io_nodes ppf metainfo in_out_sig =
+  let gen_single = function
+    | id, TMode (file, mode, t) ->
+      fprintf
+        ppf
+        "@,WithMode<%a, %a> %a;"
+        gen_mode_name
+        (file, mode)
+        (gen_value_type metainfo)
+        t
+        pp_identifier
+        id
+    | _ -> ()
+  in
+  List.iter gen_single in_out_sig
+;;
+
 let generate ppf metainfo =
   let entry_file = metainfo.entry_file in
-  let toplevel_clockperiod =
+  let toplevel_clockperiod, in_sig, out_sig =
     match Hashtbl.find metainfo.moduledata (entry_file, "Main") with
-    | ModuleInfo info -> info.module_clockperiod
-    | SModuleInfo info -> info.smodule_clockperiod
+    | ModuleInfo info -> info.module_clockperiod, info.module_in_sig, info.module_out_sig
+    | SModuleInfo info ->
+      info.smodule_clockperiod, info.smodule_in_sig, info.smodule_out_sig
   in
   let iter_period = toplevel_clockperiod + 1 in
   (* for global const *)
@@ -70,6 +88,8 @@ let generate ppf metainfo =
   fprintf ppf "@,@[<h>int current_side;@]";
   gen_global_consts ppf metainfo;
   gen_type_globals ppf metainfo;
+  fprintf ppf "@,";
+  gen_io_nodes ppf metainfo (in_sig @ out_sig);
   fprintf ppf "@,@,@[<h>%a memory;@]" gen_module_memory_type (entry_file, "Main");
   fprintf ppf "@]"
 ;;

@@ -59,20 +59,27 @@ let add_extern_prototype metainfo prototype_writers =
     let entry_file = metainfo.entry_file in
     get_module_sig metainfo entry_file "Main"
   in
-  let gen_protype_args ppf signature =
-    (pp_print_list
-       (fun ppf (_, t) -> fprintf ppf "%a*" (gen_value_type metainfo) t)
-       ~pp_sep:pp_print_commaspace)
+  let gen_input_prototype (id, t) ppf () =
+    fprintf
       ppf
-      signature
+      "@[<h>extern %a input_%a();@]"
+      (gen_value_type metainfo)
+      t
+      pp_identifier
+      id
   in
-  let gen_input_prototype ppf () =
-    fprintf ppf "@[<h>extern void input(%a);@]" gen_protype_args in_sig
+  let gen_output_prototype (id, t) ppf () =
+    fprintf
+      ppf
+      "@[<h>extern void output_%a(%a);@]"
+      pp_identifier
+      id
+      (gen_value_type metainfo)
+      t
   in
-  let gen_output_prototype ppf () =
-    fprintf ppf "@[<h>extern void output(%a);@]" gen_protype_args out_sig
-  in
-  prototype_writers |> List.cons gen_input_prototype |> List.cons gen_output_prototype
+  prototype_writers
+  |> List.append (List.map gen_input_prototype in_sig)
+  |> List.append (List.map gen_output_prototype out_sig)
 ;;
 
 let gen_activate_fun ppf metainfo =
@@ -111,25 +118,59 @@ let gen_activate_fun ppf metainfo =
       all_consts
     |> List.rev
   in
-  let gen_body_input ppf () =
-    let gen_input_arg ppf () =
-      (pp_print_list
-         (fun ppf (id, _) -> fprintf ppf "&memory.%s[current_side]" id)
-         ~pp_sep:pp_print_commaspace)
-        ppf
-        in_sig
+  let gen_io_node_init ppf io_sig =
+    let gen_single = function
+      | id, Type.TMode _ ->
+        fprintf ppf "@,memory.%a = &%a;" pp_identifier id pp_identifier id
+      | _ -> ()
     in
-    fprintf ppf "@[<h>input(@[<hov>%a@]);@]" gen_input_arg ()
+    List.iter gen_single io_sig
+  in
+  let gen_body_input ppf () =
+    let gen_single = function
+      | id, Type.TMode (file, mode, _) ->
+        fprintf
+          ppf
+          "@,if (%a_is_accessible(%a.mode[current_side])) {@;<0 2>"
+          gen_mode_name
+          (file, mode)
+          pp_identifier
+          id;
+        fprintf ppf "%a.value = input_%a();@," pp_identifier id pp_identifier id;
+        fprintf ppf "}"
+      | id, _ ->
+        fprintf
+          ppf
+          "@,memory.%a[current_side] = input_%a();"
+          pp_identifier
+          id
+          pp_identifier
+          id
+    in
+    List.iter gen_single in_sig
   in
   let gen_body_output ppf () =
-    let gen_output_arg ppf () =
-      (pp_print_list
-         (fun ppf (id, _) -> fprintf ppf "&memory.%s[current_side]" id)
-         ~pp_sep:pp_print_commaspace)
-        ppf
-        out_sig
+    let gen_single = function
+      | id, Type.TMode (file, mode, _) ->
+        fprintf
+          ppf
+          "@,if (%a_is_accessible(%a.mode[current_side])) {@;<0 2>"
+          gen_mode_name
+          (file, mode)
+          pp_identifier
+          id;
+        fprintf ppf "output_%a(%a.value);@," pp_identifier id pp_identifier id;
+        fprintf ppf "}"
+      | id, _ ->
+        fprintf
+          ppf
+          "@,output_%a(memory.%a[current_side]);"
+          pp_identifier
+          id
+          pp_identifier
+          id
     in
-    fprintf ppf "@[<h>output(@[<hov>%a@]);@]" gen_output_arg ()
+    List.iter gen_single out_sig
   in
   let gen_body_loop ppf () =
     fprintf ppf "clock = 0;";
@@ -137,9 +178,9 @@ let gen_activate_fun ppf metainfo =
     then ()
     else fprintf ppf "@,%a" (exec_all_writers ()) const_remark_writers;
     fprintf ppf "@,clock = 1;";
-    fprintf ppf "@,%a" gen_body_input ();
+    fprintf ppf "%a" gen_body_input ();
     fprintf ppf "@,update_%a(&memory);" gen_global_modulename (entry_file, "Main");
-    fprintf ppf "@,%a" gen_body_output ();
+    fprintf ppf "%a" gen_body_output ();
     fprintf ppf "@,clock = period;";
     fprintf ppf "@,refresh_mark();";
     fprintf ppf "@,current_side = !current_side;";
@@ -157,6 +198,7 @@ let gen_activate_fun ppf metainfo =
     if all_consts = []
     then ()
     else fprintf ppf "@,%a" (pp_print_list gen_body_const_init) all_consts;
+    gen_io_node_init ppf (in_sig @ out_sig);
     fprintf ppf "@,memory.init = 1;";
     fprintf ppf "@,while (1) {@;<0 2>";
     fprintf ppf "@[<v>%a@]@," gen_body_loop ();

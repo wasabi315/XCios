@@ -47,7 +47,7 @@ let define_newnode_fun metainfo generator fun_writers =
   let gen_input_address input_id ty ppf () =
     match ty with
     | Type.TMode (_, _, _) ->
-      fprintf ppf "%a.%a.value" gen_instance_address () pp_print_string input_id
+      fprintf ppf "%a.%a->value" gen_instance_address () pp_print_string input_id
     | _ ->
       fprintf ppf "%a.%a[current_side]" gen_instance_address () pp_print_string input_id
   in
@@ -140,7 +140,7 @@ let define_newnode_fun metainfo generator fun_writers =
                 let gen_head ppf () =
                   fprintf
                     ppf
-                    "if (%a_is_accessible(%a.%a.mode[current_side]))"
+                    "if (%a_is_accessible(%a.%a->mode[current_side]))"
                     gen_mode_name
                     (file, mode_id)
                     gen_instance_address

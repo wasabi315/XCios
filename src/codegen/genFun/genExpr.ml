@@ -336,7 +336,7 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
         let f_node nattr ty =
           match codegen_ctx, nattr, ty with
           | CTXModuleNewnodeIn, _, TMode (_, _, _) | CTXModuleNode _, _, TMode (_, _, _)
-            -> fprintf ppf "memory->%s.value" id
+            -> fprintf ppf "memory->%s->value" id
           | CTXModuleNewnodeIn, _, _ | CTXModuleNode _, _, _ ->
             fprintf ppf "memory->%s[current_side]" id
           | CTXStateNode (state_id, _, _), NormalNode, _

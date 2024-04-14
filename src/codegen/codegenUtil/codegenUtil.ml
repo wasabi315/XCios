@@ -140,7 +140,7 @@ let gen_module_node_address ppf (_nattr, node_id) = fprintf ppf "memory->%s" nod
 
 let gen_module_node_curr_address ppf (_nattr, node_id, ty) =
   match ty with
-  | TMode _ -> fprintf ppf "memory->%s.value" node_id
+  | TMode _ -> fprintf ppf "memory->%s->value" node_id
   | _ -> fprintf ppf "memory->%s[current_side]" node_id
 ;;
 
@@ -156,7 +156,7 @@ let gen_state_node_address state_id ppf (nattr, node_id) =
 
 let gen_state_node_curr_address state_id ppf (nattr, node_id, ty) =
   match nattr, ty with
-  | (InputNode | OutputNode), TMode _ -> fprintf ppf "memory->%s.value" node_id
+  | (InputNode | OutputNode), TMode _ -> fprintf ppf "memory->%s->value" node_id
   | _, TMode _ -> assert false
   | (InputNode | SharedNode | OutputNode), _ ->
     fprintf ppf "memory->%s[current_side]" node_id
