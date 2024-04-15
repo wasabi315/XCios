@@ -82,14 +82,20 @@ and visit_newnode moduledata def (clock, lifetime, mode_calc) =
       lifetime
       def.newnode_inputs
   in
-  let clock, in_sig, out_sig =
+  let modul, clock, in_sig, out_sig =
     match def.newnode_module with
     | module_id, ModuleCons (file, _, _, _) ->
       (match Hashtbl.find moduledata (file, module_id) with
        | ModuleInfo info ->
-         clock + info.module_clockperiod, info.module_in_sig, info.module_out_sig
+         ( (file, module_id)
+         , clock + info.module_clockperiod
+         , info.module_in_sig
+         , info.module_out_sig )
        | SModuleInfo info ->
-         clock + info.smodule_clockperiod, info.smodule_in_sig, info.smodule_out_sig)
+         ( (file, module_id)
+         , clock + info.smodule_clockperiod
+         , info.smodule_in_sig
+         , info.smodule_out_sig ))
     | _ -> assert false
   in
   let lifetime =
@@ -106,7 +112,7 @@ and visit_newnode moduledata def (clock, lifetime, mode_calc) =
         | EId (id1, _), Type.TMode _ ->
           let entry = Idmap.find id1 mode_calc in
           let entry =
-            { entry with child_modev = (def.newnode_id, id2) :: entry.child_modev }
+            { entry with child_modev = (modul, def.newnode_id, id2) :: entry.child_modev }
           in
           Idmap.add id1 entry mode_calc
         | _ -> mode_calc)
@@ -121,7 +127,7 @@ and visit_newnode moduledata def (clock, lifetime, mode_calc) =
         | Type.TMode _ ->
           let entry = Idmap.find id1 mode_calc in
           let entry =
-            { entry with child_modev = (def.newnode_id, id2) :: entry.child_modev }
+            { entry with child_modev = (modul, def.newnode_id, id2) :: entry.child_modev }
           in
           Idmap.add id1 entry mode_calc
         | _ -> mode_calc)

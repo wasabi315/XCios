@@ -21,7 +21,10 @@ let gen_with_mode ppf =
   fprintf ppf "@]@,};@,@,"
 ;;
 
+let gen_max ppf = fprintf ppf "#define MAX(a, b) ((a) > (b) ? (a) : (b))@,@,"
+
 let generate ppf metainfo =
   gen_with_mode ppf;
+  gen_max ppf;
   pp_list_break2 gen_mode ppf metainfo.typedata.modes
 ;;

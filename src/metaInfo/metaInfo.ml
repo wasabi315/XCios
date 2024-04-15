@@ -99,12 +99,13 @@ let pp_signature ppf signature =
 type mode_calc =
   { mode_type : string * identifier (* file * mode_id *)
   ; self_modev : identifier (* mode value specified by mode annotation *)
-  ; child_modev : (identifier * identifier) list (* (newnode_id * io_node_name) list *)
+  ; child_modev : ((string * identifier) * identifier * identifier) list
+      (* (instantiated module_id * newnode_id * io_node_name) list *)
   }
 
 let pp_mode_calc ppf modec =
-  let pp_child_modev_elem ppf (newnode_id, io_name) =
-    fprintf ppf "%s -> %s" newnode_id io_name
+  let pp_child_modev_elem ppf ((file, module_id), newnode_id, io_name) =
+    fprintf ppf "%s(%s:%s).%s" newnode_id file module_id io_name
   in
   fprintf ppf "@[<v>";
   fprintf ppf "mode_type: %s:%s" (fst modec.mode_type) (snd modec.mode_type);
