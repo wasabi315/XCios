@@ -9,6 +9,16 @@ module Hashset = struct
   let to_list s = Hashtbl.to_seq_keys s |> List.of_seq
 end
 
+module List = struct
+  include List
+
+  let pairs xs =
+    List.concat_map
+      (fun x -> List.concat_map (fun y -> if x = y then [] else [ x, y ]) xs)
+      xs
+  ;;
+end
+
 module Format = struct
   include Format
 

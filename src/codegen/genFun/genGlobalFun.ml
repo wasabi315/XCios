@@ -1,7 +1,24 @@
+open Extension
 open Extension.Format
 open Syntax
 open CodegenUtil
 open MetaInfo
+
+let gen_hook_name ppf (node_id, mode_id, from, to_) =
+  fprintf
+    ppf
+    "hook_%a_%a_%a_to_%a_%a"
+    pp_identifier
+    node_id
+    gen_mode_name
+    mode_id
+    pp_identifier
+    from
+    gen_mode_name
+    mode_id
+    pp_identifier
+    to_
+;;
 
 let define_refresh_mark_fun metainfo fun_writers =
   let gen_funname ppf () = fprintf ppf "static void refresh_mark" in
@@ -77,9 +94,28 @@ let add_extern_prototype metainfo prototype_writers =
       (gen_value_type metainfo)
       t
   in
+  let gen_hook_prototypes = function
+    | id, Type.TMode (file, mode_id, _) ->
+      let global_mode_id = file, mode_id in
+      let _, modedef =
+        List.find
+          (fun (file', def) -> file = file' && def.mode_id = mode_id)
+          metainfo.typedata.modes
+      in
+      let all_transitions = List.pairs (modedef.mode_vals @ modedef.mode_acc_vals) in
+      all_transitions
+      |> List.map (fun (from, to_) ppf () ->
+        fprintf
+          ppf
+          "@[<h>extern void %a();@]"
+          gen_hook_name
+          (id, global_mode_id, from, to_))
+    | _ -> []
+  in
   prototype_writers
   |> List.append (List.map gen_input_prototype in_sig)
   |> List.append (List.map gen_output_prototype out_sig)
+  |> List.append (List.concat_map gen_hook_prototypes (in_sig @ out_sig))
 ;;
 
 let gen_activate_fun ppf metainfo =
@@ -120,8 +156,69 @@ let gen_activate_fun ppf metainfo =
   in
   let gen_io_node_init ppf io_sig =
     let gen_single = function
-      | id, Type.TMode _ ->
+      | id, Type.TMode (file, mode_id, _) ->
+        let _, modedef =
+          List.find
+            (fun (file', def) -> file = file' && def.mode_id = mode_id)
+            metainfo.typedata.modes
+        in
+        let smallest_modev =
+          match modedef.mode_vals @ modedef.mode_acc_vals with
+          | [] -> assert false
+          | modev :: _ -> modev
+        in
+        fprintf
+          ppf
+          "@,%a.mode[!current_side] = %a::%a;"
+          pp_identifier
+          id
+          gen_mode_name
+          (file, mode_id)
+          pp_identifier
+          smallest_modev;
         fprintf ppf "@,memory.%a = &%a;" pp_identifier id pp_identifier id
+      | _ -> ()
+    in
+    List.iter gen_single io_sig
+  in
+  let gen_hook_calls ppf io_sig =
+    let gen_single = function
+      | id, Type.TMode (file, mode_id, _) ->
+        let global_mode_id = file, mode_id in
+        let _, modedef =
+          List.find
+            (fun (file', def) -> file = file' && def.mode_id = mode_id)
+            metainfo.typedata.modes
+        in
+        let all_transitions = List.pairs (modedef.mode_vals @ modedef.mode_acc_vals) in
+        fprintf
+          ppf
+          "@,%a.mode[current_side] = %a(&memory);"
+          pp_identifier
+          id
+          gen_mode_calc_fun_name
+          ((entry_file, "Main"), id);
+        all_transitions
+        |> List.iter (fun (from, to_) ->
+          fprintf
+            ppf
+            "@,\
+             @[<v 2>if (%a.mode[!current_side] == %a::%a && %a.mode[current_side] == \
+             %a::%a) {"
+            pp_identifier
+            id
+            gen_mode_name
+            global_mode_id
+            pp_identifier
+            from
+            pp_identifier
+            id
+            gen_mode_name
+            global_mode_id
+            pp_identifier
+            to_;
+          fprintf ppf "@,%a();" gen_hook_name (id, global_mode_id, from, to_);
+          fprintf ppf "@]@,}")
       | _ -> ()
     in
     List.iter gen_single io_sig
@@ -172,12 +269,14 @@ let gen_activate_fun ppf metainfo =
     in
     List.iter gen_single out_sig
   in
+  let io_sig = in_sig @ out_sig in
   let gen_body_loop ppf () =
     fprintf ppf "clock = 0;";
     if const_remark_writers = []
     then ()
     else fprintf ppf "@,%a" (exec_all_writers ()) const_remark_writers;
     fprintf ppf "@,clock = 1;";
+    gen_hook_calls ppf io_sig;
     fprintf ppf "%a" gen_body_input ();
     fprintf ppf "@,update_%a(&memory);" gen_global_modulename (entry_file, "Main");
     fprintf ppf "%a" gen_body_output ();
@@ -198,7 +297,7 @@ let gen_activate_fun ppf metainfo =
     if all_consts = []
     then ()
     else fprintf ppf "@,%a" (pp_print_list gen_body_const_init) all_consts;
-    gen_io_node_init ppf (in_sig @ out_sig);
+    gen_io_node_init ppf io_sig;
     fprintf ppf "@,memory.init = 1;";
     fprintf ppf "@,while (1) {@;<0 2>";
     fprintf ppf "@[<v>%a@]@," gen_body_loop ();

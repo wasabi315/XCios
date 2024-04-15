@@ -19,6 +19,12 @@ module Hashset : sig
   val to_list : 'a t -> 'a list
 end
 
+module List : sig
+  include module type of List
+
+  val pairs : 'a list -> ('a * 'a) list
+end
+
 module Format : sig
   include module type of Format
 

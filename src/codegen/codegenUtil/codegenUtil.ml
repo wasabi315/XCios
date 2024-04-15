@@ -134,6 +134,10 @@ let gen_tstate_consname ppf (file, module_id, cons_id) =
   fprintf ppf "%a_%a" gen_tstate_typename (file, module_id) pp_print_string cons_id
 ;;
 
+let gen_mode_calc_fun_name ppf (modul, node_id) =
+  fprintf ppf "%a_calc_mode_%a" gen_global_modulename modul pp_identifier node_id
+;;
+
 let gen_module_init ppf () = fprintf ppf "memory->init"
 let gen_state_init state_id ppf () = fprintf ppf "memory->statebody.%s.init" state_id
 let gen_module_node_address ppf (_nattr, node_id) = fprintf ppf "memory->%s" node_id

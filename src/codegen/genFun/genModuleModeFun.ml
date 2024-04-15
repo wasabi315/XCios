@@ -9,16 +9,12 @@ let gen_newnode_field ppf newnode_id =
   fprintf ppf "newnode%s" number_str
 ;;
 
-let gen_funname ppf (modul, node_id) =
-  fprintf ppf "%a_calc_mode_%a" gen_global_modulename modul pp_identifier node_id
-;;
-
 let gen_mode_calc ppf mode_calc =
   let gen_child_mode_calc ppf (child_module_id, newnode_id, io_node_id) =
     fprintf
       ppf
       "%a(&memory->%a)"
-      gen_funname
+      gen_mode_calc_fun_name
       (child_module_id, io_node_id)
       gen_newnode_field
       newnode_id
@@ -56,7 +52,7 @@ let define_module_mode_calc_fun metainfo (file, modul) fun_writers =
         "static enum %a %a(%a* memory)"
         gen_mode_name
         mode_calc.mode_type
-        gen_funname
+        gen_mode_calc_fun_name
         (global_module_id, node_id)
         gen_module_memory_type
         global_module_id
@@ -97,7 +93,6 @@ let define_smodule_mode_calc_fun metainfo (file, modul) fun_writers =
       info.state_mode_calc
       Idmap.empty
   in
-  printf "%a" (pp_idmap (pp_idmap pp_mode_calc)) mode_calcs;
   let define_single node_id mode_calcs fun_writers =
     if Idmap.is_empty mode_calcs
     then fun_writers
@@ -108,7 +103,7 @@ let define_smodule_mode_calc_fun metainfo (file, modul) fun_writers =
           "static enum %a %a(%a* memory)"
           gen_mode_name
           (snd (Idmap.choose mode_calcs)).mode_type
-          gen_funname
+          gen_mode_calc_fun_name
           (global_module_id, node_id)
           gen_module_memory_type
           global_module_id
