@@ -96,12 +96,31 @@ let pp_signature ppf signature =
     signature
 ;;
 
+type mode_calc =
+  { mode_type : string * identifier (* file * mode_id *)
+  ; self_modev : identifier (* mode value specified by mode annotation *)
+  ; child_modev : (identifier * identifier) list (* (newnode_id * io_node_name) list *)
+  }
+
+let pp_mode_calc ppf modec =
+  let pp_child_modev_elem ppf (newnode_id, io_name) =
+    fprintf ppf "%s -> %s" newnode_id io_name
+  in
+  fprintf ppf "@[<v>";
+  fprintf ppf "mode_type: %s:%s" (fst modec.mode_type) (snd modec.mode_type);
+  fprintf ppf "@,self_modev: %s" modec.self_modev;
+  fprintf ppf "@,@[<hov 2>child_modev: ";
+  fprintf ppf "@,%a@]" (pp_list_comma pp_child_modev_elem) modec.child_modev;
+  fprintf ppf "@]"
+;;
+
 type module_info =
   { module_clockperiod : int
   ; module_param_sig : (identifier * Type.t) list
   ; module_in_sig : (identifier * Type.t) list
   ; module_out_sig : (identifier * Type.t) list
   ; module_lifetime : lifetime
+  ; module_mode_calc : mode_calc Idmap.t
   }
 
 let pp_module_info ppf module_info =
@@ -111,6 +130,7 @@ let pp_module_info ppf module_info =
   fprintf ppf "@,in_sig: @[<h>%a@]" pp_signature module_info.module_in_sig;
   fprintf ppf "@,out_sig: @[<h>%a@]" pp_signature module_info.module_out_sig;
   fprintf ppf "@,life_time:@;<0 2>%a" pp_lifetime module_info.module_lifetime;
+  fprintf ppf "@,mode_calc:@;<0 2>%a" (pp_idmap pp_mode_calc) module_info.module_mode_calc;
   fprintf ppf "@]"
 ;;
 
@@ -120,6 +140,7 @@ type smodule_info =
   ; smodule_in_sig : (identifier * Type.t) list
   ; smodule_out_sig : (identifier * Type.t) list
   ; state_lifetime : lifetime Idmap.t
+  ; state_mode_calc : mode_calc Idmap.t Idmap.t
   }
 
 let pp_smodule_info ppf smodule_info =
@@ -133,6 +154,11 @@ let pp_smodule_info ppf smodule_info =
     "@,life_time:@;<0 2>@[<v>%a@]"
     (pp_idmap pp_lifetime)
     smodule_info.state_lifetime;
+  fprintf
+    ppf
+    "@,state_mode_calc:@;<0 2>@[<v>%a@]"
+    (pp_idmap (pp_idmap pp_mode_calc))
+    smodule_info.state_mode_calc;
   fprintf ppf "@]"
 ;;
 

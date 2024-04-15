@@ -71,7 +71,7 @@ type idinfo =
   | StateConst of Type.t
   | NodeId of nattr * Type.t
   | InaccNodeId of identifier * nattr * Type.t
-  | ModeValue of string * bool
+  | ModeValue of string * string * bool
 
 let pp_idinfo ppf = function
   | UnknownId -> fprintf ppf "unknown"
@@ -87,7 +87,8 @@ let pp_idinfo ppf = function
   | StateConst _ -> fprintf ppf "state const"
   | NodeId (_, _) -> fprintf ppf "node"
   | InaccNodeId (_, _, _) -> fprintf ppf "inaccessible node"
-  | ModeValue (file, _) -> fprintf ppf "mode value:%a" pp_print_string file
+  | ModeValue (file, mode_id, _) ->
+    fprintf ppf "mode value:%s:%a" file pp_identifier mode_id
 ;;
 
 let map_idinfo_type (f : Type.t -> Type.t) (idinfo : idinfo) : idinfo =
@@ -115,7 +116,7 @@ let map_idinfo_type (f : Type.t -> Type.t) (idinfo : idinfo) : idinfo =
   | StateConst t -> StateConst (f t)
   | NodeId (attr, t) -> NodeId (attr, f t)
   | InaccNodeId (modev, attr, t) -> InaccNodeId (modev, attr, t)
-  | ModeValue (file, acc) -> ModeValue (file, acc)
+  | ModeValue (file, mode_id, acc) -> ModeValue (file, mode_id, acc)
 ;;
 
 type idref = identifier * idinfo

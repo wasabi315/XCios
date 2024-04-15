@@ -75,19 +75,21 @@ let rec visit_node def (clock, lifetime) =
   in
   clock, lifetime
 
-and visit_newnode moduledata def (clock, lifetime) =
+and visit_newnode moduledata def (clock, lifetime, mode_calc) =
   let lifetime =
     List.fold_left
       (fun lifetime expr -> visit_expr clock "" expr lifetime)
       lifetime
       def.newnode_inputs
   in
-  let clock =
+  let clock, in_sig, out_sig =
     match def.newnode_module with
     | module_id, ModuleCons (file, _, _, _) ->
       (match Hashtbl.find moduledata (file, module_id) with
-       | ModuleInfo info -> clock + info.module_clockperiod
-       | SModuleInfo info -> clock + info.smodule_clockperiod)
+       | ModuleInfo info ->
+         clock + info.module_clockperiod, info.module_in_sig, info.module_out_sig
+       | SModuleInfo info ->
+         clock + info.smodule_clockperiod, info.smodule_in_sig, info.smodule_out_sig)
     | _ -> assert false
   in
   let lifetime =
@@ -97,7 +99,37 @@ and visit_newnode moduledata def (clock, lifetime) =
          def.newnode_binds
     |> update_timestamp def.newnode_id clock
   in
-  clock, lifetime
+  let mode_calc =
+    List.fold_right2
+      (fun (expr, _) (id2, ty) mode_calc ->
+        match expr, ty with
+        | EId (id1, _), Type.TMode _ ->
+          let entry = Idmap.find id1 mode_calc in
+          let entry =
+            { entry with child_modev = (def.newnode_id, id2) :: entry.child_modev }
+          in
+          Idmap.add id1 entry mode_calc
+        | _ -> mode_calc)
+      def.newnode_inputs
+      in_sig
+      mode_calc
+  in
+  let mode_calc =
+    List.fold_right2
+      (fun (_, id1, _) (id2, ty) mode_calc ->
+        match ty with
+        | Type.TMode _ ->
+          let entry = Idmap.find id1 mode_calc in
+          let entry =
+            { entry with child_modev = (def.newnode_id, id2) :: entry.child_modev }
+          in
+          Idmap.add id1 entry mode_calc
+        | _ -> mode_calc)
+      def.newnode_binds
+      out_sig
+      mode_calc
+  in
+  clock, lifetime, mode_calc
 
 and visit_input_node (id, _, _) lifetime = update_free_current id 2 lifetime
 
@@ -109,7 +141,20 @@ and visit_init id init lifetime =
 and visit_header_init (id, init, _) lifetime = visit_init id init lifetime
 and visit_node_init node lifetime = visit_init node.node_id node.node_init lifetime
 
+and visit_mode_annot annot =
+  annot
+  |> List.to_seq
+  |> Seq.map (function
+    | node_id, (modev, ModeValue (file, mode_id, _)) ->
+      node_id, { mode_type = file, mode_id; self_modev = modev; child_modev = [] }
+    | _ -> assert false)
+  |> Idmap.of_seq
+
 and visit_module file def moduledata =
+  let param_sig = def.module_params in
+  let in_sig = List.map (fun (id, _, t) -> id, t) def.module_in in
+  let out_sig = List.map (fun (id, _, t) -> id, t) def.module_out in
+  let mode_calc = visit_mode_annot def.module_mode_annot in
   let lifetime =
     lifetime_empty
     |> List.fold_right visit_input_node def.module_in
@@ -118,15 +163,17 @@ and visit_module file def moduledata =
     |> idmap_fold_values visit_node_init def.module_nodes
   in
   let clock = 2 in
-  let clock, lifetime =
+  let clock, lifetime, mode_calc =
     List.fold_right
-      (fun id (clock, lifetime) ->
+      (fun id (clock, lifetime, mode_calc) ->
         match Idmap.find id def.module_all with
-        | MNode def -> visit_node def (clock, lifetime)
-        | MNewnode def -> visit_newnode moduledata def (clock, lifetime)
+        | MNode def ->
+          let clock, lifetime = visit_node def (clock, lifetime) in
+          clock, lifetime, mode_calc
+        | MNewnode def -> visit_newnode moduledata def (clock, lifetime, mode_calc)
         | _ -> assert false)
       (List.rev def.module_update_ord)
-      (clock, lifetime)
+      (clock, lifetime, mode_calc)
   in
   let clock = clock + 1 in
   let lifetime =
@@ -135,15 +182,13 @@ and visit_module file def moduledata =
       lifetime
       def.module_out
   in
-  let param_sig = def.module_params in
-  let in_sig = List.map (fun (id, _, t) -> id, t) def.module_in in
-  let out_sig = List.map (fun (id, _, t) -> id, t) def.module_out in
   let module_info =
     { module_clockperiod = clock
     ; module_param_sig = param_sig
     ; module_in_sig = in_sig
     ; module_out_sig = out_sig
     ; module_lifetime = lifetime
+    ; module_mode_calc = mode_calc
     }
   in
   Hashtbl.add moduledata (file, def.module_id) (ModuleInfo module_info);
@@ -155,18 +200,23 @@ and visit_switch expr (clock, lifetime) =
   let lifetime = update_timestamp "state" clock lifetime in
   clock, lifetime
 
-and visit_state moduledata def lifetime =
+and visit_state moduledata def lifetime mode_calc =
   let lifetime = idmap_fold_values visit_node_init def.state_nodes lifetime in
   let clock = 2 in
-  (clock, lifetime)
-  |> List.fold_right
-       (fun id (clock, lifetime) ->
-         match Idmap.find id def.state_all with
-         | SNode def -> visit_node def (clock, lifetime)
-         | SNewnode def -> visit_newnode moduledata def (clock, lifetime)
-         | _ -> assert false)
-       (List.rev def.state_update_ord)
-  |> visit_switch def.state_switch
+  let clock, lifetime, mode_calc =
+    List.fold_right
+      (fun id (clock, lifetime, mode_calc) ->
+        match Idmap.find id def.state_all with
+        | SNode def ->
+          let clock, lifetime = visit_node def (clock, lifetime) in
+          clock, lifetime, mode_calc
+        | SNewnode def -> visit_newnode moduledata def (clock, lifetime, mode_calc)
+        | _ -> assert false)
+      (List.rev def.state_update_ord)
+      (clock, lifetime, mode_calc)
+  in
+  let clock, lifetime = visit_switch def.state_switch (clock, lifetime) in
+  clock, lifetime, mode_calc
 
 and visit_state_init lifetime = update_free_last "state" 2 lifetime
 
@@ -179,15 +229,19 @@ and visit_smodule file def moduledata =
     |> List.fold_right visit_header_init def.smodule_shared
     |> visit_state_init
   in
-  let clock, state_lifetime =
+  let clock, state_lifetime, state_mode_calc =
     idmap_fold_values
-      (fun state (clock, state_lifetime) ->
-        let clock', lifetime' = visit_state moduledata state lifetime in
+      (fun state (clock, state_lifetime, state_mode_calc) ->
+        let mode_calc = visit_mode_annot state.state_mode_annot in
+        let clock', lifetime', mode_calc =
+          visit_state moduledata state lifetime mode_calc
+        in
         let clock = max clock clock' in
         let state_lifetime = Idmap.add state.state_id lifetime' state_lifetime in
-        clock, state_lifetime)
+        let state_mode_calc = Idmap.add state.state_id mode_calc state_mode_calc in
+        clock, state_lifetime, state_mode_calc)
       def.smodule_states
-      (0, Idmap.empty)
+      (0, Idmap.empty, Idmap.empty)
   in
   let clock = clock + 1 in
   let state_lifetime =
@@ -208,6 +262,7 @@ and visit_smodule file def moduledata =
     ; smodule_in_sig = in_sig
     ; smodule_out_sig = out_sig
     ; state_lifetime
+    ; state_mode_calc
     }
   in
   Hashtbl.add moduledata (file, def.smodule_id) (SModuleInfo smodule_info);
