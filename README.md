@@ -61,3 +61,13 @@ fun isZeroAM(time) = case time of
 fun getTime(gpsData) = case gpsData of
   GpsData(time) -> time;
 ```
+
+## Usage
+
+Run the following command to compile [test/GPSWatch.xfrp](test/GPSWatch.xfrp):
+
+```sh
+dune exec src/main.exe -- test/GPSWatch.xfrp
+```
+
+This will generate the XCios program into C++ code.
