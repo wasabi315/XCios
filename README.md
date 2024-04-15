@@ -12,7 +12,7 @@ XCios is a "power-mode-aware" FRP language for small embedded systems.
 ## Example
 
 ```ocaml
-# A GPS module has two power modes: Sleep and On.
+(* A GPS module has two power modes: Sleep and On. *)
 mode GpsMode = Sleep | accessible On
 
 switchmodule Main {
