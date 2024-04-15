@@ -4,7 +4,7 @@ XCios is a "power-mode-aware" FRP language for small embedded systems.
 
 ## Features
 
-- Dynamic change of the behavior, expressed in terms of state machine a la Statecharts
+- Dynamic change of behavior, expressed in terms of state machine a la Statecharts
 - Concise and safe description of power-mode management
   - Guarantees that I/O signals are not used in the wrong power mode
   - Enabling/disabling I/O devices is managed by the runtime
