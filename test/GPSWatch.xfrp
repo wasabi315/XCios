@@ -1,0 +1,35 @@
+mode GpsMode = Sleep | accessible On
+
+type Time = Time of (Int, Int, Int)
+
+type GpsData = GpsData of Time
+
+fun add1s(time) = case time of
+  Time(23, 59, 59) -> Time(0, 0, 0);
+  Time(h, 59, 59) -> Time(h + 1, 0, 0);
+  Time(h, m, 59) -> Time(h, m + 1, 0);
+  Time(h, m, s) -> Time(h, m, s + 1);
+
+fun isZeroAM(time) = case time of
+  Time(h, m, s) -> h == 0 && m == 0 && s == 0;
+
+fun getTime(gpsData) = case gpsData of
+  GpsData(time) -> time;
+
+switchmodule Main {
+  in tick: Bool, gpsData: 'GpsMode GpsData
+  out time: Time
+  init Tick
+
+  state Tick with gpsData >= Sleep {
+    # node invalid = getTime(gpsData) ← Error!!
+    out node time =
+      if tick then add1s(time@last) else time@last
+    switch: if isZeroAM(time) then Adjust else Retain
+  }
+
+  state Adjust with gpsData >= On {
+    out node time = getTime(gpsData)
+    switch: Tick
+  }
+}
