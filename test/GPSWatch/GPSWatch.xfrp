@@ -18,7 +18,7 @@ fun getTime(gpsData) = case gpsData of
 
 switchmodule Main {
   in tick: Bool, gpsData: 'GpsMode GpsData
-  out time: Time
+  out time(Time(23, 59, 50)): Time
   init Tick
 
   state Tick with gpsData >= Sleep {
