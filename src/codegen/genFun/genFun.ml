@@ -27,3 +27,8 @@ let generate ppf metainfo =
     definition_writers;
   fprintf ppf "@,@,%a" gen_activate_fun metainfo
 ;;
+
+let generate_header ppf metainfo =
+  let prototype_writers = [] |> define_type_fun_header metainfo in
+  fprintf ppf "@[<v>%a@]" (exec_all_writers ()) prototype_writers
+;;

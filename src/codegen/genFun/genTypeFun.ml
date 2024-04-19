@@ -43,7 +43,7 @@ let define_tid_conses metainfo (file, typedef) fun_writers =
     let gen_funname ppf () =
       fprintf
         ppf
-        "static %a %a"
+        "%a %a"
         (gen_value_type metainfo)
         tid
         gen_tid_consname
@@ -101,7 +101,7 @@ let define_ttuple_cons metainfo types fun_writers =
   let ttuple = TTuple types in
   let types_with_position = List.mapi (fun pos t -> t, pos) types in
   let gen_funname ppf () =
-    fprintf ppf "static %a %a" (gen_value_type metainfo) ttuple gen_ttuple_consname types
+    fprintf ppf "%a %a" (gen_value_type metainfo) ttuple gen_ttuple_consname types
   in
   let gen_prototype_params ppf () =
     pp_print_list (gen_value_type metainfo) ppf types ~pp_sep:pp_print_commaspace
@@ -462,13 +462,25 @@ let define_tstate_gcfun metainfo (file, xfrp_smodule) fun_writers =
 ;;
 
 let define_tid_fun metainfo (file, typedef) fun_writers =
-  fun_writers
-  |> define_tid_conses metainfo (file, typedef)
-  |> define_tid_gcfun metainfo (file, typedef)
+  let _, tid_cons_writers = List.split (define_tid_conses metainfo (file, typedef) []) in
+  let tid_cons_writers = List.map (fun w -> (fun _ _ -> ()), w) tid_cons_writers in
+  fun_writers |> List.append tid_cons_writers |> define_tid_gcfun metainfo (file, typedef)
+;;
+
+let define_tid_fun_header metainfo (file, typedef) prototype_writers =
+  let tid_cons_writers, _ = List.split (define_tid_conses metainfo (file, typedef) []) in
+  tid_cons_writers @ prototype_writers
 ;;
 
 let define_ttuple_fun metainfo types fun_writers =
-  fun_writers |> define_ttuple_cons metainfo types |> define_ttuple_gcfun metainfo types
+  let _, ttuple_cons_writers = List.split (define_ttuple_cons metainfo types []) in
+  let ttuple_cons_writers = List.map (fun w -> (fun _ _ -> ()), w) ttuple_cons_writers in
+  fun_writers |> List.append ttuple_cons_writers |> define_ttuple_gcfun metainfo types
+;;
+
+let define_ttuple_fun_header metainfo types prototype_writers =
+  let ttuple_cons_writers, _ = List.split (define_ttuple_cons metainfo types []) in
+  ttuple_cons_writers @ prototype_writers
 ;;
 
 let define_tstate_fun metainfo (file, xfrp_smodule) fun_writers =
@@ -485,4 +497,12 @@ let define_type_fun metainfo fun_writers =
   |> List.fold_right (define_tid_fun metainfo) (List.rev nonenum_tid_defs)
   |> List.fold_right (define_ttuple_fun metainfo) (List.rev tuple_types)
   |> List.fold_right (define_tstate_fun metainfo) (List.rev tstate_defs)
+;;
+
+let define_type_fun_header metainfo prototype_writers =
+  let nonenum_tid_defs = metainfo.typedata.nonenum_tid_defs in
+  let tuple_types = metainfo.typedata.tuple_types in
+  prototype_writers
+  |> List.fold_right (define_tid_fun_header metainfo) (List.rev nonenum_tid_defs)
+  |> List.fold_right (define_ttuple_fun_header metainfo) (List.rev tuple_types)
 ;;

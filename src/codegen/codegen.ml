@@ -24,6 +24,8 @@ let generate_header metainfo =
   fprintf out "@[<v>";
   fprintf out "#ifndef %s" include_guard;
   fprintf out "@,#define %s" include_guard;
+  fprintf out "@,@,%a" GenDataType.generate_header metainfo;
+  fprintf out "@,@,%a" GenFun.generate_header metainfo;
   fprintf out "@,@,void activate();";
   fprintf out "@,@,#endif";
   fprintf out "@]@.";

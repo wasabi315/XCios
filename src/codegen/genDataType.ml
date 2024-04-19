@@ -98,9 +98,17 @@ let gen_tstate metainfo ppf (file, xfrp_smodule) =
 ;;
 
 let generate ppf metainfo =
+  let tstate_defs = metainfo.typedata.tstate_defs in
+  let print_all printer = pp_print_list printer ~pp_sep:pp_print_cut2 in
+  if tstate_defs = []
+  then ()
+  else fprintf ppf "%a" (print_all (gen_tstate metainfo)) tstate_defs;
+  fprintf ppf "@]"
+;;
+
+let generate_header ppf metainfo =
   let nonenum_tid_defs = metainfo.typedata.nonenum_tid_defs in
   let tuple_types = metainfo.typedata.tuple_types in
-  let tstate_defs = metainfo.typedata.tstate_defs in
   let print_all printer = pp_print_list printer ~pp_sep:pp_print_cut2 in
   fprintf ppf "@[<v>";
   if nonenum_tid_defs = []
@@ -108,9 +116,6 @@ let generate ppf metainfo =
   else fprintf ppf "%a@,@," (print_all (gen_tid metainfo)) nonenum_tid_defs;
   if tuple_types = []
   then ()
-  else fprintf ppf "%a@,@," (print_all (gen_ttuple metainfo)) tuple_types;
-  if tstate_defs = []
-  then ()
-  else fprintf ppf "%a" (print_all (gen_tstate metainfo)) tstate_defs;
+  else fprintf ppf "%a" (print_all (gen_ttuple metainfo)) tuple_types;
   fprintf ppf "@]"
 ;;
