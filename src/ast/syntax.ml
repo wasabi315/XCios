@@ -69,9 +69,9 @@ type idinfo =
   | ModuleConst of Type.t
   | StateParam of Type.t
   | StateConst of Type.t
-  | NodeId of nattr * Type.t
+  | NodeId of nattr * (* initial value set? *) bool * Type.t
   | InaccNodeId of identifier * nattr * Type.t
-  | ModeValue of string * string * bool
+  | ModeValue of string * string * (* accessible? *) bool
 
 let pp_idinfo ppf = function
   | UnknownId -> fprintf ppf "unknown"
@@ -85,7 +85,7 @@ let pp_idinfo ppf = function
   | ModuleConst _ -> fprintf ppf "module const"
   | StateParam _ -> fprintf ppf "state param"
   | StateConst _ -> fprintf ppf "state const"
-  | NodeId (_, _) -> fprintf ppf "node"
+  | NodeId (_, _, _) -> fprintf ppf "node"
   | InaccNodeId (_, _, _) -> fprintf ppf "inaccessible node"
   | ModeValue (file, mode_id, _) ->
     fprintf ppf "mode value:%s:%a" file pp_identifier mode_id
@@ -114,7 +114,7 @@ let map_idinfo_type (f : Type.t -> Type.t) (idinfo : idinfo) : idinfo =
   | ModuleConst t -> ModuleConst (f t)
   | StateParam t -> StateParam (f t)
   | StateConst t -> StateConst (f t)
-  | NodeId (attr, t) -> NodeId (attr, f t)
+  | NodeId (attr, init, t) -> NodeId (attr, init, f t)
   | InaccNodeId (modev, attr, t) -> InaccNodeId (modev, attr, t)
   | ModeValue (file, mode_id, acc) -> ModeValue (file, mode_id, acc)
 ;;

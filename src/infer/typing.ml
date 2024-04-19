@@ -319,19 +319,21 @@ let rec infer_expression env tenv level (ast, _) =
     | ModuleConst t
     | StateParam t
     | StateConst t
-    | NodeId (_, t)
+    | NodeId (_, _, t)
     | InaccNodeId (_, _, t) -> EId idref, t
     | _ -> raise_err_pp "invalid identifier reference : %a" pp_identifier id
   in
   let infer_annot idref annot =
     let ((id, idinfo) as idref) = infer_idref env tenv level idref in
-    match idinfo with
-    | InaccNodeId (_, _, TMode (_, _, _)) | NodeId (_, TMode (_, _, _)) ->
+    match idinfo, annot with
+    | InaccNodeId (_, _, TMode (_, _, _)), _ | NodeId (_, _, TMode (_, _, _)), _ ->
       raise_err_pp
         "past values of I/O node with mode cannot be accessed: %a"
         pp_identifier
         id
-    | NodeId (_, t) -> EAnnot (idref, annot), t
+    | NodeId (_, false, _), ALast ->
+      raise_err_pp "node %a is not initialized" pp_identifier id
+    | NodeId (_, _, t), ALast -> EAnnot (idref, ALast), t
     | _ -> raise_err_pp "expected node : %a" pp_identifier id
   in
   let infer_variant c v =
@@ -481,7 +483,7 @@ let infer_fundef env tenv def =
 let infer_node env tenv undefined_out_nodes def =
   let t =
     match Idmap.find def.node_id env with
-    | NodeId (_, t) -> t
+    | NodeId (_, _, t) -> t
     | InaccNodeId (modev, _, _) ->
       raise_err_pp
         "%a is inaccessible when its mode is %a"
@@ -582,7 +584,7 @@ let infer_mode_annot env tenv annot =
       (fun (id, mode) ->
         let mode = infer_idref env tenv 1 mode in
         (match infer_idref env tenv 1 (id, UnknownId), mode with
-         | (node_id, NodeId (OutputNode, _)), (_, ModeValue (_, _, true)) ->
+         | (node_id, NodeId (OutputNode, _, _)), (_, ModeValue (_, _, true)) ->
            Hashset.add undefined_out_nodes node_id
          | _ -> ());
         id, mode)
@@ -596,7 +598,7 @@ let infer_whole_nodes env tenv undefined_out_nodes nodes newnodes =
     match def.node_attr with
     | NormalNode ->
       let t = read_typespec tenv 1 def.node_type in
-      add_env def.node_id (NodeId (NormalNode, t)) env
+      add_env def.node_id (NodeId (NormalNode, Option.is_some def.node_init, t)) env
     | _ -> env
   in
   let add_env_newnode def env =
@@ -605,7 +607,7 @@ let infer_whole_nodes env tenv undefined_out_nodes nodes newnodes =
         match attr with
         | NormalNode ->
           let t = read_typespec tenv 1 t in
-          add_env id (NodeId (NormalNode, t)) env
+          add_env id (NodeId (NormalNode, false, t)) env
         | _ -> env)
       env
       def.newnode_binds
@@ -663,10 +665,12 @@ let infer_module env tenv def =
     let env =
       env
       |> List.fold_right
-           (fun (id, _, t) env -> add_env id (NodeId (InputNode, t)) env)
+           (fun (id, init, t) env ->
+             add_env id (NodeId (InputNode, Option.is_some init, t)) env)
            in_nodes
       |> List.fold_right
-           (fun (id, _, t) env -> add_env id (NodeId (OutputNode, t)) env)
+           (fun (id, init, t) env ->
+             add_env id (NodeId (OutputNode, Option.is_some init, t)) env)
            out_nodes
     in
     def, env
@@ -681,7 +685,7 @@ let infer_module env tenv def =
           | id, (modev, ModeValue (_, _, false)) ->
             let attr, t =
               match Idmap.find id env with
-              | NodeId (attr, t) -> attr, t
+              | NodeId (attr, _, t) -> attr, t
               | _ -> assert false
             in
             add_env_shadowing id (InaccNodeId (modev, attr, t)) env
@@ -746,7 +750,7 @@ let infer_state env tenv file mname def =
           | id, (modev, ModeValue (_, _, false)) ->
             let attr, t =
               match Idmap.find id env with
-              | NodeId (attr, t) -> attr, t
+              | NodeId (attr, _, t) -> attr, t
               | _ -> assert false
             in
             add_env_shadowing id (InaccNodeId (modev, attr, t)) env
@@ -853,13 +857,16 @@ let infer_smodule env tenv file def =
     let env =
       env
       |> List.fold_right
-           (fun (id, _, t) env -> add_env id (NodeId (InputNode, t)) env)
+           (fun (id, init, t) env ->
+             add_env id (NodeId (InputNode, Option.is_some init, t)) env)
            def.smodule_in
       |> List.fold_right
-           (fun (id, _, t) env -> add_env id (NodeId (OutputNode, t)) env)
+           (fun (id, init, t) env ->
+             add_env id (NodeId (OutputNode, Option.is_some init, t)) env)
            def.smodule_out
       |> List.fold_right
-           (fun (id, _, t) env -> add_env id (NodeId (SharedNode, t)) env)
+           (fun (id, init, t) env ->
+             add_env id (NodeId (SharedNode, Option.is_some init, t)) env)
            def.smodule_shared
     in
     def, env

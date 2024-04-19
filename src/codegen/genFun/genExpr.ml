@@ -352,10 +352,7 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
         | ModuleParam _ | ModuleConst _ -> f_module_value ()
         | StateConst _ -> f_state_const ()
         | StateParam _ -> f_state_param ()
-        | NodeId (nattr, ty) -> f_node nattr ty
-        | InaccNodeId _ ->
-          Format.printf "InaccNodeId is not supported yet.\n";
-          assert false
+        | NodeId (nattr, _, ty) -> f_node nattr ty
         | _ -> assert false
       in
       body_writers, gen_expr
@@ -364,7 +361,7 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
       let id, idinfo = idref in
       let gen_expr ppf () =
         match idinfo, annot with
-        | NodeId (nattr, _), ALast ->
+        | NodeId (nattr, _, _), ALast ->
           (match codegen_ctx, nattr with
            | CTXModuleNode _, _ | CTXModuleNewnodeIn, _ ->
              fprintf ppf "memory->%s[!current_side]" id
