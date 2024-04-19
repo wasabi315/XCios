@@ -158,16 +158,18 @@ let define_newnode_fun metainfo generator fun_writers =
         (pp_print_list gen_single) ppf inputs
       in
       let gen_body_output ppf outputs =
-        let gen_single ppf (from_id, nattr, to_id, ty) =
-          fprintf
-            ppf
-            "%a = %a.%a[current_side];"
-            gen_bind_address
-            (nattr, to_id, ty)
-            gen_instance_address
-            ()
-            pp_print_string
-            from_id
+        let gen_single ppf = function
+          | _, _, _, Type.TMode (_, _, _) -> ()
+          | from_id, nattr, to_id, ty ->
+            fprintf
+              ppf
+              "%a = %a.%a[current_side];"
+              gen_bind_address
+              (nattr, to_id, ty)
+              gen_instance_address
+              ()
+              pp_print_string
+              from_id
         in
         (pp_print_list gen_single) ppf outputs
       in

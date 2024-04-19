@@ -4,6 +4,12 @@ open Type
 open CodegenUtil
 open MetaInfo
 
+let gen_newnode_field' ppf newnode_id =
+  let len = String.length newnode_id in
+  let number_str = String.sub newnode_id 1 (len - 1) in
+  fprintf ppf "newnode%s" number_str
+;;
+
 let gen_life_node_current lifetime node_id ppf () =
   match Idmap.find node_id lifetime.free_current with
   | Some clock -> fprintf ppf "entry + %d" clock
@@ -316,6 +322,31 @@ let get_init_remark_writers metainfo lifetime init_header_nodes init_nodedefs =
   |> List.rev
 ;;
 
+let gen_body_module_newnode_io_init metainfo file module_id ppf =
+  let modeinfo =
+    match Hashtbl.find metainfo.moduledata (file, module_id) with
+    | ModuleInfo info -> info.module_mode_calc
+    | _ -> assert false
+  in
+  fprintf ppf "@[<v>";
+  fprintf ppf "@[<v 2>if (memory->init) {";
+  modeinfo
+  |> Idmap.iter (fun io_node_id modeinfo ->
+    modeinfo.child_modev
+    |> List.iter (fun (_, newnode_id, io_node_id') ->
+      fprintf
+        ppf
+        "@,memory->%a.%a = memory->%a;"
+        gen_newnode_field'
+        newnode_id
+        pp_identifier
+        io_node_id'
+        pp_identifier
+        io_node_id));
+  fprintf ppf "@]@,}";
+  fprintf ppf "@]"
+;;
+
 let define_module_update_fun metainfo (file, xfrp_module) fun_writers =
   let module_id = xfrp_module.module_id in
   let gen_funname ppf () =
@@ -372,7 +403,8 @@ let define_module_update_fun metainfo (file, xfrp_module) fun_writers =
     in
     let gen_body ppf () =
       fprintf ppf "@[<v>";
-      fprintf ppf "int entry = clock;";
+      fprintf ppf "int entry = clock;@,";
+      gen_body_module_newnode_io_init metainfo file module_id ppf;
       if consts = [] then () else fprintf ppf "@,%a" gen_body_const consts;
       if init_header_nodes = []
       then ()

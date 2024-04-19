@@ -245,7 +245,7 @@ xfrp_module:
     in_nodes = loption(in_node_decl)
     out_nodes = out_node_decl
     mode_annot = loption(mode_annot)
-    elems = nonempty_list(module_elem)
+    elems = list(module_elem)
     RBRACE
     {
       try
@@ -347,7 +347,7 @@ state:
     params = loption(paren(separated_nonempty_list(COMMA, id_and_type)))
     mode_annot = loption(mode_annot)
     LBRACE
-    elems = nonempty_list(state_elem)
+    elems = list(state_elem)
     SWITCH COLON switch = expression
     RBRACE
     {

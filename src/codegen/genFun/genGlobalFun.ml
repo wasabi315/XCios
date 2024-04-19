@@ -181,6 +181,20 @@ let gen_activate_fun ppf metainfo =
     in
     List.iter gen_single io_sig
   in
+  let gen_mode_calc ppf io_sig =
+    let gen_single = function
+      | id, Type.TMode _ ->
+        fprintf
+          ppf
+          "@,%a.mode[current_side] = %a(&memory);"
+          pp_identifier
+          id
+          gen_mode_calc_fun_name
+          ((entry_file, "Main"), id)
+      | _ -> ()
+    in
+    List.iter gen_single io_sig
+  in
   let gen_hook_calls ppf io_sig =
     let gen_single = function
       | id, Type.TMode (file, mode_id, _) ->
@@ -191,13 +205,6 @@ let gen_activate_fun ppf metainfo =
             metainfo.typedata.modes
         in
         let all_transitions = List.pairs (modedef.mode_vals @ modedef.mode_acc_vals) in
-        fprintf
-          ppf
-          "@,%a.mode[current_side] = %a(&memory);"
-          pp_identifier
-          id
-          gen_mode_calc_fun_name
-          ((entry_file, "Main"), id);
         all_transitions
         |> List.iter (fun (from, to_) ->
           fprintf
@@ -283,6 +290,7 @@ let gen_activate_fun ppf metainfo =
     fprintf ppf "@,clock = period;";
     fprintf ppf "@,refresh_mark();";
     fprintf ppf "@,current_side = !current_side;";
+    gen_mode_calc ppf io_sig;
     fprintf ppf "@]"
   in
   let gen_body ppf () =
