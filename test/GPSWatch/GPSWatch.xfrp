@@ -1,4 +1,33 @@
+# A GPS module has two power modes: Sleep and On.
 mode GpsMode = Sleep | accessible On
+
+switchmodule Main {
+  in  pulse1s: Bool,
+      # gpsData is an input signal of type GpsData from the GPS module that is accessible only in the On mode.
+      gpsData: 'GpsMode GpsData
+  out time(Time(23, 59, 55)): Time
+  init Tick
+
+  # Increment the time every second. We don't need data from the GPS module in this state so we set the mode of gpsData to Sleep.
+  state Tick with gpsData >= Sleep {
+    out node time =
+      if pulse1s then add1s(time@last) else time@last
+
+    # gpsData is in the Sleep mode, meaning gpsData is not accessible, so we can't use it here. If we try to use it, the compiler will give an error.
+    # node invalid = getTime(gpsData)
+
+    # Transition to the Adjust state at midnight.
+    switch: if isZeroAM(time) then Adjust else Retain
+  }
+
+  # Adjust the time at midnight using the GPS data. So here we set the mode of gpsData to On.
+  state Adjust with gpsData >= On {
+    out node time = getTime(gpsData)
+
+    # Go back to the Tick state after adjusting the time.
+    switch: Tick
+  }
+}
 
 type Time = Time of (Int, Int, Int)
 
@@ -15,21 +44,3 @@ fun isZeroAM(time) = case time of
 
 fun getTime(gpsData) = case gpsData of
   GpsData(time) -> time;
-
-switchmodule Main {
-  in tick: Bool, gpsData: 'GpsMode GpsData
-  out time(Time(23, 59, 50)): Time
-  init Tick
-
-  state Tick with gpsData >= Sleep {
-    # node invalid = getTime(gpsData) ← Error!!
-    out node time =
-      if tick then add1s(time@last) else time@last
-    switch: if isZeroAM(time) then Adjust else Retain
-  }
-
-  state Adjust with gpsData >= On {
-    out node time = getTime(gpsData)
-    switch: Tick
-  }
-}
