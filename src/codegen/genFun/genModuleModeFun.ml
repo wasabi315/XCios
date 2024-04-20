@@ -9,6 +9,10 @@ let gen_newnode_field ppf newnode_id =
   fprintf ppf "newnode%s" number_str
 ;;
 
+let gen_mode_value ppf (mode_type, modev) =
+  fprintf ppf "%a::%a" gen_mode_name mode_type pp_identifier modev
+;;
+
 let gen_mode_calc ppf mode_calc =
   let gen_child_mode_calc ppf (child_module_id, newnode_id, io_node_id) =
     fprintf
@@ -21,13 +25,7 @@ let gen_mode_calc ppf mode_calc =
   in
   let gen_mode_calc =
     let gen_self ppf () =
-      fprintf
-        ppf
-        "%a::%a"
-        gen_mode_name
-        mode_calc.mode_type
-        pp_identifier
-        mode_calc.self_modev
+      gen_mode_value ppf (mode_calc.mode_type, fst mode_calc.self_modev)
     in
     List.fold_right
       (fun child_mode_calc printer ppf () ->
@@ -58,9 +56,18 @@ let define_module_mode_calc_fun metainfo (file, modul) fun_writers =
         global_module_id
     in
     let gen_prototype ppf () = fprintf ppf "%a;" gen_header () in
-    let gen_definition ppf () =
-      gen_codeblock gen_header (fun ppf () -> gen_mode_calc ppf mode_calc) ppf ()
+    let gen_body ppf () =
+      fprintf ppf "@[<v>@[<v 2>if (memory->init) {";
+      fprintf
+        ppf
+        "@,return %a;"
+        gen_mode_value
+        (mode_calc.mode_type, fst mode_calc.init_modev);
+      fprintf ppf "@]@,}";
+      gen_mode_calc ppf mode_calc;
+      fprintf ppf "@]"
     in
+    let gen_definition ppf () = gen_codeblock gen_header gen_body ppf () in
     (gen_prototype, gen_definition) :: fun_writers
   in
   Idmap.fold define_single info.module_mode_calc fun_writers
@@ -97,12 +104,13 @@ let define_smodule_mode_calc_fun metainfo (file, modul) fun_writers =
     if Idmap.is_empty mode_calcs
     then fun_writers
     else (
+      let mode_type = (snd (Idmap.choose mode_calcs)).mode_type in
       let gen_header ppf () =
         fprintf
           ppf
           "static enum %a %a(%a* memory)"
           gen_mode_name
-          (snd (Idmap.choose mode_calcs)).mode_type
+          mode_type
           gen_mode_calc_fun_name
           (global_module_id, node_id)
           gen_module_memory_type
@@ -110,16 +118,14 @@ let define_smodule_mode_calc_fun metainfo (file, modul) fun_writers =
       in
       let gen_prototype ppf () = fprintf ppf "%a;" gen_header () in
       let gen_definition ppf () =
-        let init_state_id =
-          match modul.smodule_init with
-          | EVariant ((id, _), _), _ -> id
-          | _ -> assert false
-        in
-        let init_mode_calc = Idmap.find init_state_id mode_calcs in
         let gen_body ppf () =
           fprintf ppf "@[<v>";
           fprintf ppf "@[<v 2>if (memory->init) {";
-          gen_mode_calc ppf init_mode_calc;
+          fprintf
+            ppf
+            "@,return %a;"
+            gen_mode_value
+            (mode_type, fst (Idmap.find node_id info.smodule_init_modev));
           fprintf ppf "@]@,}";
           Idmap.iter
             (fun state_id mode_calc ->
@@ -127,6 +133,15 @@ let define_smodule_mode_calc_fun metainfo (file, modul) fun_writers =
                 ppf
                 "@,@[<v 2>if (memory->state->tag == %d) {"
                 (Idmap.find state_id tag_table);
+              if mode_calc.child_modev <> []
+              then (
+                fprintf ppf "@,@[<v 2>if (memory->state->fresh) {";
+                fprintf
+                  ppf
+                  "@,return %a;"
+                  gen_mode_value
+                  (mode_type, fst mode_calc.init_modev);
+                fprintf ppf "@]@,}");
               gen_mode_calc ppf mode_calc;
               fprintf ppf "@]@,}")
             mode_calcs;

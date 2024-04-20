@@ -82,7 +82,7 @@ and visit_newnode moduledata def (clock, lifetime, mode_calc) =
       lifetime
       def.newnode_inputs
   in
-  let modul, clock, in_sig, out_sig =
+  let modul, clock, in_sig, out_sig, init_modev =
     match def.newnode_module with
     | module_id, ModuleCons (file, _, _, _) ->
       (match Hashtbl.find moduledata (file, module_id) with
@@ -90,12 +90,14 @@ and visit_newnode moduledata def (clock, lifetime, mode_calc) =
          ( (file, module_id)
          , clock + info.module_clockperiod
          , info.module_in_sig
-         , info.module_out_sig )
+         , info.module_out_sig
+         , Idmap.map (fun mode_calc -> mode_calc.init_modev) info.module_mode_calc )
        | SModuleInfo info ->
          ( (file, module_id)
          , clock + info.smodule_clockperiod
          , info.smodule_in_sig
-         , info.smodule_out_sig ))
+         , info.smodule_out_sig
+         , info.smodule_init_modev ))
     | _ -> assert false
   in
   let lifetime =
@@ -111,8 +113,16 @@ and visit_newnode moduledata def (clock, lifetime, mode_calc) =
         match expr, ty with
         | EId (id1, _), Type.TMode _ ->
           let entry = Idmap.find id1 mode_calc in
+          let init_modev =
+            match entry.init_modev, Idmap.find id2 init_modev with
+            | (_, ord1), ((_, ord2) as modev) when ord2 > ord1 -> modev
+            | init_modev, _ -> init_modev
+          in
           let entry =
-            { entry with child_modev = (modul, def.newnode_id, id2) :: entry.child_modev }
+            { entry with
+              child_modev = (modul, def.newnode_id, id2) :: entry.child_modev
+            ; init_modev
+            }
           in
           Idmap.add id1 entry mode_calc
         | _ -> mode_calc)
@@ -126,8 +136,16 @@ and visit_newnode moduledata def (clock, lifetime, mode_calc) =
         match ty with
         | Type.TMode _ ->
           let entry = Idmap.find id1 mode_calc in
+          let init_modev =
+            match entry.init_modev, Idmap.find id2 init_modev with
+            | (_, ord1), ((_, ord2) as modev) when ord2 > ord1 -> modev
+            | init_modev, _ -> init_modev
+          in
           let entry =
-            { entry with child_modev = (modul, def.newnode_id, id2) :: entry.child_modev }
+            { entry with
+              child_modev = (modul, def.newnode_id, id2) :: entry.child_modev
+            ; init_modev
+            }
           in
           Idmap.add id1 entry mode_calc
         | _ -> mode_calc)
@@ -151,8 +169,13 @@ and visit_mode_annot annot =
   annot
   |> List.to_seq
   |> Seq.map (function
-    | node_id, (modev, ModeValue (file, mode_id, _)) ->
-      node_id, { mode_type = file, mode_id; self_modev = modev; child_modev = [] }
+    | node_id, (modev, ModeValue (file, mode_id, ord, _)) ->
+      ( node_id
+      , { mode_type = file, mode_id
+        ; self_modev = modev, ord
+        ; child_modev = []
+        ; init_modev = modev, ord
+        } )
     | _ -> assert false)
   |> Idmap.of_seq
 
@@ -259,6 +282,13 @@ and visit_smodule file def moduledata =
           def.smodule_out)
       state_lifetime
   in
+  let init_modev =
+    match def.smodule_init with
+    | EVariant ((state_id, _), _), _ ->
+      Idmap.find state_id state_mode_calc
+      |> Idmap.map (fun mode_calc -> mode_calc.init_modev)
+    | _ -> assert false
+  in
   let param_sig = def.smodule_params in
   let in_sig = List.map (fun (id, _, t) -> id, t) def.smodule_in in
   let out_sig = List.map (fun (id, _, t) -> id, t) def.smodule_out in
@@ -269,6 +299,7 @@ and visit_smodule file def moduledata =
     ; smodule_out_sig = out_sig
     ; state_lifetime
     ; state_mode_calc
+    ; smodule_init_modev = init_modev
     }
   in
   Hashtbl.add moduledata (file, def.smodule_id) (SModuleInfo smodule_info);

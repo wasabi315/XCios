@@ -283,6 +283,7 @@ let gen_activate_fun ppf metainfo =
     then ()
     else fprintf ppf "@,%a" (exec_all_writers ()) const_remark_writers;
     fprintf ppf "@,clock = 1;";
+    gen_mode_calc ppf io_sig;
     gen_hook_calls ppf io_sig;
     fprintf ppf "%a" gen_body_input ();
     fprintf ppf "@,update_%a(&memory);" gen_global_modulename (entry_file, "Main");
@@ -290,7 +291,6 @@ let gen_activate_fun ppf metainfo =
     fprintf ppf "@,clock = period;";
     fprintf ppf "@,refresh_mark();";
     fprintf ppf "@,current_side = !current_side;";
-    gen_mode_calc ppf io_sig;
     fprintf ppf "@]"
   in
   let gen_body ppf () =

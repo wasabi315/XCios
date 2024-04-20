@@ -584,7 +584,7 @@ let infer_mode_annot env tenv annot =
       (fun (id, mode) ->
         let mode = infer_idref env tenv 1 mode in
         (match infer_idref env tenv 1 (id, UnknownId), mode with
-         | (node_id, NodeId (OutputNode, _, _)), (_, ModeValue (_, _, true)) ->
+         | (node_id, NodeId (OutputNode, _, _)), (_, ModeValue (_, _, _, true)) ->
            Hashset.add undefined_out_nodes node_id
          | _ -> ());
         id, mode)
@@ -681,8 +681,8 @@ let infer_module env tenv def =
     let env =
       List.fold_left
         (fun env -> function
-          | _, (_, ModeValue (_, _, true)) -> env
-          | id, (modev, ModeValue (_, _, false)) ->
+          | _, (_, ModeValue (_, _, _, true)) -> env
+          | id, (modev, ModeValue (_, _, _, false)) ->
             let attr, t =
               match Idmap.find id env with
               | NodeId (attr, _, t) -> attr, t
@@ -746,8 +746,8 @@ let infer_state env tenv file mname def =
     let env =
       List.fold_left
         (fun env -> function
-          | _, (_, ModeValue (_, _, true)) -> env
-          | id, (modev, ModeValue (_, _, false)) ->
+          | _, (_, ModeValue (_, _, _, true)) -> env
+          | id, (modev, ModeValue (_, _, _, false)) ->
             let attr, t =
               match Idmap.find id env with
               | NodeId (attr, _, t) -> attr, t
@@ -917,17 +917,18 @@ let infer_smodule env tenv file def =
 
 let infer (other_progs : xfrp Idmap.t) (file : string) (prog : xfrp) : xfrp =
   let register_modevals file def env : env =
-    env
+    (env, 0)
     |> List.fold_right
-         (fun v env ->
-           let entry = ModeValue (file, def.mode_id, false) in
-           add_env v entry env)
+         (fun v (env, i) ->
+           let entry = ModeValue (file, def.mode_id, i, false) in
+           add_env v entry env, i + 1)
          def.mode_vals
     |> List.fold_right
-         (fun v env ->
-           let entry = ModeValue (file, def.mode_id, true) in
-           add_env v entry env)
+         (fun v (env, i) ->
+           let entry = ModeValue (file, def.mode_id, i, true) in
+           add_env v entry env, i + 1)
          def.mode_acc_vals
+    |> fst
   in
   let register_typeconses file def env : env =
     Idmap.fold
