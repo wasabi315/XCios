@@ -1,0 +1,65 @@
+mode GpsMode = Off | accessible LowAcc | HighAcc
+mode LocDispMode = Off2 | accessible On
+
+switchmodule Watch {
+  in  pulse1s: Bool, adjust: Bool, gpsData: 'GpsMode GpsData
+  out time(Time(0, 0, 0)): Time
+  init NoAdjust
+
+  state NoAdjust with gpsData >= Off {
+    out node time =
+      if pulse1s then add1s(time@last)
+      else time@last
+    switch: if adjust then Adjust else Retain
+  }
+
+  state Adjust with gpsData >= LowAcc {
+    out node time = getTime(gpsData)
+    switch: NoAdjust
+  }
+}
+
+switchmodule LocDisp {
+  in showLoc: Bool, gpsData: 'GpsMode GpsData
+  out locInfo: 'LocDispMode LocInfo
+  init Disabled
+
+  state Enabled with gpsData >= HighAcc, locInfo >= On
+  {
+    out node locInfo = getLocInfo(gpsData)
+    switch: if !showLoc then Disabled else Retain
+  }
+
+  state Disabled with gpsData >= Off, locInfo >= Off2 {
+    switch: if showLoc then Enabled else Retain
+  }
+}
+
+module Main {
+  in  pulse1s: Bool, adjust: Bool, showLoc: Bool, gpsData: 'GpsMode GpsData
+  out time: Time, locInfo: 'LocDispMode LocInfo
+  with gpsData >= Off, locInfo >= Off2
+
+  newnode out time = Watch <- pulse1s, adjust, gpsData
+  newnode out locInfo = LocDisp <- showLoc, gpsData
+}
+
+type Time = Time of (Int, Int, Int)
+type LocInfo = LocInfo of (Float, Float)
+
+type GpsData = GpsData of (Time, LocInfo)
+
+fun add1s(time) = case time of
+  Time(23, 59, 59) -> Time(0, 0, 0);
+  Time(h, 59, 59) -> Time(h + 1, 0, 0);
+  Time(h, m, 59) -> Time(h, m + 1, 0);
+  Time(h, m, s) -> Time(h, m, s + 1);
+
+fun isZeroAM(time) = case time of
+  Time(h, m, s) -> h == 0 && m == 0 && s == 0;
+
+fun getTime(gpsData) = case gpsData of
+  GpsData(time, _) -> time;
+
+fun getLocInfo(gpsData) = case gpsData of
+  GpsData(_, locInfo) -> locInfo;
