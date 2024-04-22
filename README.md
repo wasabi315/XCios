@@ -63,14 +63,14 @@ fun getTime(gpsData) = case gpsData of
 The following command will generate a C++ code named `GPSWatch.cpp` and `GPSWatch.h`.
 
 ```sh
-cd test/GPSWatch
-dune exec src/main.exe -- GPGWatch.xfrp
+dune exec src/main.exe -- test/GPSWatch/GPGWatch.xfrp
 ```
 
 A wrapper program for the generated code is already provided (`GPSWatchMain.cpp`).
 Compiling the generated code together with the wrapper program will produce an executable.
 
 ```sh
+cd test/GPSWatch
 g++ GPSWatchMain.cpp GPSWatch.cpp
 ```
 
