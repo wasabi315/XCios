@@ -53,6 +53,17 @@ let gen_ttuple metainfo ppf types =
   fprintf ppf "%a;" (gen_codeblock gen_ttuple_head gen_ttuple_body) ()
 ;;
 
+let gen_with_mode_type metainfo ppf ((file, mode_id, t') as t) =
+  let gen_header ppf () = fprintf ppf "struct %a" (gen_with_mode_type metainfo) t in
+  let gen_body ppf () =
+    fprintf ppf "@[<v>";
+    fprintf ppf "@[<h>enum %a mode[2];@]" gen_mode_name (file, mode_id);
+    fprintf ppf "@,%a value;" (gen_value_type metainfo) t';
+    fprintf ppf "@]"
+  in
+  fprintf ppf "%a;" (gen_codeblock gen_header gen_body) ()
+;;
+
 let gen_tstate metainfo ppf (file, xfrp_smodule) =
   let typedata = metainfo.typedata in
   let tstate = TState (file, xfrp_smodule.smodule_id) in
@@ -98,8 +109,12 @@ let gen_tstate metainfo ppf (file, xfrp_smodule) =
 ;;
 
 let generate ppf metainfo =
+  let types_with_mode = metainfo.typedata.types_with_mode in
   let tstate_defs = metainfo.typedata.tstate_defs in
   let print_all printer = pp_print_list printer ~pp_sep:pp_print_cut2 in
+  if types_with_mode = []
+  then ()
+  else fprintf ppf "%a@,@," (print_all (gen_with_mode_type metainfo)) types_with_mode;
   if tstate_defs = []
   then ()
   else fprintf ppf "%a" (print_all (gen_tstate metainfo)) tstate_defs;

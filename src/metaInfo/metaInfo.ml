@@ -196,6 +196,7 @@ type typedata =
   ; tstate_defs : (string * xfrp_smodule) list
   ; tstate_param_ids : (Type.t, string list Idmap.t) Hashtbl.t
   ; modes : (string * modedef) list
+  ; types_with_mode : (string * identifier * Type.t) list
   }
 
 let pp_typedata ppf typedata =
@@ -236,6 +237,12 @@ let pp_typedata ppf typedata =
     let pp_mode ppf (file, modedef) = fprintf ppf "%s:%a@ " file pp_modedef modedef in
     pp_list_comma pp_mode ppf modes
   in
+  let pp_types_with_mode ppf tys =
+    let pp_elem ppf (file, mode_id, t) =
+      fprintf ppf "'%s:%a %a" file pp_identifier mode_id Type.pp_t t
+    in
+    pp_list_comma pp_elem ppf tys
+  in
   fprintf ppf "@[<v>";
   fprintf ppf "enum_types:";
   fprintf ppf "@;<0 2>@[<hov> %a @]" pp_typeset typedata.enum_types;
@@ -253,6 +260,8 @@ let pp_typedata ppf typedata =
   fprintf ppf "@;<0 2>@[<hov>%a@]" pp_tstate_param_ids typedata.tstate_param_ids;
   fprintf ppf "@,modes:";
   fprintf ppf "@;<0 2>@[<hov>%a@]" pp_modes typedata.modes;
+  fprintf ppf "@,types_with_mode:";
+  fprintf ppf "@;<0 2>@[<hov>%a@]" pp_types_with_mode typedata.types_with_mode;
   fprintf ppf "@]"
 ;;
 
@@ -301,6 +310,7 @@ let typedata_empty () =
   ; tstate_defs = []
   ; tstate_param_ids = Hashtbl.create 20
   ; modes = []
+  ; types_with_mode = []
   }
 ;;
 

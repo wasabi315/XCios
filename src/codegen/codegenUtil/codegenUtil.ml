@@ -102,6 +102,30 @@ let rec gen_value_type metainfo ppf t =
   | _ -> assert false
 ;;
 
+let gen_type_name metainfo ppf t =
+  let enum_types = metainfo.typedata.enum_types in
+  match t with
+  | TBool | TInt -> pp_print_string ppf "int"
+  | TFloat -> pp_print_string ppf "double"
+  | TState (file, module_name) ->
+    let file = String.capitalize_ascii file in
+    if Hashset.mem enum_types t
+    then pp_print_string ppf "int"
+    else fprintf ppf "%a" gen_tstate_typename (file, module_name)
+  | TId (file, type_name) ->
+    let file = String.capitalize_ascii file in
+    if Hashset.mem enum_types t
+    then pp_print_string ppf "int"
+    else fprintf ppf "%a" gen_tid_typename (file, type_name)
+  | TTuple ts -> fprintf ppf "%a" gen_ttuple_typename ts
+  | TMode (_, _, t) -> gen_value_type metainfo ppf t
+  | _ -> assert false
+;;
+
+let gen_with_mode_type metainfo ppf (file, mode_id, t) =
+  fprintf ppf "WithMode_%a_%a" gen_mode_name (file, mode_id) (gen_type_name metainfo) t
+;;
+
 let gen_newnode_field ppf newnode =
   let len = String.length newnode.newnode_id in
   let number_str = String.sub newnode.newnode_id 1 (len - 1) in

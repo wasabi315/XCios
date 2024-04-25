@@ -95,6 +95,18 @@ let calc_typedata all_data file_ord metainfo =
       all_data
       []
   in
+  let get_types_with_mode metainfo =
+    let main_io_sig =
+      match Hashtbl.find metainfo.moduledata (metainfo.entry_file, "Main") with
+      | ModuleInfo { module_in_sig; module_out_sig; _ } -> module_in_sig @ module_out_sig
+      | SModuleInfo { smodule_in_sig; smodule_out_sig; _ } ->
+        smodule_in_sig @ smodule_out_sig
+    in
+    main_io_sig
+    |> List.filter_map (function
+      | _, TMode (file, mode_id, t) -> Some (file, mode_id, t)
+      | _ -> None)
+  in
   let () =
     Hashtbl.iter
       (fun t _ ->
@@ -109,8 +121,15 @@ let calc_typedata all_data file_ord metainfo =
   let tuple_types = get_tuple_types metainfo in
   let tstate_defs = get_tstate_defs metainfo in
   let modes = get_modes all_data in
+  let types_with_mode = get_types_with_mode metainfo in
   let typedata =
-    { metainfo.typedata with nonenum_tid_defs; tuple_types; tstate_defs; modes }
+    { metainfo.typedata with
+      nonenum_tid_defs
+    ; tuple_types
+    ; tstate_defs
+    ; modes
+    ; types_with_mode
+    }
   in
   { metainfo with typedata }
 ;;

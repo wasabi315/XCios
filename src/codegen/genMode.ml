@@ -13,18 +13,9 @@ let gen_mode ppf (file, mode) =
   fprintf ppf "%a;" (gen_codeblock gen_mode_head gen_mode_body) ()
 ;;
 
-let gen_with_mode ppf =
-  fprintf ppf "template <typename M, typename T>@,";
-  fprintf ppf "@[<v 2>struct WithMode {@,";
-  fprintf ppf "M mode[2];@,";
-  fprintf ppf "T value;";
-  fprintf ppf "@]@,};@,@,"
-;;
-
 let gen_max ppf = fprintf ppf "#define MAX(a, b) ((a) > (b) ? (a) : (b))@,@,"
 
 let generate ppf metainfo =
-  gen_with_mode ppf;
   gen_max ppf;
   pp_list_break2 gen_mode ppf metainfo.typedata.modes
 ;;

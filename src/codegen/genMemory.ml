@@ -12,11 +12,9 @@ let gen_header_node metainfo ppf = function
   | id, _, TMode (file, mode_id, t) ->
     fprintf
       ppf
-      "@[<h>WithMode<%a, %a>* %a;@]"
-      gen_mode_name
-      (file, mode_id)
-      (gen_value_type metainfo)
-      t
+      "@[<h>struct %a* %a;@]"
+      (gen_with_mode_type metainfo)
+      (file, mode_id, t)
       pp_print_string
       id
   | id, _, t ->

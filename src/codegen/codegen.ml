@@ -3,7 +3,7 @@ open Extension.Format
 
 let generate_main metainfo =
   let entry_file = metainfo.entry_file in
-  let ochan = open_out (entry_file ^ ".cpp") in
+  let ochan = open_out (entry_file ^ ".c") in
   let out = formatter_of_out_channel ochan in
   fprintf out "@[<v>";
   fprintf out "#include \"%s.h\"" entry_file;

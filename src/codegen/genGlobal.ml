@@ -60,11 +60,9 @@ let gen_io_nodes ppf metainfo in_out_sig =
     | id, TMode (file, mode, t) ->
       fprintf
         ppf
-        "@,WithMode<%a, %a> %a;"
-        gen_mode_name
-        (file, mode)
-        (gen_value_type metainfo)
-        t
+        "@,struct %a %a;"
+        (gen_with_mode_type metainfo)
+        (file, mode, t)
         pp_identifier
         id
     | _ -> ()

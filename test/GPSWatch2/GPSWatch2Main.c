@@ -3,9 +3,11 @@
 #include "GPSWatch2.h"
 
 struct GPSWatch2GpsData* input_gpsData() {
+    printf("[GPS]   : Fetching...\n");
+    usleep(500000); // 0.5s
     printf("[GPS]   : 00:00:10, 35.6764, 139.6500\n");
-    auto time = GPSWatch2Time_Time(TupleIntIntInt_Cons(0, 0, 38));
-    auto locInfo = GPSWatch2LocInfo_LocInfo(TupleDoubleDouble_Cons(35.6764, 139.6500));
+    struct GPSWatch2Time* time = GPSWatch2Time_Time(TupleIntIntInt_Cons(0, 0, 38));
+    struct GPSWatch2LocInfo* locInfo = GPSWatch2LocInfo_LocInfo(TupleDoubleDouble_Cons(35.6764, 139.6500));
     return GPSWatch2GpsData_GpsData(TupleGPSWatch2TimeGPSWatch2LocInfo_Cons(time, locInfo));
 }
 
@@ -37,35 +39,43 @@ void output_time(struct GPSWatch2Time* time) {
 }
 
 void hook_locInfo_ModeGPSWatch2LocDispMode_On_to_ModeGPSWatch2LocDispMode_Off2() {
-    printf("[LOC]   : Turn off\n");
+    printf("[LOC]   : Turning off...\n");
+    usleep(500000); // 0.5s
 }
 
 void hook_locInfo_ModeGPSWatch2LocDispMode_Off2_to_ModeGPSWatch2LocDispMode_On() {
-    printf("[LOC]   : Turn on\n");
+    printf("[LOC]   : Turning on...\n");
+    usleep(500000); // 0.5s
 }
 
 void hook_gpsData_ModeGPSWatch2GpsMode_HighAcc_to_ModeGPSWatch2GpsMode_LowAcc() {
-    printf("[GPS]   : Change to low accuracy\n");
+    printf("[GPS]   : Changing to the low accuracy mode...\n");
+    usleep(500000); // 0.5s
 }
 
 void hook_gpsData_ModeGPSWatch2GpsMode_HighAcc_to_ModeGPSWatch2GpsMode_Off() {
-    printf("[GPS]   : Turn off\n");
+    printf("[GPS]   : Turning off...\n");
+    usleep(500000); // 0.5s
 }
 
 void hook_gpsData_ModeGPSWatch2GpsMode_LowAcc_to_ModeGPSWatch2GpsMode_HighAcc() {
-    printf("[GPS]   : Change to high accuracy\n");
+    printf("[GPS]   : Changing to the high accuracy mode...\n");
+    usleep(500000); // 0.5s
 }
 
 void hook_gpsData_ModeGPSWatch2GpsMode_LowAcc_to_ModeGPSWatch2GpsMode_Off() {
-    printf("[GPS]   : Turn off\n");
+    printf("[GPS]   : Turning off...\n");
+    usleep(500000); // 0.5s
 }
 
 void hook_gpsData_ModeGPSWatch2GpsMode_Off_to_ModeGPSWatch2GpsMode_HighAcc() {
-    printf("[GPS]   : Turn on\n");
+    printf("[GPS]   : Turning on...\n");
+    usleep(500000); // 0.5s
 }
 
 void hook_gpsData_ModeGPSWatch2GpsMode_Off_to_ModeGPSWatch2GpsMode_LowAcc() {
-    printf("[GPS]   : Turn on (low accuracy)\n");
+    printf("[GPS]   : Turning on (low accuracy)...\n");
+    usleep(500000); // 0.5s
 }
 
 int main() {
