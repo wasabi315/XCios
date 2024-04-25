@@ -9,10 +9,6 @@ let gen_newnode_field ppf newnode_id =
   fprintf ppf "newnode%s" number_str
 ;;
 
-let gen_mode_value ppf (mode_type, modev) =
-  fprintf ppf "%a::%a" gen_mode_name mode_type pp_identifier modev
-;;
-
 let gen_mode_calc ppf mode_calc =
   let gen_child_mode_calc ppf (child_module_id, newnode_id, io_node_id) =
     fprintf
@@ -25,7 +21,7 @@ let gen_mode_calc ppf mode_calc =
   in
   let gen_mode_calc =
     let gen_self ppf () =
-      gen_mode_value ppf (mode_calc.mode_type, fst mode_calc.self_modev)
+      gen_modev_name ppf (mode_calc.mode_type, fst mode_calc.self_modev)
     in
     List.fold_right
       (fun child_mode_calc printer ppf () ->
@@ -61,7 +57,7 @@ let define_module_mode_calc_fun metainfo (file, modul) fun_writers =
       fprintf
         ppf
         "@,return %a;"
-        gen_mode_value
+        gen_modev_name
         (mode_calc.mode_type, fst mode_calc.init_modev);
       fprintf ppf "@]@,}";
       gen_mode_calc ppf mode_calc;
@@ -124,7 +120,7 @@ let define_smodule_mode_calc_fun metainfo (file, modul) fun_writers =
           fprintf
             ppf
             "@,return %a;"
-            gen_mode_value
+            gen_modev_name
             (mode_type, fst (Idmap.find node_id info.smodule_init_modev));
           fprintf ppf "@]@,}";
           Idmap.iter
@@ -139,7 +135,7 @@ let define_smodule_mode_calc_fun metainfo (file, modul) fun_writers =
                 fprintf
                   ppf
                   "@,return %a;"
-                  gen_mode_value
+                  gen_modev_name
                   (mode_type, fst mode_calc.init_modev);
                 fprintf ppf "@]@,}");
               gen_mode_calc ppf mode_calc;

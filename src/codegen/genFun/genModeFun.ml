@@ -14,13 +14,7 @@ let define_is_accessible (file, { mode_id; mode_vals; mode_acc_vals; _ }) =
       | [], _ -> fprintf ppf "return true;"
       | _, [] -> fprintf ppf "return false;"
       | _, modev :: _ ->
-        fprintf
-          ppf
-          "return modev >= %a::%a;"
-          gen_mode_name
-          (file, mode_id)
-          pp_identifier
-          modev
+        fprintf ppf "return modev >= %a;" gen_modev_name ((file, mode_id), modev)
     in
     gen_codeblock gen_head gen_body ppf ()
   in

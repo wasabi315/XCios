@@ -68,6 +68,10 @@ let gen_mode_name ppf (file, mode_id) =
   fprintf ppf "Mode%s%s" file mode_id
 ;;
 
+let gen_modev_name ppf ((file, mode_id), modev) =
+  fprintf ppf "%a_%a" gen_mode_name (file, mode_id) pp_identifier modev
+;;
+
 let gen_global_constname ppf (file, const_id) =
   let file = String.capitalize_ascii file in
   pp_print_string ppf (conc_id [ file; const_id ])

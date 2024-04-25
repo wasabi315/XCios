@@ -7,17 +7,13 @@ open MetaInfo
 let gen_hook_name ppf (node_id, mode_id, from, to_) =
   fprintf
     ppf
-    "hook_%a_%a_%a_to_%a_%a"
+    "hook_%a_%a_to_%a"
     pp_identifier
     node_id
-    gen_mode_name
-    mode_id
-    pp_identifier
-    from
-    gen_mode_name
-    mode_id
-    pp_identifier
-    to_
+    gen_modev_name
+    (mode_id, from)
+    gen_modev_name
+    (mode_id, to_)
 ;;
 
 let define_refresh_mark_fun metainfo fun_writers =
@@ -169,13 +165,11 @@ let gen_activate_fun ppf metainfo =
         in
         fprintf
           ppf
-          "@,%a.mode[!current_side] = %a::%a;"
+          "@,%a.mode[!current_side] = %a;"
           pp_identifier
           id
-          gen_mode_name
-          (file, mode_id)
-          pp_identifier
-          smallest_modev;
+          gen_modev_name
+          ((file, mode_id), smallest_modev);
         fprintf ppf "@,memory.%a = &%a;" pp_identifier id pp_identifier id
       | _ -> ()
     in
@@ -209,21 +203,15 @@ let gen_activate_fun ppf metainfo =
         |> List.iter (fun (from, to_) ->
           fprintf
             ppf
-            "@,\
-             @[<v 2>if (%a.mode[!current_side] == %a::%a && %a.mode[current_side] == \
-             %a::%a) {"
+            "@,@[<v 2>if (%a.mode[!current_side] == %a && %a.mode[current_side] == %a) {"
             pp_identifier
             id
-            gen_mode_name
-            global_mode_id
-            pp_identifier
-            from
+            gen_modev_name
+            (global_mode_id, from)
             pp_identifier
             id
-            gen_mode_name
-            global_mode_id
-            pp_identifier
-            to_;
+            gen_modev_name
+            (global_mode_id, to_);
           fprintf ppf "@,%a();" gen_hook_name (id, global_mode_id, from, to_);
           fprintf ppf "@]@,}")
       | _ -> ()

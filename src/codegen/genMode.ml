@@ -4,11 +4,11 @@ open MetaInfo
 open CodegenUtil
 
 let gen_mode ppf (file, mode) =
-  let gen_mode_head ppf () =
-    fprintf ppf "enum class %a" gen_mode_name (file, mode.mode_id)
-  in
+  let gen_mode_head ppf () = fprintf ppf "enum %a" gen_mode_name (file, mode.mode_id) in
   let gen_mode_body ppf () =
-    fprintf ppf "%a" (pp_list_comma pp_identifier) (mode.mode_vals @ mode.mode_acc_vals)
+    mode.mode_vals @ mode.mode_acc_vals
+    |> List.map (fun modev -> (file, mode.mode_id), modev)
+    |> fprintf ppf "%a" (pp_list_comma gen_modev_name)
   in
   fprintf ppf "%a;" (gen_codeblock gen_mode_head gen_mode_body) ()
 ;;
