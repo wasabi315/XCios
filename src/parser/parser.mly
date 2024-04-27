@@ -417,7 +417,7 @@ node:
 newnode:
   | NEWNODE binds = separated_nonempty_list(COMMA, newnode_bind) EQUAL
     module_id = UID margs = loption(paren(separated_list(COMMA, expression)))
-    LARROW inputs = separated_nonempty_list(COMMA, expression)
+    LARROW inputs = separated_nonempty_list(COMMA, newnode_input)
     {
       let id = gensym () in
       {
@@ -430,7 +430,7 @@ newnode:
     }
 
 newnode_bind:
-  | attr = node_attr? id = ID
+  | attr = node_attr? AND? id = ID
     {
       let attr =
         match attr with
@@ -439,6 +439,9 @@ newnode_bind:
       in
       (attr, id, TEmpty)
     }
+
+newnode_input:
+  | AND? expr = expression { expr }
 
 (* expressions *)
 expression:

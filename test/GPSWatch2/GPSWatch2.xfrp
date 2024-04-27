@@ -40,8 +40,8 @@ module Main {
   out time: Time, locInfo: 'LocDispMode LocInfo
   with gpsData >= Off, locInfo >= Off2
 
-  newnode out time = Watch <- pulse1s, adjust, gpsData
-  newnode out locInfo = LocDisp <- showLoc, gpsData
+  newnode out time = Watch <- pulse1s, adjust, &gpsData
+  newnode out &locInfo = LocDisp <- showLoc, &gpsData
 }
 
 type Time = Time of (Int, Int, Int)
