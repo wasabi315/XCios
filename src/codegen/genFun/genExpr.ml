@@ -28,7 +28,7 @@ let gen_literal ppf = function
   | LFalse -> pp_print_string ppf "0"
   | LInt n -> pp_print_int ppf n
   | LFloat n -> pp_print_float ppf n
-  | LUnit -> assert false
+  | LUnit -> pp_print_string ppf "xfrpUnit"
 ;;
 
 let get_pattern_conds_binds metainfo gen_target pattern =

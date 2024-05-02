@@ -73,22 +73,28 @@ let add_extern_prototype metainfo prototype_writers =
     get_module_sig metainfo entry_file "Main"
   in
   let gen_input_prototype (id, t) ppf () =
-    fprintf
-      ppf
-      "@[<h>extern %a input_%a();@]"
-      (gen_value_type metainfo)
-      t
-      pp_identifier
-      id
+    match t with
+    | Type.(TUnit | TMode (_, _, TUnit)) -> ()
+    | _ ->
+      fprintf
+        ppf
+        "@[<h>extern %a input_%a();@]"
+        (gen_value_type metainfo)
+        t
+        pp_identifier
+        id
   in
   let gen_output_prototype (id, t) ppf () =
-    fprintf
-      ppf
-      "@[<h>extern void output_%a(%a);@]"
-      pp_identifier
-      id
-      (gen_value_type metainfo)
-      t
+    match t with
+    | Type.(TUnit | TMode (_, _, TUnit)) -> ()
+    | _ ->
+      fprintf
+        ppf
+        "@[<h>extern void output_%a(%a);@]"
+        pp_identifier
+        id
+        (gen_value_type metainfo)
+        t
   in
   let gen_hook_prototypes = function
     | id, Type.TMode (file, mode_id, _) ->
@@ -220,6 +226,7 @@ let gen_activate_fun ppf metainfo =
   in
   let gen_body_input ppf () =
     let gen_single = function
+      | _, Type.(TUnit | TMode (_, _, TUnit)) -> ()
       | id, Type.TMode (file, mode, _) ->
         fprintf
           ppf
@@ -243,6 +250,7 @@ let gen_activate_fun ppf metainfo =
   in
   let gen_body_output ppf () =
     let gen_single = function
+      | _, Type.(TUnit | TMode (_, _, TUnit)) -> ()
       | id, Type.TMode (file, mode, _) ->
         fprintf
           ppf

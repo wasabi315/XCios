@@ -85,6 +85,7 @@ let gen_global_funname ppf (file, fun_id) =
 let rec gen_value_type metainfo ppf t =
   let enum_types = metainfo.typedata.enum_types in
   match t with
+  | TUnit -> pp_print_string ppf "struct XfrpUnit"
   | TBool | TInt -> pp_print_string ppf "int"
   | TFloat -> pp_print_string ppf "double"
   | TState (file, module_name) ->
@@ -105,6 +106,7 @@ let rec gen_value_type metainfo ppf t =
 let gen_type_name metainfo ppf t =
   let enum_types = metainfo.typedata.enum_types in
   match t with
+  | TUnit -> pp_print_string ppf "Unit"
   | TBool | TInt -> pp_print_string ppf "int"
   | TFloat -> pp_print_string ppf "double"
   | TState (file, module_name) ->
@@ -209,7 +211,7 @@ let get_module_sig metainfo file module_id =
 
 let rec get_mark_writer metainfo target_type gen_address gen_life =
   match target_type with
-  | TBool | TInt | TFloat -> None
+  | TUnit | TBool | TInt | TFloat -> None
   | TState (file, module_id) ->
     let writer ppf () =
       fprintf
@@ -258,7 +260,7 @@ let rec get_mark_writer metainfo target_type gen_address gen_life =
 
 let rec get_free_writer metainfo target_type gen_address =
   match target_type with
-  | TBool | TInt | TFloat -> None
+  | TUnit | TBool | TInt | TFloat -> None
   | TState (file, module_id) ->
     let writer ppf () =
       fprintf

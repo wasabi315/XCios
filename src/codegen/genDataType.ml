@@ -112,6 +112,7 @@ let generate ppf metainfo =
   let types_with_mode = metainfo.typedata.types_with_mode in
   let tstate_defs = metainfo.typedata.tstate_defs in
   let print_all printer = pp_print_list printer ~pp_sep:pp_print_cut2 in
+  fprintf ppf "struct XfrpUnit xfrpUnit = {};@,@,";
   if types_with_mode = []
   then ()
   else fprintf ppf "%a@,@," (print_all (gen_with_mode_type metainfo)) types_with_mode;
@@ -126,6 +127,7 @@ let generate_header ppf metainfo =
   let tuple_types = metainfo.typedata.tuple_types in
   let print_all printer = pp_print_list printer ~pp_sep:pp_print_cut2 in
   fprintf ppf "@[<v>";
+  fprintf ppf "struct XfrpUnit {};@,@,";
   if nonenum_tid_defs = []
   then ()
   else fprintf ppf "%a@,@," (print_all (gen_tid metainfo)) nonenum_tid_defs;

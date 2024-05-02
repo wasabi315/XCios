@@ -605,6 +605,7 @@ typespec:
   | id = UID
     {
       match id with
+      | "Unit" -> TUnit
       | "Bool" -> TBool
       | "Int" -> TInt
       | "Float" -> TFloat
