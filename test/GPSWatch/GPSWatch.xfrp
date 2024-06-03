@@ -1,5 +1,5 @@
 # A GPS module has two power modes: Sleep and On.
-mode GpsMode = Sleep | accessible On
+mode GpsMode = Sleep < acc On
 
 switchmodule Main {
   in  pulse1s: Bool,

@@ -20,7 +20,7 @@
         "type",         TYPE;
         "fun",          FUN;
         "mode",         MODE;
-        "accessible",   ACCESSIBLE;
+        "acc",          ACC;
         "newnode",      NEWNODE;
         "node",         NODE;
         "state",        STATE;

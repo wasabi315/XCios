@@ -53,7 +53,7 @@ let split_file_elems elems =
 
 %token
 MODULE SWITCHMODULE IN OUT USE INIT PUBLIC SHARED
-CONST TYPE FUN MODE ACCESSIBLE STATE NODE NEWNODE WITH SWITCH
+CONST TYPE FUN MODE ACC STATE NODE NEWNODE WITH SWITCH
 RETAIN LAST IF THEN ELSE LET CASE OF
 TRUE FALSE
 
@@ -196,9 +196,9 @@ mode_value_defs:
     { [], [] }
   | mode = UID
     { [mode], [] }
-  | ACCESSIBLE acc_modes = separated_list(OR, UID)
+  | ACC acc_modes = separated_list(pair(LT, ACC), UID)
     { [], acc_modes }
-  | mode = UID OR modes = mode_value_defs
+  | mode = UID LT modes = mode_value_defs
     {
       let modes , acc_modes = modes in
       mode :: modes, acc_modes

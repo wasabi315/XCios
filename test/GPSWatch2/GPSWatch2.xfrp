@@ -1,5 +1,5 @@
-mode GpsMode = Off | accessible LowAcc | HighAcc
-mode LocDispMode = Off2 | accessible On
+mode GpsMode = Off < acc LowAcc < acc HighAcc
+mode LocDispMode = Off2 < acc On
 
 switchmodule Watch {
   in  pulse1s: Bool, adjust: Bool, gpsData: 'GpsMode GpsData

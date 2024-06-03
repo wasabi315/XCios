@@ -1,4 +1,4 @@
-mode OnOff = Off | accessible On
+mode OnOff = Off < acc On
 
 module Id {
   in input : 'OnOff (Float, Float)
