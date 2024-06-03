@@ -106,6 +106,7 @@ let calc_typedata all_data file_ord metainfo =
     |> List.filter_map (function
       | _, TMode (file, mode_id, t) -> Some (file, mode_id, t)
       | _ -> None)
+    |> List.sort_uniq compare
   in
   let () =
     Hashtbl.iter
