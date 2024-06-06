@@ -97,7 +97,7 @@ and visit_newnode moduledata def (clock, lifetime, mode_calc) =
          , clock + info.smodule_clockperiod
          , info.smodule_in_sig
          , info.smodule_out_sig
-         , info.smodule_init_modev ))
+         , Idmap.map snd info.smodule_init_modev ))
     | _ -> assert false
   in
   let lifetime =
@@ -286,7 +286,7 @@ and visit_smodule file def moduledata =
     match def.smodule_init with
     | EVariant ((state_id, _), _), _ ->
       Idmap.find state_id state_mode_calc
-      |> Idmap.map (fun mode_calc -> mode_calc.init_modev)
+      |> Idmap.map (fun mode_calc -> mode_calc.mode_type, mode_calc.init_modev)
     | _ -> assert false
   in
   let param_sig = def.smodule_params in

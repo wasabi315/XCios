@@ -584,13 +584,28 @@ let infer_mode_annot env tenv annot =
       (fun (id, mode) ->
         let mode = infer_idref env tenv 1 mode in
         (match infer_idref env tenv 1 (id, UnknownId), mode with
-         | (node_id, NodeId (OutputNode, _, _)), (_, ModeValue (_, _, _, true)) ->
+         | (node_id, NodeId (OutputNode, _, _)), (_, ModeValue (_, _, _, Acc)) ->
            Hashset.add undefined_out_nodes node_id
          | _ -> ());
         id, mode)
       annot
   in
-  annot, undefined_out_nodes
+  let env =
+    List.fold_left
+      (fun env -> function
+        | _, (_, ModeValue (_, _, _, Acc)) -> env
+        | id, (modev, ModeValue (_, _, _, Inacc)) ->
+          let attr, t =
+            match Idmap.find id env with
+            | NodeId (attr, _, t) -> attr, t
+            | _ -> assert false
+          in
+          add_env_shadowing id (InaccNodeId (modev, attr, t)) env
+        | _ -> assert false)
+      env
+      annot
+  in
+  env, annot, undefined_out_nodes
 ;;
 
 let infer_whole_nodes env tenv undefined_out_nodes nodes newnodes =
@@ -676,24 +691,9 @@ let infer_module env tenv def =
     def, env
   in
   let infer_module_mode_annot env tenv def =
-    let annot, undefined_out_nodes = infer_mode_annot env tenv def.module_mode_annot in
+    let env, annot, undef_out_nodes = infer_mode_annot env tenv def.module_mode_annot in
     let def = { def with module_mode_annot = annot } in
-    let env =
-      List.fold_left
-        (fun env -> function
-          | _, (_, ModeValue (_, _, _, true)) -> env
-          | id, (modev, ModeValue (_, _, _, false)) ->
-            let attr, t =
-              match Idmap.find id env with
-              | NodeId (attr, _, t) -> attr, t
-              | _ -> assert false
-            in
-            add_env_shadowing id (InaccNodeId (modev, attr, t)) env
-          | _ -> assert false)
-        env
-        annot
-    in
-    def, env, undefined_out_nodes
+    def, env, undef_out_nodes
   in
   let infer_module_consts env tenv def =
     let cs, all, env =
@@ -741,24 +741,9 @@ let infer_state env tenv file mname def =
       env
   in
   let infer_state_mode_annot env tenv def =
-    let annot, undefined_out_nodes = infer_mode_annot env tenv def.state_mode_annot in
+    let env, annot, undef_out_nodes = infer_mode_annot env tenv def.state_mode_annot in
     let def = { def with state_mode_annot = annot } in
-    let env =
-      List.fold_left
-        (fun env -> function
-          | _, (_, ModeValue (_, _, _, true)) -> env
-          | id, (modev, ModeValue (_, _, _, false)) ->
-            let attr, t =
-              match Idmap.find id env with
-              | NodeId (attr, _, t) -> attr, t
-              | _ -> assert false
-            in
-            add_env_shadowing id (InaccNodeId (modev, attr, t)) env
-          | _ -> assert false)
-        env
-        annot
-    in
-    def, env, undefined_out_nodes
+    def, env, undef_out_nodes
   in
   let infer_state_consts env tenv def =
     let cs, all, env =
@@ -918,16 +903,11 @@ let infer_smodule env tenv file def =
 let infer (other_progs : xfrp Idmap.t) (file : string) (prog : xfrp) : xfrp =
   let register_modevals file def env : env =
     (env, 0)
-    |> List.fold_right
-         (fun v (env, i) ->
-           let entry = ModeValue (file, def.mode_id, i, false) in
-           add_env v entry env, i + 1)
+    |> Idmap.fold
+         (fun mval acc (env, i) ->
+           let entry = ModeValue (file, def.mode_id, i, acc) in
+           add_env mval entry env, i + 1)
          def.mode_vals
-    |> List.fold_right
-         (fun v (env, i) ->
-           let entry = ModeValue (file, def.mode_id, i, true) in
-           add_env v entry env, i + 1)
-         def.mode_acc_vals
     |> fst
   in
   let register_typeconses file def env : env =

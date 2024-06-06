@@ -1,4 +1,4 @@
-mode OnOff = Off < acc On
+ordered mode OnOff = Off < acc On
 
 module Id {
   in input : 'OnOff (Float, Float)

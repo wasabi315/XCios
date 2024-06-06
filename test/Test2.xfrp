@@ -1,5 +1,5 @@
-mode OnOff = Off < acc On
-mode GpsMode = Off2 < acc LowAcc < acc HighAcc
+ordered mode OnOff = Off < acc On
+ordered mode GpsMode = Off2 < acc LowAcc < acc HighAcc
 
 fun hoge(x,y) = x == y
 

@@ -144,7 +144,7 @@ type smodule_info =
   ; smodule_out_sig : (identifier * Type.t) list
   ; state_lifetime : lifetime Idmap.t
   ; state_mode_calc : mode_calc Idmap.t Idmap.t
-  ; smodule_init_modev : (identifier * int) Idmap.t
+  ; smodule_init_modev : ((string * identifier) * (identifier * int)) Idmap.t
   }
 
 let pp_smodule_info ppf smodule_info =
@@ -166,7 +166,7 @@ let pp_smodule_info ppf smodule_info =
   fprintf
     ppf
     "@,smodule_init_modev:@;<0 2>@[<v>%a@]"
-    (pp_idmap (fun ppf (id, _) -> pp_identifier ppf id))
+    (pp_idmap (fun ppf (_, (id, _)) -> pp_identifier ppf id))
     smodule_info.smodule_init_modev;
   fprintf ppf "@]"
 ;;
@@ -195,7 +195,7 @@ type typedata =
   ; tuple_types : Type.t list list
   ; tstate_defs : (string * xfrp_smodule) list
   ; tstate_param_ids : (Type.t, string list Idmap.t) Hashtbl.t
-  ; modes : (string * modedef) list
+  ; modes : (string * modetydef) list
   ; types_with_mode : (string * identifier * Type.t) list
   }
 

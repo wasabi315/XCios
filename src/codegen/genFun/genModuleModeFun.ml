@@ -121,7 +121,7 @@ let define_smodule_mode_calc_fun metainfo (file, modul) fun_writers =
             ppf
             "@,return %a;"
             gen_modev_name
-            (mode_type, fst (Idmap.find node_id info.smodule_init_modev));
+            (mode_type, fst (snd (Idmap.find node_id info.smodule_init_modev)));
           fprintf ppf "@]@,}";
           Idmap.iter
             (fun state_id mode_calc ->

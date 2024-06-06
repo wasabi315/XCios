@@ -104,7 +104,9 @@ let add_extern_prototype metainfo prototype_writers =
           (fun (file', def) -> file = file' && def.mode_id = mode_id)
           metainfo.typedata.modes
       in
-      let all_transitions = List.pairs (modedef.mode_vals @ modedef.mode_acc_vals) in
+      let all_transitions =
+        Idmap.to_seq modedef.mode_vals |> Seq.map fst |> List.of_seq |> List.pairs
+      in
       all_transitions
       |> List.map (fun (from, to_) ppf () ->
         fprintf
@@ -124,6 +126,7 @@ let gen_activate_fun ppf metainfo =
   let entry_file = metainfo.entry_file in
   let all_consts = metainfo.all_elements.all_consts in
   let param_sig, in_sig, out_sig = get_module_sig metainfo entry_file "Main" in
+  let init_modevs = get_mode_init_modev metainfo entry_file "Main" in
   let gen_head_arg ppf () =
     (pp_print_list
        (fun ppf (id, t) ->
@@ -156,30 +159,18 @@ let gen_activate_fun ppf metainfo =
       all_consts
     |> List.rev
   in
-  let gen_io_node_init ppf io_sig =
-    let gen_single = function
-      | id, Type.TMode (file, mode_id, _) ->
-        let _, modedef =
-          List.find
-            (fun (file', def) -> file = file' && def.mode_id = mode_id)
-            metainfo.typedata.modes
-        in
-        let smallest_modev =
-          match modedef.mode_vals @ modedef.mode_acc_vals with
-          | [] -> assert false
-          | modev :: _ -> modev
-        in
-        fprintf
-          ppf
-          "@,%a.mode[!current_side] = %a;"
-          pp_identifier
-          id
-          gen_modev_name
-          ((file, mode_id), smallest_modev);
-        fprintf ppf "@,memory.%a = &%a;" pp_identifier id pp_identifier id
-      | _ -> ()
+  let gen_io_node_init ppf init_modevs =
+    let gen_single id ((file, mode_id), (init_modev, _)) =
+      fprintf
+        ppf
+        "@,%a.mode[!current_side] = %a;"
+        pp_identifier
+        id
+        gen_modev_name
+        ((file, mode_id), init_modev);
+      fprintf ppf "@,memory.%a = &%a;" pp_identifier id pp_identifier id
     in
-    List.iter gen_single io_sig
+    Idmap.iter gen_single init_modevs
   in
   let gen_mode_calc ppf io_sig =
     let gen_single = function
@@ -204,7 +195,9 @@ let gen_activate_fun ppf metainfo =
             (fun (file', def) -> file = file' && def.mode_id = mode_id)
             metainfo.typedata.modes
         in
-        let all_transitions = List.pairs (modedef.mode_vals @ modedef.mode_acc_vals) in
+        let all_transitions =
+          Idmap.to_seq modedef.mode_vals |> Seq.map fst |> List.of_seq |> List.pairs
+        in
         all_transitions
         |> List.iter (fun (from, to_) ->
           fprintf
@@ -301,7 +294,7 @@ let gen_activate_fun ppf metainfo =
     if all_consts = []
     then ()
     else fprintf ppf "@,%a" (pp_print_list gen_body_const_init) all_consts;
-    gen_io_node_init ppf io_sig;
+    gen_io_node_init ppf init_modevs;
     fprintf ppf "@,memory.init = 1;";
     fprintf ppf "@,while (1) {@;<0 2>";
     fprintf ppf "@[<v>%a@]@," gen_body_loop ();

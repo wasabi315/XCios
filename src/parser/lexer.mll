@@ -19,6 +19,7 @@
         "const",        CONST;
         "type",         TYPE;
         "fun",          FUN;
+        "ordered",      ORDERED;
         "mode",         MODE;
         "acc",          ACC;
         "newnode",      NEWNODE;

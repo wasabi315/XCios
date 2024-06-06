@@ -53,7 +53,7 @@ let split_file_elems elems =
 
 %token
 MODULE SWITCHMODULE IN OUT USE INIT PUBLIC SHARED
-CONST TYPE FUN MODE ACC STATE NODE NEWNODE WITH SWITCH
+CONST TYPE FUN ORDERED MODE ACC STATE NODE NEWNODE WITH SWITCH
 RETAIN LAST IF THEN ELSE LET CASE OF
 TRUE FALSE
 
@@ -185,20 +185,35 @@ variant_def:
 
 (* mode *)
 modedef:
-  | MODE id = UID EQUAL modes = mode_value_defs
+  | ORDERED MODE id = UID EQUAL mvals = omode_value_defs
   {
-    let modes , acc_modes = modes in
-    { mode_pub = false; mode_id = id; mode_vals = modes; mode_acc_vals = acc_modes }
+    let inacc_mvals , acc_mvals = mvals in
+    let mode_val_ord = inacc_mvals @ acc_mvals in
+    let inacc_mvals =
+      inacc_mvals
+      |> List.to_seq
+      |> Seq.map (fun mval -> (mval, Inacc))
+    in
+    let acc_mvals =
+      acc_mvals
+      |> List.to_seq
+      |> Seq.map (fun mval -> (mval, Acc))
+    in
+    { mode_pub = false
+    ; mode_id = id
+    ; mode_vals = Idmap.of_seq (Seq.append inacc_mvals acc_mvals)
+    ; mode_val_ord = Some(mode_val_ord)
+    }
   }
 
-mode_value_defs:
+omode_value_defs:
   | (* empty *)
     { [], [] }
   | mode = UID
     { [mode], [] }
   | ACC acc_modes = separated_list(pair(LT, ACC), UID)
     { [], acc_modes }
-  | mode = UID LT modes = mode_value_defs
+  | mode = UID LT modes = omode_value_defs
     {
       let modes , acc_modes = modes in
       mode :: modes, acc_modes

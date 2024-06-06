@@ -6,7 +6,9 @@ open CodegenUtil
 let gen_mode ppf (file, mode) =
   let gen_mode_head ppf () = fprintf ppf "enum %a" gen_mode_name (file, mode.mode_id) in
   let gen_mode_body ppf () =
-    mode.mode_vals @ mode.mode_acc_vals
+    (match mode.mode_val_ord with
+     | None -> Idmap.to_seq mode.mode_vals |> Seq.map fst |> List.of_seq
+     | Some modev_ord -> modev_ord)
     |> List.map (fun modev -> (file, mode.mode_id), modev)
     |> fprintf ppf "%a" (pp_list_comma gen_modev_name)
   in

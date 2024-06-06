@@ -56,6 +56,15 @@ let pp_nattr ppf = function
   | SharedNode -> fprintf ppf "shared"
 ;;
 
+type access =
+  | Acc
+  | Inacc
+
+let pp_access ppf = function
+  | Acc -> fprintf ppf "acc"
+  | Inacc -> fprintf ppf "inacc"
+;;
+
 (* identifier reference *)
 type idinfo =
   | UnknownId
@@ -71,7 +80,7 @@ type idinfo =
   | StateConst of Type.t
   | NodeId of nattr * (* initial value set? *) bool * Type.t
   | InaccNodeId of identifier * nattr * Type.t
-  | ModeValue of string * string * int (* order *) * (* accessible? *) bool
+  | ModeValue of string * string * int (* order *) * access
 
 let pp_idinfo ppf = function
   | UnknownId -> fprintf ppf "unknown"
@@ -370,23 +379,24 @@ let pp_typedef ppf { type_pub; type_id; type_conses } =
 ;;
 
 (* mode *)
-type modedef =
+
+type modetydef =
   { mode_pub : bool
   ; mode_id : identifier
-  ; mode_vals : identifier list
-  ; mode_acc_vals : identifier list
+  ; mode_vals : access Idmap.t
+  ; mode_val_ord : identifier list option
   }
 
-let pp_modedef ppf { mode_pub; mode_id; mode_vals; mode_acc_vals } =
+let pp_modedef ppf { mode_pub; mode_id; mode_vals; mode_val_ord } =
   fprintf ppf "@[<v>ModeDef: {@;<0 2>";
   fprintf ppf "@[<v>id: %a@;" pp_identifier mode_id;
   fprintf ppf "public: %a@;" pp_print_bool mode_pub;
-  fprintf ppf "mode values: @[%a@]@;" (pp_list_comma pp_identifier) mode_vals;
+  fprintf ppf "mode values: @[%a@]@;" (pp_idmap pp_access) mode_vals;
   fprintf
     ppf
-    "accessible mode values: @[%a@]@]@;"
-    (pp_list_comma pp_identifier)
-    mode_acc_vals;
+    "mode value order: @[%a@]@]@;"
+    (pp_print_option (pp_list_comma pp_identifier))
+    mode_val_ord;
   fprintf ppf "}@]"
 ;;
 
@@ -612,7 +622,7 @@ let pp_xfrp_smodule ppf def =
 (* whole program *)
 type xfrp_elem =
   | XFRPType of typedef
-  | XFRPMode of modedef
+  | XFRPMode of modetydef
   | XFRPConst of constdef
   | XFRPFun of fundef
   | XFRPModule of xfrp_module
@@ -639,7 +649,7 @@ let xfrp_elem_id = function
 type xfrp =
   { xfrp_use : identifier list
   ; xfrp_types : typedef Idmap.t
-  ; xfrp_modes : modedef Idmap.t
+  ; xfrp_modes : modetydef Idmap.t
   ; xfrp_consts : constdef Idmap.t
   ; xfrp_funs : fundef Idmap.t
   ; xfrp_modules : xfrp_module Idmap.t
