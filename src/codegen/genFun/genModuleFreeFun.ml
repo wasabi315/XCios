@@ -272,7 +272,7 @@ let define_smodule_free_fun metainfo (file, xfrp_smodule) fun_writers =
           (fun (tag, state_free) ->
             fprintf ppf "@,@[<v 2>case %a: {@," gen_tstate_tag_val tag;
             exec_all_writers () ppf state_free;
-            fprintf ppf "@]@,}")
+            fprintf ppf "@,break;@]@,}")
           states_free;
         fprintf ppf "@,@[<v 2>default: {@,break;@]@,}";
         fprintf ppf "@]@,}");

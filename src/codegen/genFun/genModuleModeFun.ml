@@ -139,7 +139,7 @@ let define_smodule_mode_calc_fun metainfo (file, modul) fun_writers =
                   (mode_type, fst mode_calc.init_modev);
                 fprintf ppf "@]@,}");
               gen_mode_calc ppf mode_calc;
-              fprintf ppf "@]@,}")
+              fprintf ppf "@,break;@]@,}")
             mode_calcs;
           fprintf ppf "@]@,}";
           fprintf ppf "@]"

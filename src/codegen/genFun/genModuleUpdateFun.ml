@@ -602,7 +602,7 @@ let define_smodule_update_fun metainfo (file, xfrp_smodule) fun_writers =
               gen_tstate_tag_val
               ((file, module_id), state.state_id);
             fprintf ppf "@[<v>%a@]" gen_body_state state;
-            fprintf ppf "@]@,}")
+            fprintf ppf "@,break;@]@,}")
           states;
         fprintf ppf "@]@,}"
     in
