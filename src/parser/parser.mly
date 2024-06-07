@@ -184,24 +184,36 @@ variant_def:
     }
 
 (* mode *)
+accessibility:
+  | (* empty *) { Inacc }
+  | ACC { Acc }
+
 modedef:
-  | ORDERED MODE id = UID EQUAL mvals = omode_value_defs
+  | MODE id = UID EQUAL modevs = separated_nonempty_list(OR, pair(accessibility, UID))
   {
-    let inacc_mvals , acc_mvals = mvals in
-    let mode_val_ord = inacc_mvals @ acc_mvals in
-    let inacc_mvals =
-      inacc_mvals
+    { mode_pub = false
+    ; mode_id = id
+    ; mode_vals = List.to_seq modevs |> Seq.map (fun (acc, modev) -> (modev, acc)) |> Idmap.of_seq
+    ; mode_val_ord = None
+    }
+  }
+  | ORDERED MODE id = UID EQUAL modevs = omode_value_defs
+  {
+    let inacc_modevs , acc_modevs = modevs in
+    let mode_val_ord = inacc_modevs @ acc_modevs in
+    let inacc_modevs =
+      inacc_modevs
       |> List.to_seq
-      |> Seq.map (fun mval -> (mval, Inacc))
+      |> Seq.map (fun modev -> (modev, Inacc))
     in
-    let acc_mvals =
-      acc_mvals
+    let acc_modevs =
+      acc_modevs
       |> List.to_seq
-      |> Seq.map (fun mval -> (mval, Acc))
+      |> Seq.map (fun modev -> (modev, Acc))
     in
     { mode_pub = false
     ; mode_id = id
-    ; mode_vals = Idmap.of_seq (Seq.append inacc_mvals acc_mvals)
+    ; mode_vals = Idmap.of_seq (Seq.append inacc_modevs acc_modevs)
     ; mode_val_ord = Some(mode_val_ord)
     }
   }

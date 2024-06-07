@@ -904,9 +904,9 @@ let infer (other_progs : xfrp Idmap.t) (file : string) (prog : xfrp) : xfrp =
   let register_modevals file def env : env =
     (env, 0)
     |> Idmap.fold
-         (fun mval acc (env, i) ->
+         (fun modev acc (env, i) ->
            let entry = ModeValue (file, def.mode_id, i, acc) in
-           add_env mval entry env, i + 1)
+           add_env modev entry env, i + 1)
          def.mode_vals
     |> fst
   in
