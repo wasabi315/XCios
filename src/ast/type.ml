@@ -47,6 +47,11 @@ and pp_tvar ppf = function
   | TVBound t -> fprintf ppf "<tvbound : %a>" pp_t t
 ;;
 
+let map_under_mode f = function
+  | TMode (file, mode_name, t) -> TMode (file, mode_name, f t)
+  | t -> f t
+;;
+
 let tvar_counter = ref 0
 
 (* generate fresh free variable *)

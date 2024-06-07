@@ -29,3 +29,11 @@ let raise_ionode_past_value id =
 ;;
 
 let raise_uninitialized id = raise_err_pp "Node %a is uninitialized" pp_identifier id
+
+let raise_name_conflict id =
+  raise_err_pp "Name conflict: %a is already used" pp_identifier id
+;;
+
+let raise_ionode_init id =
+  raise_err_pp "I/O node %a does not have initial value" pp_identifier id
+;;

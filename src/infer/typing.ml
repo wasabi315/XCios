@@ -415,6 +415,7 @@ and infer_expression_acc env level ast =
     (match find_inacc id env with
      | Some modev -> raise_inaccessible id modev
      | None -> e, t)
+  | _, TMode _ -> assert false
   | e -> e
 ;;
 
@@ -470,13 +471,7 @@ let infer_node env undefined_out_nodes def =
     | None -> None
   in
   let ((_, tbody) as body) = infer_expression_acc env 1 def.node_body in
-  let t =
-    (* Keep mode information *)
-    match t, unify t tbody with
-    | TMode (_, _, _), (TMode (_, _, _) as t) -> t
-    | TMode (file, mode, _), t -> TMode (file, mode, t)
-    | _, t -> t
-  in
+  let t = map_under_mode (unify tbody) t in
   (match def.node_attr with
    | OutputNode -> Hashset.remove undefined_out_nodes def.node_id
    | _ -> ());
@@ -639,18 +634,16 @@ let infer_module env def =
     let in_nodes = List.map (infer_header_node env) def.module_in in
     let out_nodes = List.map (infer_header_node env) def.module_out in
     let def = { def with module_in = in_nodes; module_out = out_nodes } in
+    let register_header_node attr (id, init, t) env =
+      match init, t with
+      | Some _, TMode _ -> raise_ionode_init id
+      | Some _, _ -> add_info id (NodeId (attr, Init, t)) env
+      | None, _ -> add_info id (NodeId (attr, Uninit, t)) env
+    in
     let env =
       env
-      |> List.fold_right
-           (fun (id, init, t) env ->
-             let init = if Option.is_some init then Init else Uninit in
-             add_info id (NodeId (InputNode, init, t)) env)
-           in_nodes
-      |> List.fold_right
-           (fun (id, init, t) env ->
-             let init = if Option.is_some init then Init else Uninit in
-             add_info id (NodeId (OutputNode, init, t)) env)
-           out_nodes
+      |> List.fold_right (register_header_node InputNode) in_nodes
+      |> List.fold_right (register_header_node OutputNode) out_nodes
     in
     def, env
   in

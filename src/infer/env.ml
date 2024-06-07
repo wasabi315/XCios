@@ -16,14 +16,11 @@ let empty_env : env =
   }
 ;;
 
-exception NameConflict of identifier
-exception NotFound of identifier
-
 (* Add new entry to environment.
    If `id` is already used, then raise NameConflict Exception *)
 let add_uniq (id : identifier) (value : 'a) (map : 'a Idmap.t) : 'a Idmap.t =
   match Idmap.find_opt id map with
-  | Some _ -> raise (NameConflict id)
+  | Some _ -> raise_name_conflict id
   | None -> Idmap.add id value map
 ;;
 
