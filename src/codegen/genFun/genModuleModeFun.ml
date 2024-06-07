@@ -76,8 +76,6 @@ let define_smodule_mode_calc_fun metainfo (file, modul) fun_writers =
     | SModuleInfo info -> info
     | _ -> assert false
   in
-  let tstate = Type.TState (file, modul.smodule_id) in
-  let tag_table = Hashtbl.find metainfo.typedata.cons_tag tstate in
   (* transposing nested maps *)
   let mode_calcs =
     Idmap.fold
@@ -123,12 +121,14 @@ let define_smodule_mode_calc_fun metainfo (file, modul) fun_writers =
             gen_modev_name
             (mode_type, fst (snd (Idmap.find node_id info.smodule_init_modev)));
           fprintf ppf "@]@,}";
+          fprintf ppf "@,@[<v 2>switch (memory->state->tag) {";
           Idmap.iter
             (fun state_id mode_calc ->
               fprintf
                 ppf
-                "@,@[<v 2>if (memory->state->tag == %d) {"
-                (Idmap.find state_id tag_table);
+                "@,@[<v 2>case %a: {"
+                gen_tstate_tag_val
+                ((file, modul.smodule_id), state_id);
               if mode_calc.child_modev <> []
               then (
                 fprintf ppf "@,@[<v 2>if (memory->state->fresh) {";
@@ -141,6 +141,7 @@ let define_smodule_mode_calc_fun metainfo (file, modul) fun_writers =
               gen_mode_calc ppf mode_calc;
               fprintf ppf "@]@,}")
             mode_calcs;
+          fprintf ppf "@]@,}";
           fprintf ppf "@]"
         in
         gen_codeblock gen_header gen_body ppf ()

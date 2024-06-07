@@ -8,6 +8,15 @@ open CodegenUtil
 let gen_tid metainfo ppf (file, typedef) =
   let typedata = metainfo.typedata in
   let tid = TId (file, typedef.type_id) in
+  let gen_tid_tag_head ppf () =
+    fprintf ppf "enum %a" gen_tid_tag_name (file, typedef.type_id)
+  in
+  let gen_tid_tag_body ppf () =
+    let gen_tag_val ppf (c, _) = gen_tid_tag_val ppf ((file, typedef.type_id), c) in
+    fprintf ppf "@[<hov>";
+    pp_list_comma gen_tag_val ppf (Idmap.bindings typedef.type_conses);
+    fprintf ppf "@]"
+  in
   let gen_value_union ppf conses =
     let gen_union_field ppf (c, vtype) =
       fprintf ppf "@[<h>%a %a;@]" (gen_value_type metainfo) vtype pp_print_string c
@@ -30,11 +39,12 @@ let gen_tid metainfo ppf (file, typedef) =
     fprintf ppf "@[<h>int mark;@]";
     if Hashset.mem typedata.singleton_types tid
     then ()
-    else fprintf ppf "@,@[<h>int tag;@]";
+    else fprintf ppf "@,@[<h>enum %a tag;@]" gen_tid_tag_name (file, typedef.type_id);
     fprintf ppf "@,";
     gen_value_union ppf typedef.type_conses;
     fprintf ppf "@]"
   in
+  fprintf ppf "%a;@," (gen_codeblock gen_tid_tag_head gen_tid_tag_body) ();
   fprintf ppf "%a;" (gen_codeblock gen_tid_head gen_tid_body) ()
 ;;
 
@@ -67,6 +77,17 @@ let gen_with_mode_type metainfo ppf ((file, mode_id, t') as t) =
 let gen_tstate metainfo ppf (file, xfrp_smodule) =
   let typedata = metainfo.typedata in
   let tstate = TState (file, xfrp_smodule.smodule_id) in
+  let gen_tstate_tag_head ppf () =
+    fprintf ppf "enum %a" gen_tstate_tag_name (file, xfrp_smodule.smodule_id)
+  in
+  let gen_tstate_tag_body ppf () =
+    let gen_tag_val ppf (c, _) =
+      gen_tstate_tag_val ppf ((file, xfrp_smodule.smodule_id), c)
+    in
+    fprintf ppf "@[<hov>";
+    pp_list_comma gen_tag_val ppf (Idmap.bindings xfrp_smodule.smodule_states);
+    fprintf ppf "@]"
+  in
   let gen_param_struct ppf state =
     let gen_param_field ppf (id, t) =
       fprintf ppf "@[<h>%a %a;@]" (gen_value_type metainfo) t pp_print_string id
@@ -99,12 +120,18 @@ let gen_tstate metainfo ppf (file, xfrp_smodule) =
     fprintf ppf "@,@[<h>int fresh;@]";
     if Hashset.mem typedata.singleton_types tstate
     then ()
-    else fprintf ppf "@,@[<h>int tag;@]";
+    else
+      fprintf
+        ppf
+        "@,@[<h>enum %a tag;@]"
+        gen_tstate_tag_name
+        (file, xfrp_smodule.smodule_id);
     if states_with_params = []
     then ()
     else fprintf ppf "@,%a" gen_param_union states_with_params;
     fprintf ppf "@]"
   in
+  fprintf ppf "%a;@," (gen_codeblock gen_tstate_tag_head gen_tstate_tag_body) ();
   fprintf ppf "%a;" (gen_codeblock gen_tstate_head gen_tstate_body) ()
 ;;
 

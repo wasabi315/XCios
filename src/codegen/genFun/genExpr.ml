@@ -72,10 +72,16 @@ let get_pattern_conds_binds metainfo gen_target pattern =
         then conds
         else (
           let tag = Hashtbl.find cons_tag tpat |> Idmap.find cons_id in
+          let type_id =
+            match tpat with
+            | TId (file, id) -> file, id
+            | _ -> assert false
+          in
           let gen_cond ppf () =
             if Hashset.mem enum_types tpat
             then fprintf ppf "%a == %a" gen_target () pp_print_int tag
-            else fprintf ppf "%a->tag == %a" gen_target () pp_print_int tag
+            else
+              fprintf ppf "%a->tag == %a" gen_target () gen_tid_tag_val (type_id, cons_id)
           in
           gen_cond :: conds)
       in
@@ -94,9 +100,13 @@ let get_pattern_conds_binds metainfo gen_target pattern =
         if Hashset.mem singleton_types tpat
         then conds
         else (
-          let tag = Hashtbl.find cons_tag tpat |> Idmap.find cons_id in
+          let mod_id =
+            match tpat with
+            | TState (file, id) -> file, id
+            | _ -> assert false
+          in
           let gen_cond ppf () =
-            fprintf ppf "%a->tag == %a" gen_target () pp_print_int tag
+            fprintf ppf "%a->tag == %a" gen_target () gen_tstate_tag_val (mod_id, cons_id)
           in
           gen_cond :: conds)
       in

@@ -71,8 +71,9 @@ let define_tid_conses metainfo (file, typedef) fun_writers =
         if is_singleton
         then writers
         else (
-          let tag = Hashtbl.find typedata.cons_tag tid |> Idmap.find cons_id in
-          let writer ppf () = fprintf ppf "x->tag = %d;" tag in
+          let writer ppf () =
+            fprintf ppf "x->tag = %a;" gen_tid_tag_val ((file, type_id), cons_id)
+          in
           writer :: writers)
       in
       let writers =
@@ -188,9 +189,7 @@ let define_tstate_conses metainfo (file, xfrp_smodule) fun_writers =
       fprintf ppf "x->fresh = 1;";
       if is_singleton
       then ()
-      else (
-        let tag = Hashtbl.find typedata.cons_tag tstate |> Idmap.find state_id in
-        fprintf ppf "@,x->tag = %d;" tag);
+      else fprintf ppf "@,x->tag = %a;" gen_tstate_tag_val ((file, module_id), state_id);
       if state_params = []
       then ()
       else (
@@ -277,11 +276,10 @@ let define_tid_gcfun metainfo (file, typedef) fun_writers =
   let typename = asprintf "%a" gen_tid_typename (file, type_id) in
   let enum_types = metainfo.typedata.enum_types in
   let singleton_types = metainfo.typedata.singleton_types in
-  let tag_table = Hashtbl.find metainfo.typedata.cons_tag tid in
   let reccall_branchs =
     Idmap.fold
       (fun cons_id vtype branchs ->
-        let tag = Idmap.find cons_id tag_table in
+        let tag = (file, type_id), cons_id in
         match vtype with
         | TBool | TInt | TFloat | TUnit -> branchs
         | TId (file, type_id) ->
@@ -326,7 +324,7 @@ let define_tid_gcfun metainfo (file, typedef) fun_writers =
             fprintf
               ppf
               "@[<v 2>case %a:@,%a@]"
-              pp_print_int
+              gen_tid_tag_val
               tag
               gen_funcall
               (cons_id, vtypename))
@@ -388,7 +386,6 @@ let define_tstate_gcfun metainfo (file, xfrp_smodule) fun_writers =
   let typename = asprintf "%a" gen_tstate_typename (file, module_id) in
   let enum_types = metainfo.typedata.enum_types in
   let singleton_types = metainfo.typedata.singleton_types in
-  let tag_table = Hashtbl.find metainfo.typedata.cons_tag tstate in
   let get_state_reccalls state =
     let state_id = state.state_id in
     List.fold_right
@@ -411,7 +408,7 @@ let define_tstate_gcfun metainfo (file, xfrp_smodule) fun_writers =
   let reccall_branchs =
     idmap_fold_values
       (fun state branchs ->
-        let tag = Idmap.find state.state_id tag_table in
+        let tag = (file, module_id), state.state_id in
         let reccalls = get_state_reccalls state in
         if reccalls = [] then branchs else (tag, reccalls) :: branchs)
       xfrp_smodule.smodule_states
@@ -445,7 +442,7 @@ let define_tstate_gcfun metainfo (file, xfrp_smodule) fun_writers =
             fprintf
               ppf
               "@[<v 2>case %a:@,@[<v>%a@]@]"
-              pp_print_int
+              gen_tstate_tag_val
               tag
               (pp_print_list gen_funcall)
               reccalls)

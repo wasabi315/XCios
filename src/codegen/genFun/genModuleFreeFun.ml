@@ -248,13 +248,11 @@ let define_smodule_free_fun metainfo (file, xfrp_smodule) fun_writers =
       in
       let all_writers = params_free @ consts_free in
       let states_free =
-        let tstate = TState (file, xfrp_smodule.smodule_id) in
-        let tag_table = Hashtbl.find metainfo.typedata.cons_tag tstate in
         List.fold_left
           (fun states_free state ->
-            let cons_tag = Idmap.find state.state_id tag_table in
+            let tag = (file, xfrp_smodule.smodule_id), state.state_id in
             let state_free = get_state_free state in
-            if state_free = [] then states_free else (cons_tag, state_free) :: states_free)
+            if state_free = [] then states_free else (tag, state_free) :: states_free)
           []
           (idmap_value_list xfrp_smodule.smodule_states)
         |> List.rev
@@ -268,15 +266,16 @@ let define_smodule_free_fun metainfo (file, xfrp_smodule) fun_writers =
       fprintf ppf "}";
       if states_free = []
       then ()
-      else
-        (pp_print_list
-           (fun ppf (tag, state_free) ->
-             fprintf ppf " else if (memory->state->tag == %d) {@;<0 2>" tag;
-             fprintf ppf "@[<v>%a@]@," (exec_all_writers ()) state_free;
-             fprintf ppf "}")
-           ~pp_sep:pp_none)
-          ppf
+      else (
+        fprintf ppf "@,@[<v 2>switch (memory->state->tag) {";
+        List.iter
+          (fun (tag, state_free) ->
+            fprintf ppf "@,@[<v 2>case %a: {@," gen_tstate_tag_val tag;
+            exec_all_writers () ppf state_free;
+            fprintf ppf "@]@,}")
           states_free;
+        fprintf ppf "@,@[<v 2>default: {@,break;@]@,}";
+        fprintf ppf "@]@,}");
       fprintf
         ppf
         "@,free_%a(memory->state);"

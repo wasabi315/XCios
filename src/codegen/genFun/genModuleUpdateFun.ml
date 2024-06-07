@@ -589,28 +589,22 @@ let define_smodule_update_fun metainfo (file, xfrp_smodule) fun_writers =
       fprintf ppf "@]"
     in
     let gen_body_state_branch ppf () =
-      let tag_table = Hashtbl.find metainfo.typedata.cons_tag tstate in
-      let gen_cond ppf state =
-        let cons_tag = Idmap.find state.state_id tag_table in
-        fprintf ppf "memory->state->tag == %d" cons_tag
-      in
       match states with
       | [] -> assert false
       | [ state ] -> gen_body_state ppf state
       | states ->
-        let branch_size = List.length states in
-        fprintf ppf "@[<v>";
-        List.iteri
-          (fun pos state ->
-            if pos = 0
-            then fprintf ppf "if (%a) {@;<0 2>" gen_cond state
-            else if pos = branch_size - 1
-            then fprintf ppf " else {@;<0 2>"
-            else fprintf ppf " else if (@[<hov>%a@]) {@;<0 2>" gen_cond state;
-            fprintf ppf "@[<v>%a@]@," gen_body_state state;
-            fprintf ppf "}")
+        fprintf ppf "@[<v 2>switch (memory->state->tag) {";
+        List.iter
+          (fun state ->
+            fprintf
+              ppf
+              "@,@[<v 2>case %a: {@,"
+              gen_tstate_tag_val
+              ((file, module_id), state.state_id);
+            fprintf ppf "@[<v>%a@]" gen_body_state state;
+            fprintf ppf "@]@,}")
           states;
-        fprintf ppf "@]"
+        fprintf ppf "@]@,}"
     in
     let gen_body ppf () =
       fprintf ppf "@[<v>";

@@ -45,9 +45,21 @@ let gen_tstate_typename ppf (file, module_id) =
   fprintf ppf "State%s%s" file module_id
 ;;
 
+let gen_tstate_tag_name ppf module_id = fprintf ppf "%a_Tag" gen_tstate_typename module_id
+
+let gen_tstate_tag_val ppf (module_id, con_id) =
+  fprintf ppf "%a_%a" gen_tstate_tag_name module_id pp_print_string con_id
+;;
+
 let gen_tid_typename ppf (file, type_id) =
   let file = String.capitalize_ascii file in
   fprintf ppf "%s%s" file type_id
+;;
+
+let gen_tid_tag_name ppf type_id = fprintf ppf "%a_Tag" gen_tid_typename type_id
+
+let gen_tid_tag_val ppf (type_id, con_id) =
+  fprintf ppf "%a_%a" gen_tid_tag_name type_id pp_print_string con_id
 ;;
 
 let rec gen_ttuple_typename ppf ts =
