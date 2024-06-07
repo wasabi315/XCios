@@ -91,7 +91,7 @@ let compile path =
     let file = Filename.remove_extension basename in
     gather_filedata file |> get_metainfo file |> Codegen.codegen
   with
-  | ParseError msg | FileError msg | Typing.TypeError msg ->
+  | ParseError msg | FileError msg | Typing.Error msg ->
     printf "Compile Error : %s" msg;
     print_newline ()
 ;;

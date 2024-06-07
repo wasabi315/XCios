@@ -4,17 +4,7 @@ open Type
 open Env
 open Extension
 open Extension.Format
-
-exception TypeError of string
-
-(* Raise type error with given message `msg`. *)
-let raise_err msg = raise (TypeError msg)
-
-(* Raise type error with message. *)
-let raise_err_pp fmt = kasprintf (fun msg -> raise (TypeError msg)) fmt
-
-(* Raise type imcompatible error with `t1` and `t2`. *)
-let raise_imcompatible t1 t2 = raise_err_pp "%a and %a is not compatible" pp_t t1 pp_t t2
+include Errors
 
 (* Adjusting level of unification target pointed by another free variable
    with `id` and `level`. *)
@@ -24,7 +14,7 @@ let rec adjust_level id level = function
      | TVGeneric _ -> assert false
      | TVBound t -> adjust_level id level t
      | TVFree (id', level') ->
-       if id = id' then raise_err "recursive type" else r := TVFree (id', min level level'))
+       if id = id' then raise_recursive_type () else r := TVFree (id', min level level'))
   | TTuple ts -> List.iter (adjust_level id level) ts
   | _ -> ()
 ;;
@@ -105,16 +95,13 @@ let instantiate level t =
 let rec read_typespec env level = function
   | TEmpty -> gen_tvar_free level
   | TMode ("", mode, t) ->
-    (match find_modety mode env with
-     | Some file ->
-       let t' = read_typespec env level t in
-       TMode (file, mode, t')
-     | None -> raise_err_pp "Unknown : %a" pp_print_string mode)
+    let file = find_modety mode env in
+    let t' = read_typespec env level t in
+    TMode (file, mode, t')
   | TMode (_, _, _) -> assert false
   | TId ("", name) ->
-    (match find_ty name env with
-     | Some file -> TId (file, name)
-     | None -> raise_err_pp "Unknown : %a" pp_print_string name)
+    let file = find_ty name env in
+    TId (file, name)
   | TId (_, _) -> assert false
   | TTuple ts ->
     let ts' = List.map (read_typespec env level) ts in
@@ -213,9 +200,8 @@ and deref_branch_type { branch_pat; branch_body } =
 let infer_idref env level (id, _) =
   let idinfo =
     match find_info id env with
-    | Some UnknownId -> assert false
-    | Some idinfo -> map_idinfo_type (instantiate level) idinfo
-    | None -> raise_err_pp "Unknown %a" pp_identifier id
+    | UnknownId -> assert false
+    | idinfo -> map_idinfo_type (instantiate level) idinfo
   in
   id, idinfo
 ;;
@@ -307,7 +293,7 @@ let rec infer_expression env level (ast, _) =
   in
   let infer_retain () =
     match find_info "Retain" env with
-    | Some (LocalId t) -> ast, t
+    | LocalId t -> ast, t
     | _ -> assert false (* fail in register "Retain" *)
   in
   let infer_idexpr idref =
@@ -319,20 +305,14 @@ let rec infer_expression env level (ast, _) =
     | ModuleConst t
     | StateParam t
     | StateConst t
-    | NodeId (_, _, t)
-    | InaccNodeId (_, _, t) -> EId idref, t
+    | NodeId (_, _, t) -> EId idref, t
     | _ -> raise_err_pp "invalid identifier reference : %a" pp_identifier id
   in
   let infer_annot idref annot =
     let ((id, idinfo) as idref) = infer_idref env level idref in
     match idinfo, annot with
-    | InaccNodeId (_, _, TMode (_, _, _)), _ | NodeId (_, _, TMode (_, _, _)), _ ->
-      raise_err_pp
-        "past values of I/O node with mode cannot be accessed: %a"
-        pp_identifier
-        id
-    | NodeId (_, false, _), ALast ->
-      raise_err_pp "node %a is not initialized" pp_identifier id
+    | NodeId (_, _, TMode (_, _, _)), _ -> raise_ionode_past_value id
+    | NodeId (_, Uninit, _), ALast -> raise_uninitialized id
     | NodeId (_, _, t), ALast -> EAnnot (idref, ALast), t
     | _ -> raise_err_pp "expected node : %a" pp_identifier id
   in
@@ -431,13 +411,10 @@ let rec infer_expression env level (ast, _) =
 (* check accessiblity in addition *)
 and infer_expression_acc env level ast =
   match infer_expression env level ast with
-  | EId (id, InaccNodeId (modev, _, _)), _ ->
-    raise_err_pp
-      "%a is inaccessible when its mode is %a"
-      pp_identifier
-      id
-      pp_identifier
-      modev
+  | (EId (id, _) as e), TMode (_, _, t) ->
+    (match find_inacc id env with
+     | Some modev -> raise_inaccessible id modev
+     | None -> e, t)
   | e -> e
 ;;
 
@@ -467,7 +444,7 @@ let infer_fundef env def =
     List.map
       (fun (id, _) ->
         match find_info id env with
-        | Some (LocalId t) -> id, flatten_type t
+        | LocalId t -> id, flatten_type t
         | _ -> assert false)
       def.fun_params
   in
@@ -478,15 +455,9 @@ let infer_fundef env def =
 
 let infer_node env undefined_out_nodes def =
   let t =
-    match find_info def.node_id env with
-    | Some (NodeId (_, _, t)) -> t
-    | Some (InaccNodeId (modev, _, _)) ->
-      raise_err_pp
-        "%a is inaccessible when its mode is %a"
-        pp_identifier
-        def.node_id
-        pp_identifier
-        modev
+    match find_info def.node_id env, find_inacc def.node_id env with
+    | _, Some modev -> raise_inaccessible def.node_id modev
+    | NodeId (_, _, t), _ -> t
     | _ -> assert false
   in
   let env = add_info "Retain" (LocalId t) env in
@@ -590,13 +561,7 @@ let infer_mode_annot env annot =
     List.fold_left
       (fun env -> function
         | _, (_, ModeValue (_, _, _, Acc)) -> env
-        | id, (modev, ModeValue (_, _, _, Inacc)) ->
-          let attr, t =
-            match find_info id env with
-            | Some (NodeId (attr, _, t)) -> attr, t
-            | _ -> assert false
-          in
-          add_info_shadowing id (InaccNodeId (modev, attr, t)) env
+        | id, (modev, ModeValue (_, _, _, Inacc)) -> add_inacc id modev env
         | _ -> assert false)
       env
       annot
@@ -609,7 +574,8 @@ let infer_whole_nodes env undefined_out_nodes nodes newnodes =
     match def.node_attr with
     | NormalNode ->
       let t = read_typespec env 1 def.node_type in
-      add_info def.node_id (NodeId (NormalNode, Option.is_some def.node_init, t)) env
+      let init = if Option.is_some def.node_init then Init else Uninit in
+      add_info def.node_id (NodeId (NormalNode, init, t)) env
     | _ -> env
   in
   let add_info_newnode def env =
@@ -618,7 +584,7 @@ let infer_whole_nodes env undefined_out_nodes nodes newnodes =
         match attr with
         | NormalNode ->
           let t = read_typespec env 1 t in
-          add_info id (NodeId (NormalNode, false, t)) env
+          add_info id (NodeId (NormalNode, Uninit, t)) env
         | _ -> env)
       env
       def.newnode_binds
@@ -677,11 +643,13 @@ let infer_module env def =
       env
       |> List.fold_right
            (fun (id, init, t) env ->
-             add_info id (NodeId (InputNode, Option.is_some init, t)) env)
+             let init = if Option.is_some init then Init else Uninit in
+             add_info id (NodeId (InputNode, init, t)) env)
            in_nodes
       |> List.fold_right
            (fun (id, init, t) env ->
-             add_info id (NodeId (OutputNode, Option.is_some init, t)) env)
+             let init = if Option.is_some init then Init else Uninit in
+             add_info id (NodeId (OutputNode, init, t)) env)
            out_nodes
     in
     def, env
@@ -839,15 +807,18 @@ let infer_smodule env file def =
       env
       |> List.fold_right
            (fun (id, init, t) env ->
-             add_info id (NodeId (InputNode, Option.is_some init, t)) env)
+             let init = if Option.is_some init then Init else Uninit in
+             add_info id (NodeId (InputNode, init, t)) env)
            def.smodule_in
       |> List.fold_right
            (fun (id, init, t) env ->
-             add_info id (NodeId (OutputNode, Option.is_some init, t)) env)
+             let init = if Option.is_some init then Init else Uninit in
+             add_info id (NodeId (OutputNode, init, t)) env)
            def.smodule_out
       |> List.fold_right
            (fun (id, init, t) env ->
-             add_info id (NodeId (SharedNode, Option.is_some init, t)) env)
+             let init = if Option.is_some init then Init else Uninit in
+             add_info id (NodeId (SharedNode, init, t)) env)
            def.smodule_shared
     in
     def, env
