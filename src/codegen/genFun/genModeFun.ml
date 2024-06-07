@@ -10,9 +10,11 @@ let define_is_accessible (file, { mode_id; mode_vals; _ }) =
   let gen_definition ppf () =
     let gen_head ppf () = fprintf ppf "int %a(%a)" gen_funname () gen_arg () in
     let gen_body ppf () =
-      fprintf ppf "@[<hov 2>return@ ";
-      Idmap.to_seq mode_vals
-      |> Seq.filter (fun (_, acc) -> acc = Acc)
+      let acc_modevs = Idmap.filter (fun _ acc -> acc = Acc) mode_vals in
+      if Idmap.is_empty acc_modevs
+      then fprintf ppf "return 0"
+      else fprintf ppf "@[<hov 2>return@ ";
+      Idmap.to_seq acc_modevs
       |> Seq.iteri (fun i (modev, _) ->
         if i > 0 then fprintf ppf " ||@ ";
         fprintf ppf "modev == %a" gen_modev_name ((file, mode_id), modev));
