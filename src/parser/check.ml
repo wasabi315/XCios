@@ -127,11 +127,6 @@ let check_nodes in_decls out_decls shared_decls nodes newnodes mode_annot =
   in
   let check_mode_annot all_nodes_with_mode mode_annot =
     let annotd_nodes = mode_annot |> List.map fst |> Idset.of_list in
-    let non_annotd_nodes = Idset.diff all_nodes_with_mode annotd_nodes in
-    if not (Idset.is_empty non_annotd_nodes)
-    then (
-      let msg = Format.asprintf "Not mode-annotated : %a" pp_idset non_annotd_nodes in
-      raise (Error msg));
     let unneeded_annots = Idset.diff annotd_nodes all_nodes_with_mode in
     if not (Idset.is_empty unneeded_annots)
     then (

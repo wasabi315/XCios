@@ -261,8 +261,11 @@ shared_node_decl:
   | SHARED shared_nodes = separated_list(COMMA, node_decl) { shared_nodes }
 
 mode_annot:
-  | WITH annots = separated_nonempty_list(COMMA, separated_pair(ID, GEQ, UID))
-    { List.map (fun (id, mode) -> (id, (mode, UnknownId))) annots }
+  | id = ID EQUAL mode = UID { id, ModeAnnotEq (mode, UnknownId) }
+  | id = ID GEQ mode = UID { id, ModeAnnotGeq (mode, UnknownId) }
+
+mode_annots:
+  | WITH annots = separated_nonempty_list(COMMA, mode_annot) { annots }
 
 (* module *)
 xfrp_module:
@@ -271,7 +274,7 @@ xfrp_module:
     LBRACE
     in_nodes = loption(in_node_decl)
     out_nodes = out_node_decl
-    mode_annot = loption(mode_annot)
+    mode_annot = loption(mode_annots)
     elems = list(module_elem)
     RBRACE
     {
@@ -291,7 +294,7 @@ xfrp_module:
           module_params = params;
           module_in = in_nodes;
           module_out = out_nodes;
-          module_mode_annot = mode_annot;
+          module_mode_annots = mode_annot;
           module_consts = consts;
           module_nodes = nodes;
           module_newnodes = newnodes;
@@ -341,7 +344,7 @@ xfrp_smodule:
         let consts_ord = tsort_consts consts in
         let () =
           List.iter (fun st ->
-            check_nodes in_nodes out_nodes shared_nodes st.state_nodes st.state_newnodes st.state_mode_annot
+            check_nodes in_nodes out_nodes shared_nodes st.state_nodes st.state_newnodes st.state_mode_annots
           ) sts
         in
         {
@@ -372,7 +375,7 @@ smodule_elem:
 state:
   | STATE id = UID
     params = loption(paren(separated_nonempty_list(COMMA, id_and_type)))
-    mode_annot = loption(mode_annot)
+    mode_annot = loption(mode_annots)
     LBRACE
     elems = list(state_elem)
     SWITCH COLON switch = expression
@@ -390,7 +393,7 @@ state:
         {
           state_id = id;
           state_params = params;
-          state_mode_annot = mode_annot;
+          state_mode_annots = mode_annot;
           state_consts = consts;
           state_nodes = nodes;
           state_newnodes = newnodes;
@@ -468,7 +471,8 @@ newnode_bind:
     }
 
 newnode_input:
-  | AND? expr = expression { expr }
+  | expr = expression { expr }
+  | AND id = ID { EPass(id, UnknownId), TEmpty }
 
 (* expressions *)
 expression:

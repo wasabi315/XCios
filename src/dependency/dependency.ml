@@ -84,6 +84,7 @@ let find_ids_expr targets expr =
     | ECase (e, branchs) ->
       visit_expr e acc
       |> List.fold_right (fun { branch_body = e; _ } a -> visit_expr e a) branchs
+    | EPass (id, _) -> if Idset.mem id targets then Idset.add id acc else acc
   in
   visit_expr expr Idset.empty
 ;;

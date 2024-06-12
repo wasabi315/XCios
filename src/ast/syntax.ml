@@ -74,6 +74,10 @@ let pp_initialized ppf = function
   | Uninit -> fprintf ppf "uninitialized"
 ;;
 
+type is_ionode =
+  | IO
+  | NonIO
+
 (* identifier reference *)
 type idinfo =
   | UnknownId
@@ -87,7 +91,7 @@ type idinfo =
   | ModuleConst of Type.t
   | StateParam of Type.t
   | StateConst of Type.t
-  | NodeId of nattr * initialized * Type.t
+  | NodeId of nattr * is_ionode * initialized * Type.t
   | ModeValue of string * string * int (* order *) * access
 
 let pp_idinfo ppf = function
@@ -102,7 +106,7 @@ let pp_idinfo ppf = function
   | ModuleConst _ -> fprintf ppf "module const"
   | StateParam _ -> fprintf ppf "state param"
   | StateConst _ -> fprintf ppf "state const"
-  | NodeId (_, _, _) -> fprintf ppf "node"
+  | NodeId (_, _, _, _) -> fprintf ppf "node"
   | ModeValue (file, mode_id, _, _) ->
     fprintf ppf "mode value:%s:%a" file pp_identifier mode_id
 ;;
@@ -130,7 +134,7 @@ let map_idinfo_type (f : Type.t -> Type.t) (idinfo : idinfo) : idinfo =
   | ModuleConst t -> ModuleConst (f t)
   | StateParam t -> StateParam (f t)
   | StateConst t -> StateConst (f t)
-  | NodeId (attr, init, t) -> NodeId (attr, init, f t)
+  | NodeId (attr, is_io, init, t) -> NodeId (attr, is_io, init, f t)
   | ModeValue (file, mode_id, ord, acc) -> ModeValue (file, mode_id, ord, acc)
 ;;
 
@@ -274,6 +278,7 @@ type expression_ast =
   | ERetain
   | EId of idref
   | EAnnot of idref * annotation
+  | EPass of idref (* Only for passing I/O nodes to module instances *)
   | EFuncall of idref * expression list
   | EIf of expression * expression * expression
   | ELet of binder list * expression
@@ -344,6 +349,7 @@ let rec pp_expression_ast ppf = function
       e
       (pp_list_comma pp_branch)
       branchs
+  | EPass idref -> fprintf ppf "<pass %a>" pp_idref idref
 
 and pp_binder ppf { binder_id; binder_body } =
   fprintf ppf "%a = @[%a@]" pp_id_and_type binder_id pp_expression binder_body
@@ -406,15 +412,19 @@ let pp_modedef ppf { mode_pub; mode_id; mode_vals; mode_val_ord } =
   fprintf ppf "}@]"
 ;;
 
-type mode_annot = (identifier * idref) list
+type mode_annot_kind =
+  | ModeAnnotEq of idref
+  | ModeAnnotGeq of idref
 
-let pp_mode_annot ppf annot =
-  fprintf
-    ppf
-    "%a"
-    (pp_list_comma (fun ppf (node, mode) ->
-       fprintf ppf "%a >= %a" pp_identifier node pp_idref mode))
-    annot
+let pp_mode_annot_kind ppf = function
+  | ModeAnnotEq modev -> fprintf ppf "= %a" pp_idref modev
+  | ModeAnnotGeq modev -> fprintf ppf ">= %a" pp_idref modev
+;;
+
+type mode_annot = identifier * mode_annot_kind
+
+let pp_mode_annot ppf (id, kind) =
+  fprintf ppf "%a %a" pp_identifier id pp_mode_annot_kind kind
 ;;
 
 (* function *)
@@ -510,7 +520,7 @@ type xfrp_module =
   ; module_params : (identifier * Type.t) list
   ; module_in : (identifier * expression option * Type.t) list
   ; module_out : (identifier * expression option * Type.t) list
-  ; module_mode_annot : mode_annot
+  ; module_mode_annots : mode_annot list
   ; module_consts : constdef Idmap.t
   ; module_nodes : node Idmap.t
   ; module_newnodes : newnode Idmap.t
@@ -525,7 +535,7 @@ let pp_xfrp_module ppf def =
   fprintf ppf "public : %a@;" pp_print_bool def.module_pub;
   fprintf ppf "in: @[%a@]@;" (pp_list_comma pp_node_decl) def.module_in;
   fprintf ppf "out: @[%a@]@;" (pp_list_comma pp_node_decl) def.module_out;
-  fprintf ppf "mode_annot: @[%a@]@;" pp_mode_annot def.module_mode_annot;
+  fprintf ppf "mode_annot: @[%a@]@;" (pp_list_comma pp_mode_annot) def.module_mode_annots;
   fprintf ppf "consts: @[%a@]@;" (pp_idmap pp_constdef) def.module_consts;
   fprintf ppf "nodes: @[%a@]@;" (pp_idmap pp_node) def.module_nodes;
   fprintf ppf "newnodes: @[%a@]@;" (pp_idmap pp_newnode) def.module_newnodes;
@@ -555,7 +565,7 @@ let state_elem_id = function
 type state =
   { state_id : identifier
   ; state_params : (identifier * Type.t) list
-  ; state_mode_annot : mode_annot
+  ; state_mode_annots : mode_annot list
   ; state_consts : constdef Idmap.t
   ; state_nodes : node Idmap.t
   ; state_newnodes : newnode Idmap.t
@@ -569,7 +579,7 @@ let pp_state ppf def =
   fprintf ppf "@[<v>StateDef: {@;<0 2>";
   fprintf ppf "@[<v>id: %a@;" pp_identifier def.state_id;
   fprintf ppf "params: @[%a@]@;" (pp_list_comma pp_id_and_type) def.state_params;
-  fprintf ppf "mode_annot: @[%a@]@;" pp_mode_annot def.state_mode_annot;
+  fprintf ppf "mode_annot: @[%a@]@;" (pp_list_comma pp_mode_annot) def.state_mode_annots;
   fprintf ppf "consts: @[%a@]@;" (pp_idmap pp_constdef) def.state_consts;
   fprintf ppf "nodes: @[%a@]@;" (pp_idmap pp_node) def.state_nodes;
   fprintf ppf "newnodes: @[%a@]@;" (pp_idmap pp_newnode) def.state_newnodes;

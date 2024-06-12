@@ -127,7 +127,7 @@ let rec get_req_expr all_data expr =
       |> fun amount ->
       Hashtbl.add amount t 1;
       amount
-    | EConst _ | ERetain | EId _ | EAnnot (_, _) -> alloc_amount_empty ()
+    | EConst _ | ERetain | EId _ | EAnnot _ | EPass _ -> alloc_amount_empty ()
     | EFuncall ((fname, finfo), args) ->
       (match finfo with
        | FunId (file, _, _) ->

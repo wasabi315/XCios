@@ -83,6 +83,7 @@ let get_metainfo entry_file (all_data, file_ord) =
 
 let compile path =
   try
+    Printexc.record_backtrace true;
     let basename = Filename.basename path in
     let ext = Filename.extension basename in
     let () = if ext = ".xfrp" then () else raise (FileError "Invalid file name") in

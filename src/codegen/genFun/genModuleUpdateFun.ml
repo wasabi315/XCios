@@ -429,6 +429,33 @@ let define_module_update_fun metainfo (file, xfrp_module) fun_writers =
   (gen_prototype, gen_definition) :: fun_writers
 ;;
 
+let gen_body_state_newnode_io_init metainfo file module_id state_id ppf =
+  let modeinfo =
+    match Hashtbl.find metainfo.moduledata (file, module_id) with
+    | SModuleInfo info -> Idmap.find state_id info.state_mode_calc
+    | _ -> assert false
+  in
+  fprintf ppf "@[<v>";
+  fprintf ppf "@[<v 2>if (memory->statebody.%a.init) {" pp_identifier state_id;
+  modeinfo
+  |> Idmap.iter (fun io_node_id modeinfo ->
+    modeinfo.child_modev
+    |> List.iter (fun (_, newnode_id, io_node_id') ->
+      fprintf
+        ppf
+        "@,memory->statebody.%a.%a.%a = memory->%a;"
+        pp_identifier
+        state_id
+        gen_newnode_field'
+        newnode_id
+        pp_identifier
+        io_node_id'
+        pp_identifier
+        io_node_id));
+  fprintf ppf "@]@,}";
+  fprintf ppf "@]"
+;;
+
 let define_smodule_update_fun metainfo (file, xfrp_smodule) fun_writers =
   let module_id = xfrp_smodule.smodule_id in
   let gen_funname ppf () =
@@ -561,7 +588,8 @@ let define_smodule_update_fun metainfo (file, xfrp_smodule) fun_writers =
       fprintf ppf "if (memory->state->fresh) {@;<0 2>";
       fprintf ppf "memory->statebody.%s.init = 1;@," state_id;
       fprintf ppf "}";
-      fprintf ppf "@,memory->state->fresh = 0;";
+      fprintf ppf "@,memory->state->fresh = 0;@,";
+      gen_body_state_newnode_io_init metainfo file module_id state_id ppf;
       if input_remark_writers = []
       then ()
       else fprintf ppf "@,%a" (exec_all_writers ()) input_remark_writers;

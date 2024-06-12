@@ -343,9 +343,9 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
           | CTXSwitch state_id -> fprintf ppf "memory->state->params.%s.%s" state_id id
           | _ -> assert false
         in
-        let f_node nattr ty =
-          match codegen_ctx, nattr, ty with
-          | _, _, TMode (_, _, _) -> fprintf ppf "memory->%s->value" id
+        let f_node nattr is_io =
+          match codegen_ctx, nattr, is_io with
+          | _, _, IO -> fprintf ppf "memory->%s->value" id
           | CTXModuleNewnodeIn, _, _ | CTXModuleNode _, _, _ ->
             fprintf ppf "memory->%s[current_side]" id
           | CTXStateNode (state_id, _, _), NormalNode, _
@@ -362,7 +362,7 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
         | ModuleParam _ | ModuleConst _ -> f_module_value ()
         | StateConst _ -> f_state_const ()
         | StateParam _ -> f_state_param ()
-        | NodeId (nattr, _, ty) -> f_node nattr ty
+        | NodeId (nattr, is_io, _, _) -> f_node nattr is_io
         | _ -> assert false
       in
       body_writers, gen_expr
@@ -371,7 +371,7 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
       let id, idinfo = idref in
       let gen_expr ppf () =
         match idinfo, annot with
-        | NodeId (nattr, _, _), ALast ->
+        | NodeId (nattr, _, _, _), ALast ->
           (match codegen_ctx, nattr with
            | CTXModuleNode _, _ | CTXModuleNewnodeIn, _ ->
              fprintf ppf "memory->%s[!current_side]" id
@@ -579,6 +579,7 @@ let get_expr_generator metainfo codegen_ctx expr : writer list * writer =
     | EIf (etest, ethen, eelse) -> f_if etest ethen eelse
     | ELet (binders, body) -> f_let binders body
     | ECase (target, branchs) -> f_case target branchs
+    | EPass _ -> assert false
   in
   let body_writers, gen_expr = rec_f expr [] in
   let body_writers = List.rev body_writers in

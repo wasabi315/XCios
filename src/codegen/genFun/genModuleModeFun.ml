@@ -3,21 +3,21 @@ open Syntax
 open CodegenUtil
 open MetaInfo
 
-let gen_newnode_field ppf newnode_id =
+let get_newnode_filed newnode_id =
   let len = String.length newnode_id in
   let number_str = String.sub newnode_id 1 (len - 1) in
-  fprintf ppf "newnode%s" number_str
+  sprintf "newnode%s" number_str
 ;;
 
-let gen_mode_calc ppf mode_calc =
+let gen_mode_calc pp_loc ppf mode_calc =
   let gen_child_mode_calc ppf (child_module_id, newnode_id, io_node_id) =
     fprintf
       ppf
-      "%a(&memory->%a)"
+      "%a(%a)"
       gen_mode_calc_fun_name
       (child_module_id, io_node_id)
-      gen_newnode_field
-      newnode_id
+      pp_loc
+      (get_newnode_filed newnode_id)
   in
   let gen_mode_calc =
     let gen_self ppf () =
@@ -60,7 +60,7 @@ let define_module_mode_calc_fun metainfo (file, modul) fun_writers =
         gen_modev_name
         (mode_calc.mode_type, fst mode_calc.init_modev);
       fprintf ppf "@]@,}";
-      gen_mode_calc ppf mode_calc;
+      gen_mode_calc (fun ppf -> fprintf ppf "&memory->%s") ppf mode_calc;
       fprintf ppf "@]"
     in
     let gen_definition ppf () = gen_codeblock gen_header gen_body ppf () in
@@ -138,7 +138,10 @@ let define_smodule_mode_calc_fun metainfo (file, modul) fun_writers =
                   gen_modev_name
                   (mode_type, fst mode_calc.init_modev);
                 fprintf ppf "@]@,}");
-              gen_mode_calc ppf mode_calc;
+              gen_mode_calc
+                (fun ppf -> fprintf ppf "&memory->statebody.%a.%s" pp_identifier state_id)
+                ppf
+                mode_calc;
               fprintf ppf "@,break;@]@,}")
             mode_calcs;
           fprintf ppf "@]@,}";

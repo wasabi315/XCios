@@ -66,8 +66,8 @@ let define_newnode_fun metainfo generator fun_writers =
     define_updatefun metainfo generator fun_writers
   in
   let define_input_fun (input_id, ty, expr) fun_writers =
-    match snd expr with
-    | Type.TMode (_, _, _) -> fun_writers
+    match expr with
+    | EPass _, Type.TMode (_, _, _) -> fun_writers
     | _ ->
       let gen_funname ppf () =
         fprintf

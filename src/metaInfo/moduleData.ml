@@ -51,6 +51,7 @@ let visit_expr clock self_id expr lifetime =
     | EId _ -> lifetime
     | EAnnot ((id, NodeId _), _) -> update_free_last id (clock + 1) lifetime
     | EAnnot _ -> assert false
+    | EPass (id, _) -> update_free_last id (clock + 1) lifetime
     | EFuncall (_, args) -> List.fold_right rec_f args lifetime
     | EIf (etest, ethen, eelse) -> lifetime |> rec_f etest |> rec_f ethen |> rec_f eelse
     | ELet (binders, e) ->
@@ -111,7 +112,7 @@ and visit_newnode moduledata def (clock, lifetime, mode_calc) =
     List.fold_right2
       (fun (expr, _) (id2, ty) mode_calc ->
         match expr, ty with
-        | EId (id1, _), Type.TMode _ ->
+        | EPass (id1, _), Type.TMode _ ->
           let entry = Idmap.find id1 mode_calc in
           let init_modev =
             match entry.init_modev, Idmap.find id2 init_modev with
@@ -169,6 +170,9 @@ and visit_mode_annot annot =
   annot
   |> List.to_seq
   |> Seq.map (function
+    | id, ModeAnnotGeq modev -> id, modev
+    | id, ModeAnnotEq modev -> id, modev)
+  |> Seq.map (function
     | node_id, (modev, ModeValue (file, mode_id, ord, _)) ->
       ( node_id
       , { mode_type = file, mode_id
@@ -183,7 +187,7 @@ and visit_module file def moduledata =
   let param_sig = def.module_params in
   let in_sig = List.map (fun (id, _, t) -> id, t) def.module_in in
   let out_sig = List.map (fun (id, _, t) -> id, t) def.module_out in
-  let mode_calc = visit_mode_annot def.module_mode_annot in
+  let mode_calc = visit_mode_annot def.module_mode_annots in
   let lifetime =
     lifetime_empty
     |> List.fold_right visit_input_node def.module_in
@@ -261,7 +265,7 @@ and visit_smodule file def moduledata =
   let clock, state_lifetime, state_mode_calc =
     idmap_fold_values
       (fun state (clock, state_lifetime, state_mode_calc) ->
-        let mode_calc = visit_mode_annot state.state_mode_annot in
+        let mode_calc = visit_mode_annot state.state_mode_annots in
         let clock', lifetime', mode_calc =
           visit_state moduledata state lifetime mode_calc
         in

@@ -15,7 +15,7 @@ let update_used all_data expr used =
         let filedata = Idmap.find file all_data in
         let constdef = Idmap.find id filedata.xfrp_consts in
         used |> rec_f constdef.const_body |> Idset.add global_name)
-    | EConst _ | ERetain | EId _ | EAnnot _ -> used
+    | EConst _ | ERetain | EId _ | EAnnot _ | EPass _ -> used
     | EFuncall ((id, FunId (file, _, _)), args) ->
       let used = List.fold_right rec_f args used in
       let global_name = conc_id [ file; "fun"; id ] in
