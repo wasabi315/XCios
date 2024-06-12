@@ -213,11 +213,12 @@ let gen_iterbody_newnode metainfo generator ppf newnode =
   in
   let gen_marks =
     List.fold_left
-      (fun writers (nattr, node_id, t) ->
-        let mark_writer = get_bind_mark_writer (nattr, node_id, t) in
-        match mark_writer with
-        | Some writer -> writer :: writers
-        | None -> writers)
+      (fun writers -> function
+        | nattr, (NBDef node_id | NBPass node_id), t ->
+          let mark_writer = get_bind_mark_writer (nattr, node_id, t) in
+          (match mark_writer with
+           | Some writer -> writer :: writers
+           | None -> writers))
       []
       newnode.newnode_binds
     |> List.rev
@@ -328,23 +329,25 @@ let gen_body_module_newnode_io_init metainfo file module_id ppf =
     | ModuleInfo info -> info.module_mode_calc
     | _ -> assert false
   in
-  fprintf ppf "@[<v>";
-  fprintf ppf "@[<v 2>if (memory->init) {";
-  modeinfo
-  |> Idmap.iter (fun io_node_id modeinfo ->
-    modeinfo.child_modev
-    |> List.iter (fun (_, newnode_id, io_node_id') ->
-      fprintf
-        ppf
-        "@,memory->%a.%a = memory->%a;"
-        gen_newnode_field'
-        newnode_id
-        pp_identifier
-        io_node_id'
-        pp_identifier
-        io_node_id));
-  fprintf ppf "@]@,}";
-  fprintf ppf "@]"
+  if not (Idmap.for_all (fun _ modeinfo -> modeinfo.child_modev = []) modeinfo)
+  then (
+    fprintf ppf "@,@[<v>";
+    fprintf ppf "@[<v 2>if (memory->init) {";
+    modeinfo
+    |> Idmap.iter (fun io_node_id modeinfo ->
+      modeinfo.child_modev
+      |> List.iter (fun (_, newnode_id, io_node_id') ->
+        fprintf
+          ppf
+          "@,memory->%a.%a = memory->%a;"
+          gen_newnode_field'
+          newnode_id
+          pp_identifier
+          io_node_id'
+          pp_identifier
+          io_node_id));
+    fprintf ppf "@]@,}";
+    fprintf ppf "@]")
 ;;
 
 let define_module_update_fun metainfo (file, xfrp_module) fun_writers =
@@ -403,7 +406,7 @@ let define_module_update_fun metainfo (file, xfrp_module) fun_writers =
     in
     let gen_body ppf () =
       fprintf ppf "@[<v>";
-      fprintf ppf "int entry = clock;@,";
+      fprintf ppf "int entry = clock;";
       gen_body_module_newnode_io_init metainfo file module_id ppf;
       if consts = [] then () else fprintf ppf "@,%a" gen_body_const consts;
       if init_header_nodes = []
@@ -435,25 +438,27 @@ let gen_body_state_newnode_io_init metainfo file module_id state_id ppf =
     | SModuleInfo info -> Idmap.find state_id info.state_mode_calc
     | _ -> assert false
   in
-  fprintf ppf "@[<v>";
-  fprintf ppf "@[<v 2>if (memory->statebody.%a.init) {" pp_identifier state_id;
-  modeinfo
-  |> Idmap.iter (fun io_node_id modeinfo ->
-    modeinfo.child_modev
-    |> List.iter (fun (_, newnode_id, io_node_id') ->
-      fprintf
-        ppf
-        "@,memory->statebody.%a.%a.%a = memory->%a;"
-        pp_identifier
-        state_id
-        gen_newnode_field'
-        newnode_id
-        pp_identifier
-        io_node_id'
-        pp_identifier
-        io_node_id));
-  fprintf ppf "@]@,}";
-  fprintf ppf "@]"
+  if not (Idmap.for_all (fun _ modeinfo -> modeinfo.child_modev = []) modeinfo)
+  then (
+    fprintf ppf "@,@[<v>";
+    fprintf ppf "@[<v 2>if (memory->statebody.%a.init) {" pp_identifier state_id;
+    modeinfo
+    |> Idmap.iter (fun io_node_id modeinfo ->
+      modeinfo.child_modev
+      |> List.iter (fun (_, newnode_id, io_node_id') ->
+        fprintf
+          ppf
+          "@,memory->statebody.%a.%a.%a = memory->%a;"
+          pp_identifier
+          state_id
+          gen_newnode_field'
+          newnode_id
+          pp_identifier
+          io_node_id'
+          pp_identifier
+          io_node_id));
+    fprintf ppf "@]@,}";
+    fprintf ppf "@]")
 ;;
 
 let define_smodule_update_fun metainfo (file, xfrp_smodule) fun_writers =
@@ -588,7 +593,7 @@ let define_smodule_update_fun metainfo (file, xfrp_smodule) fun_writers =
       fprintf ppf "if (memory->state->fresh) {@;<0 2>";
       fprintf ppf "memory->statebody.%s.init = 1;@," state_id;
       fprintf ppf "}";
-      fprintf ppf "@,memory->state->fresh = 0;@,";
+      fprintf ppf "@,memory->state->fresh = 0;";
       gen_body_state_newnode_io_init metainfo file module_id state_id ppf;
       if input_remark_writers = []
       then ()

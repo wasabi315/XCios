@@ -104,7 +104,9 @@ and visit_newnode moduledata def (clock, lifetime, mode_calc) =
   let lifetime =
     lifetime
     |> List.fold_right
-         (fun (_, id, _) lifetime -> update_free_current id clock lifetime)
+         (function
+          | _, (NBPass id | NBDef id), _ ->
+            fun lifetime -> update_free_current id clock lifetime)
          def.newnode_binds
     |> update_timestamp def.newnode_id clock
   in
@@ -133,23 +135,25 @@ and visit_newnode moduledata def (clock, lifetime, mode_calc) =
   in
   let mode_calc =
     List.fold_right2
-      (fun (_, id1, _) (id2, ty) mode_calc ->
-        match ty with
-        | Type.TMode _ ->
-          let entry = Idmap.find id1 mode_calc in
-          let init_modev =
-            match entry.init_modev, Idmap.find id2 init_modev with
-            | (_, ord1), ((_, ord2) as modev) when ord2 > ord1 -> modev
-            | init_modev, _ -> init_modev
-          in
-          let entry =
-            { entry with
-              child_modev = (modul, def.newnode_id, id2) :: entry.child_modev
-            ; init_modev
-            }
-          in
-          Idmap.add id1 entry mode_calc
-        | _ -> mode_calc)
+      (function
+       | _, (NBPass id1 | NBDef id1), _ ->
+         fun (id2, ty) mode_calc ->
+           (match ty with
+            | Type.TMode _ ->
+              let entry = Idmap.find id1 mode_calc in
+              let init_modev =
+                match entry.init_modev, Idmap.find id2 init_modev with
+                | (_, ord1), ((_, ord2) as modev) when ord2 > ord1 -> modev
+                | init_modev, _ -> init_modev
+              in
+              let entry =
+                { entry with
+                  child_modev = (modul, def.newnode_id, id2) :: entry.child_modev
+                ; init_modev
+                }
+              in
+              Idmap.add id1 entry mode_calc
+            | _ -> mode_calc))
       def.newnode_binds
       out_sig
       mode_calc

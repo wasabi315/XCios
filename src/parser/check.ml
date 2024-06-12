@@ -36,7 +36,10 @@ let check_module_attr_node (node : node) : unit =
 ;;
 
 let check_module_attr_newnode (newnode : newnode) : unit =
-  List.iter (fun (attr, id, _) -> check_module_attr id attr) newnode.newnode_binds
+  List.iter
+    (function
+     | attr, (NBPass id | NBDef id), _ -> check_module_attr id attr)
+    newnode.newnode_binds
 ;;
 
 let check_nodes in_decls out_decls shared_decls nodes newnodes mode_annot =
@@ -69,7 +72,9 @@ let check_nodes in_decls out_decls shared_decls nodes newnodes mode_annot =
     in
     let add_newnode def all_nodes =
       List.fold_left
-        (fun all_nodes (attr, id, _) -> add id attr all_nodes)
+        (fun all_nodes (attr, id, _) ->
+          match id with
+          | NBPass id | NBDef id -> add id attr all_nodes)
         all_nodes
         def.newnode_binds
     in
@@ -77,7 +82,7 @@ let check_nodes in_decls out_decls shared_decls nodes newnodes mode_annot =
     |> Idmap.fold (fun _ def all_nodes -> add def.node_id def.node_attr all_nodes) nodes
     |> Idmap.fold (fun _ def all_nodes -> add_newnode def all_nodes) newnodes
   in
-  let get_all_nodes_with_mode in_decls out_decls =
+  let get_all_io_nodes in_decls out_decls =
     in_decls @ out_decls
     |> List.filter_map (function
       | id, _, TMode (_, _, _) -> Some id
@@ -92,7 +97,7 @@ let check_nodes in_decls out_decls shared_decls nodes newnodes mode_annot =
         raise (Error msg)
       | _ -> ())
   in
-  let check_header_nodes_defined all_decls all_nodes =
+  let check_header_nodes_defined all_decls all_nodes all_io_nodes =
     Idmap.iter
       (fun id decl_attr ->
         match Idmap.find_opt id all_nodes with
@@ -102,7 +107,7 @@ let check_nodes in_decls out_decls shared_decls nodes newnodes mode_annot =
             let msg = Format.asprintf "Conflict node attribute : %a" pp_identifier id in
             raise (Error msg))
           else ()
-        | None when decl_attr = OutputNode -> () (* check during typechecking *)
+        | _ when Idset.mem id all_io_nodes -> () (* Check during type checking *)
         | None ->
           let msg = Format.asprintf "Header node is not defined : %a" pp_identifier id in
           raise (Error msg))
@@ -137,9 +142,9 @@ let check_nodes in_decls out_decls shared_decls nodes newnodes mode_annot =
   in
   let all_decls = get_all_declared_nodes out_decls shared_decls in
   let all_nodes = get_all_defined_nodes nodes newnodes in
-  let all_nodes_with_mode = get_all_nodes_with_mode in_decls out_decls in
+  let all_io_nodes = get_all_io_nodes in_decls out_decls in
   check_node_init in_decls out_decls;
-  check_header_nodes_defined all_decls all_nodes;
+  check_header_nodes_defined all_decls all_nodes all_io_nodes;
   check_undecl_header_nodes all_nodes all_decls;
-  check_mode_annot all_nodes_with_mode mode_annot
+  check_mode_annot all_io_nodes mode_annot
 ;;

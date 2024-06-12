@@ -107,8 +107,9 @@ let define_module_free_fun metainfo (file, xfrp_module) fun_writers =
         |> idmap_fold_values
              (fun newnode nodes ->
                List.fold_left
-                 (fun nodes (nattr, id, t) ->
-                   if nattr != NormalNode then nodes else (nattr, id, t) :: nodes)
+                 (fun nodes -> function
+                   | nattr, (NBPass id | NBDef id), t ->
+                     if nattr != NormalNode then nodes else (nattr, id, t) :: nodes)
                  nodes
                  newnode.newnode_binds)
              xfrp_module.module_newnodes
@@ -196,8 +197,9 @@ let define_smodule_free_fun metainfo (file, xfrp_smodule) fun_writers =
         |> idmap_fold_values
              (fun newnode nodes ->
                List.fold_left
-                 (fun nodes (nattr, id, t) ->
-                   if nattr != NormalNode then nodes else (nattr, id, t) :: nodes)
+                 (fun nodes -> function
+                   | nattr, (NBDef id | NBPass id), t ->
+                     if nattr != NormalNode then nodes else (nattr, id, t) :: nodes)
                  nodes
                  newnode.newnode_binds)
              state.state_newnodes

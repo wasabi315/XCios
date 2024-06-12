@@ -299,19 +299,19 @@ let rec infer_expression env level (ast, _) =
   let infer_idexpr idref =
     let ((id, idinfo) as idref) = infer_idref env level idref in
     match idinfo with
-    | NodeId (_, _, _, TMode (_, _, t)) ->
-      (match find_inacc id env with
-       | Some modev -> raise_inaccessible id modev
-       | None -> ());
-      incr_read id env;
-      EId idref, t
     | LocalId t
     | ConstId (_, t)
     | ModuleParam t
     | ModuleConst t
     | StateParam t
     | StateConst t
-    | NodeId (_, _, _, t) -> EId idref, t
+    | NodeId (_, NonIO, _, t) -> EId idref, t
+    | NodeId (_, IO, _, TMode (_, _, t)) ->
+      (match find_inacc id env with
+       | Some modev -> raise_inaccessible id modev
+       | None -> ());
+      incr_read id env;
+      EId idref, t
     | _ -> raise_err_pp "invalid identifier reference : %a" pp_identifier id
   in
   let infer_annot idref annot =
@@ -325,7 +325,7 @@ let rec infer_expression env level (ast, _) =
   let infer_pass idref =
     let ((id, idinfo) as idref) = infer_idref env level idref in
     match idinfo with
-    | NodeId (_, _, _, (TMode _ as t)) -> EPass idref, t
+    | NodeId (_, IO, _, (TMode _ as t)) -> EPass idref, t
     | NodeId (_, _, _, _) -> raise_err_pp "expected I/O node : %a" pp_identifier id
     | _ -> raise_err_pp "expected I/O node : %a" pp_identifier id
   in
@@ -476,9 +476,10 @@ let infer_node env def =
   in
   let ((_, tbody) as body) = infer_expression env 1 def.node_body in
   let t = map_under_mode (unify tbody) t in
-  (match def.node_attr with
-   | NormalNode -> ()
-   | _ -> incr_def def.node_id env);
+  (match def.node_attr, t with
+   | OutputNode, TMode _ -> incr_def def.node_id env
+   | _, TMode _ -> assert false
+   | _ -> ());
   { def with node_init = init; node_body = body; node_type = t }
 ;;
 
@@ -490,24 +491,35 @@ let infer_newnode env def =
     let _, tmargs = List.split margs in
     let _ = unify_list pts tmargs in
     let inputs = List.map (fun e -> infer_expression env 1 e) def.newnode_inputs in
-    (* let _, its2 = List.split inputs in *)
     let _ = unify_list its (List.map snd inputs) in
     (* If an input node of the instance expects type TMode(...), the actual input should also have type TMode(...) *)
     List.iter2
       (fun t1 t2 ->
         match t1, t2 with
-        | TMode _, (EPass (id, _), TMode _) -> incr_pass id env
+        | TMode _, (EPass (id, NodeId (_, IO, _, _)), TMode _) -> incr_pass id env
         | TMode _, (_, TMode _) -> assert false
         | (TMode _ as t1), (_, t2) -> raise_imcompatible t1 t2
         | _ -> ())
       its
       inputs;
-    let ots2 =
-      def.newnode_binds
-      |> List.fold_left (fun acc (_, _, t) -> read_typespec env 1 t :: acc) []
-      |> List.rev
+    if List.length ots != List.length def.newnode_binds
+    then raise_err_pp "number of outputs does not match : %a" pp_identifier def.newnode_id;
+    let ots =
+      List.map2
+        (fun (_, nb, _) t ->
+          match nb with
+          | NBPass id ->
+            (match find_info id env with
+             | NodeId (_, _, _, t') -> unify t t'
+             | _ -> assert false)
+          | NBDef id ->
+            (match find_info id env, find_inacc id env with
+             | _, Some modev -> raise_inaccessible id modev
+             | NodeId (_, _, _, t'), _ -> map_under_mode (unify t) t'
+             | _ -> assert false))
+        def.newnode_binds
+        ots
     in
-    let ots = unify_list ots ots2 in
     let margs = List.map deref_expr_type margs in
     let inputs = List.map deref_expr_type inputs in
     let binds =
@@ -515,14 +527,16 @@ let infer_newnode env def =
     in
     List.iter
       (function
-       | (NormalNode | SharedNode), id, TMode _ ->
+       | (NormalNode | SharedNode), NBDef id, TMode _ ->
          raise_err_pp
            "output nodes with mode cannot be bound to normal/shared nodes: %a"
            pp_identifier
            id
        | NormalNode, _, _ -> ()
-       | _, id, TMode _ -> incr_pass id env
-       | _, id, _ -> incr_def id env)
+       | OutputNode, NBPass id, TMode _ -> incr_pass id env
+       | _, NBPass id, _ ->
+         raise_err_pp "Non-I/O node cannot be passed to instance : %a" pp_identifier id
+       | _, NBDef id, _ -> incr_def id env)
       binds;
     { def with
       newnode_binds = binds
@@ -583,8 +597,8 @@ let infer_whole_nodes env nodes newnodes =
   let add_info_newnode def env =
     List.fold_left
       (fun env (attr, id, t) ->
-        match attr with
-        | NormalNode ->
+        match attr, id with
+        | NormalNode, NBDef id ->
           let t = read_typespec env 1 t in
           add_info id (NodeId (NormalNode, NonIO, Uninit, t)) env
         | _ -> env)
@@ -619,6 +633,7 @@ let infer_whole_nodes env nodes newnodes =
   let nodes = Idmap.map (infer_node env) nodes in
   let newnodes = Idmap.map (infer_newnode env) newnodes in
   let nodes = Idmap.map deref_nodedef_type nodes in
+  Format.printf "%a\n" pp_env env;
   nodes, newnodes, env
 ;;
 

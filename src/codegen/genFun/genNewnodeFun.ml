@@ -159,8 +159,8 @@ let define_newnode_fun metainfo generator fun_writers =
       in
       let gen_body_output ppf outputs =
         let gen_single ppf = function
-          | _, _, _, Type.TMode (_, _, _) -> ()
-          | from_id, nattr, to_id, ty ->
+          | _, _, NBPass _, _ -> ()
+          | from_id, nattr, NBDef to_id, ty ->
             fprintf
               ppf
               "%a = %a.%a[current_side];"

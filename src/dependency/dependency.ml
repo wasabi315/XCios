@@ -178,8 +178,9 @@ let tsort_modules (mdefs : xfrp_module Idmap.t) (smdefs : xfrp_smodule Idmap.t) 
 (* calculate state / module update order *)
 let get_update_ord (ns : node Idmap.t) (newns : newnode Idmap.t) =
   let newnode_bind_ids newnode =
-    List.map (fun (_, id, _) -> id) newnode.newnode_binds
-    |> List.fold_left (fun acc id -> Idset.add id acc) Idset.empty
+    newnode.newnode_binds
+    |> List.map (function _, (NBPass id | NBDef id), _ -> id)
+    |> Idset.of_list
   in
   let all_nodes =
     Idset.empty

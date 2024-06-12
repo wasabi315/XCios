@@ -460,14 +460,23 @@ newnode:
     }
 
 newnode_bind:
-  | attr = node_attr? AND? id = ID
+  | attr = node_attr? id = ID
     {
       let attr =
         match attr with
         | Some(x) -> x
         | None -> NormalNode
       in
-      (attr, id, TEmpty)
+      (attr, NBDef id, TEmpty)
+    }
+  | attr = node_attr? AND id = ID
+    {
+      let attr =
+        match attr with
+        | Some(x) -> x
+        | None -> NormalNode
+      in
+      (attr, NBPass id, TEmpty)
     }
 
 newnode_input:

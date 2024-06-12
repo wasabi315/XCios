@@ -61,7 +61,11 @@ let gen_newnode metainfo ppf newnode =
   in
   let file = String.capitalize_ascii file in
   let normal_bind_nodes =
-    List.filter (fun (nattr, _, _) -> nattr = NormalNode) newnode.newnode_binds
+    List.filter_map
+      (function
+       | NormalNode, NBDef id, t -> Some (NormalNode, id, t)
+       | _ -> None)
+      newnode.newnode_binds
   in
   fprintf
     ppf

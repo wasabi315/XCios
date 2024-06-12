@@ -264,7 +264,8 @@ let get_module_free_table all_data xfrp_module lifetime =
     |> idmap_fold_values
          (fun newnode table ->
            List.fold_left
-             (fun table (_, id, t) -> Idmap.add id t table)
+             (fun table -> function
+               | _, (NBPass id | NBDef id), t -> Idmap.add id t table)
              table
              newnode.newnode_binds)
          xfrp_module.module_newnodes
@@ -286,7 +287,8 @@ let get_state_free_table all_data xfrp_smodule state_id lifetime =
     |> idmap_fold_values
          (fun newnode table ->
            List.fold_left
-             (fun table (_, id, t) -> Idmap.add id t table)
+             (fun table -> function
+               | _, (NBPass id | NBDef id), t -> Idmap.add id t table)
              table
              newnode.newnode_binds)
          state.state_newnodes
