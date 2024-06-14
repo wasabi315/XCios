@@ -1,5 +1,5 @@
-mode GpsMode = Off < acc LowAcc < acc HighAcc
-mode LocDispMode = Off2 < acc On
+ordered mode GpsMode = Off < acc LowAcc < acc HighAcc
+mode LocDispMode = Off2 | acc On
 
 switchmodule Watch {
   in  pulse1s: Bool, adjust: Bool, gpsData: 'GpsMode GpsData
@@ -24,13 +24,13 @@ switchmodule LocDisp {
   out locInfo: 'LocDispMode LocInfo
   init Disabled
 
-  state Enabled with gpsData >= HighAcc, locInfo >= On
+  state Enabled with gpsData >= HighAcc, locInfo = On
   {
     out node locInfo = getLocInfo(gpsData)
     switch: if !showLoc then Disabled else Retain
   }
 
-  state Disabled with gpsData >= Off, locInfo >= Off2 {
+  state Disabled with gpsData >= Off, locInfo = Off2 {
     switch: if showLoc then Enabled else Retain
   }
 }
@@ -38,7 +38,7 @@ switchmodule LocDisp {
 module Main {
   in  pulse1s: Bool, adjust: Bool, showLoc: Bool, gpsData: 'GpsMode GpsData
   out time: Time, locInfo: 'LocDispMode LocInfo
-  with gpsData >= Off, locInfo >= Off2
+  with gpsData >= Off
 
   newnode out time = Watch <- pulse1s, adjust, &gpsData
   newnode out &locInfo = LocDisp <- showLoc, &gpsData

@@ -5,7 +5,7 @@
 struct GPSWatch2GpsData* input_gpsData() {
     printf("[GPS]   : Fetching...\n");
     usleep(500000); // 0.5s
-    printf("[GPS]   : 00:00:10, 35.6764, 139.6500\n");
+    printf("[GPS]   : 00:00:38, 35.6764, 139.6500\n");
     struct GPSWatch2Time* time = GPSWatch2Time_Time(TupleIntIntInt_Cons(0, 0, 38));
     struct GPSWatch2LocInfo* locInfo = GPSWatch2LocInfo_LocInfo(TupleDoubleDouble_Cons(35.6764, 139.6500));
     return GPSWatch2GpsData_GpsData(TupleGPSWatch2TimeGPSWatch2LocInfo_Cons(time, locInfo));
