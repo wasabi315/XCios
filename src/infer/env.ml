@@ -9,10 +9,14 @@ type usage =
 
 let empty_usage : usage = { num_read = 0; num_def = 0; num_pass = 0 }
 
+type ordered =
+  | Ordered
+  | Unordered
+
 type env =
   { id_to_info : idinfo Idmap.t
-  ; ty_id_to_file : string Idmap.t
-  ; modety_id_to_file : string Idmap.t
+  ; ty_id_to_info : string Idmap.t
+  ; modety_id_to_info : (string * ordered) Idmap.t
   ; inaccs : identifier Idmap.t
   ; usages : (identifier, usage) Hashtbl.t
   }
@@ -26,12 +30,12 @@ let pp_env ppf env =
   let open Extension.Format in
   fprintf ppf "@[<v 2>env:";
   fprintf ppf "@,id_to_info: @[<hov>%a@]" (pp_idmap pp_idinfo) env.id_to_info;
-  fprintf ppf "@,ty_id_to_file: @[<hov>%a@]" (pp_idmap pp_print_string) env.ty_id_to_file;
+  fprintf ppf "@,ty_id_to_info: @[<hov>%a@]" (pp_idmap pp_print_string) env.ty_id_to_info;
   fprintf
     ppf
-    "@,modety_id_to_file: @[<hov>%a@]"
-    (pp_idmap pp_print_string)
-    env.modety_id_to_file;
+    "@,modety_id_to_info: @[<hov>%a@]"
+    (pp_idmap (fun ppf (file, _) -> pp_print_string ppf file))
+    env.modety_id_to_info;
   fprintf ppf "@,inaccs: @[<hov>%a@]" (pp_idmap pp_identifier) env.inaccs;
   fprintf
     ppf
@@ -44,8 +48,8 @@ let pp_env ppf env =
 
 let empty_env : env =
   { id_to_info = Idmap.empty
-  ; ty_id_to_file = Idmap.empty
-  ; modety_id_to_file = Idmap.empty
+  ; ty_id_to_info = Idmap.empty
+  ; modety_id_to_info = Idmap.empty
   ; inaccs = Idmap.empty
   ; usages = Hashtbl.create 16
   }
@@ -71,11 +75,11 @@ let add_info_shadowing (id : identifier) (entry : idinfo) (env : env) : env =
 ;;
 
 let add_ty (id : identifier) (file : string) (env : env) : env =
-  { env with ty_id_to_file = add_uniq id file env.ty_id_to_file }
+  { env with ty_id_to_info = add_uniq id file env.ty_id_to_info }
 ;;
 
-let add_modety (id : identifier) (file : string) (env : env) : env =
-  { env with modety_id_to_file = add_uniq id file env.modety_id_to_file }
+let add_modety (id : identifier) (file : string) (ord : ordered) (env : env) : env =
+  { env with modety_id_to_info = add_uniq id (file, ord) env.modety_id_to_info }
 ;;
 
 let find_info (id : identifier) (env : env) : idinfo =
@@ -85,13 +89,13 @@ let find_info (id : identifier) (env : env) : idinfo =
 ;;
 
 let find_ty (id : identifier) (env : env) : string =
-  match Idmap.find_opt id env.ty_id_to_file with
+  match Idmap.find_opt id env.ty_id_to_info with
   | Some file -> file
   | None -> raise_unknown id
 ;;
 
-let find_modety (id : identifier) (env : env) : string =
-  match Idmap.find_opt id env.modety_id_to_file with
+let find_modety (id : identifier) (env : env) : string * ordered =
+  match Idmap.find_opt id env.modety_id_to_info with
   | Some file -> file
   | None -> raise_unknown id
 ;;
@@ -108,6 +112,14 @@ let clear_usage (env : env) : unit = Hashtbl.clear env.usages
 
 let get_usage (id : identifier) (env : env) : usage =
   Hashtbl.find_opt env.usages id |> Option.value ~default:empty_usage
+;;
+
+let iter_usage (f : identifier -> usage -> unit) (env : env) : unit =
+  Hashtbl.iter f env.usages
+;;
+
+let set_usage (id : identifier) (usage : usage) (env : env) : unit =
+  Hashtbl.replace env.usages id usage
 ;;
 
 let incr_read (id : identifier) (env : env) =

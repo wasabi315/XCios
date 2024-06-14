@@ -52,7 +52,7 @@ let rec unify t1 t2 =
     then (
       let t = unify t1 t2 in
       TMode (file1, mname1, t))
-    else raise_imcompatible t1 t2
+    else raise_imcompatible (TMode (file1, mname1, t1)) (TMode (file2, mname2, t2))
   | _, _ -> raise_imcompatible t1 t2
 
 (* Unify type list `ts1` and `ts2`. *)
@@ -94,7 +94,7 @@ let instantiate level t =
 let rec read_typespec env level = function
   | TEmpty -> gen_tvar_free level
   | TMode ("", mode, t) ->
-    let file = find_modety mode env in
+    let file, _ = find_modety mode env in
     let t' = read_typespec env level t in
     TMode (file, mode, t')
   | TMode (_, _, _) -> assert false
@@ -536,7 +536,8 @@ let infer_newnode env def =
        | OutputNode, NBPass id, TMode _ -> incr_pass id env
        | _, NBPass id, _ ->
          raise_err_pp "Non-I/O node cannot be passed to instance : %a" pp_identifier id
-       | _, NBDef id, _ -> incr_def id env)
+       | _, NBDef id, TMode _ -> incr_def id env
+       | _, NBDef _, _ -> ())
       binds;
     { def with
       newnode_binds = binds
@@ -559,33 +560,57 @@ let infer_header_node env (id, init, t) =
     id, Some expr, t
 ;;
 
-let infer_mode_annot env (id, kind) =
-  let kind, mode =
-    match kind with
-    | ModeAnnotEq mode -> (fun x -> ModeAnnotEq x), mode
-    | ModeAnnotGeq mode -> (fun x -> ModeAnnotGeq x), mode
+let infer_mode_annot env id annot =
+  let idinfo = find_info id env in
+  let annot, mode, modety =
+    match annot, idinfo with
+    | ModeAnnotEq mode, NodeId (_, IO, _, TMode (file, modety, _)) ->
+      (match find_modety modety env with
+       | _, Ordered ->
+         raise_err_pp "Mode type %a is ordered, but got >= annotation" pp_identifier id
+       | _ -> ());
+      (fun x -> ModeAnnotEq x), mode, (file, modety)
+    | ModeAnnotGeq mode, NodeId (InputNode, IO, _, TMode (file, modety, _)) ->
+      (match find_modety modety env with
+       | _, Unordered ->
+         raise_err_pp "Mode type %a is unordered, but got = annotation" pp_identifier id
+       | _ -> ());
+      (fun x -> ModeAnnotGeq x), mode, (file, modety)
+    | ModeAnnotGeq _, NodeId (OutputNode, IO, _, _) ->
+      raise_err_pp "Ordered mode cannot be used for output node : %a" pp_identifier id
+    | _ -> raise_err_pp "Mode annotation is only for I/O node : %a" pp_identifier id
   in
   let mode = infer_idref env 1 mode in
   let env =
     match mode with
+    | _, ModeValue (file, mode_id, _, _) when modety <> (file, mode_id) ->
+      raise_err_pp
+        "mode types %a:%a and %a:%a are incompatible"
+        pp_identifier
+        file
+        pp_identifier
+        mode_id
+        pp_identifier
+        (fst modety)
+        pp_identifier
+        (snd modety)
     | _, ModeValue (_, _, _, Acc) -> env
     | modev, ModeValue (_, _, _, Inacc) -> add_inacc id modev env
     | _ -> assert false
   in
-  (id, kind mode), env
+  annot mode, env
 ;;
 
 let infer_mode_annots env annots =
-  List.fold_left
-    (fun (annots, env) annot ->
-      let annot, env = infer_mode_annot env annot in
-      annot :: annots, env)
-    ([], env)
+  Idmap.fold
+    (fun id annot (annots, env) ->
+      let annot, env = infer_mode_annot env id annot in
+      Idmap.add id annot annots, env)
     annots
+    (Idmap.empty, env)
 ;;
 
-let infer_whole_nodes env nodes newnodes =
-  clear_usage env;
+let infer_whole_nodes env nodes newnodes mode_annots =
   let add_info_node def env =
     match def.node_attr with
     | NormalNode ->
@@ -625,6 +650,23 @@ let infer_whole_nodes env nodes newnodes =
     in
     { def with node_type = t; node_init = init; node_body = body }
   in
+  let check_usage env mode_annots =
+    iter_usage
+      (fun id usage ->
+        Format.printf "%a -> %a\n" pp_identifier id pp_usage usage;
+        match Idmap.find_opt id mode_annots with
+        | None when usage.num_pass = 0 ->
+          raise_err_pp "unused I/O node : %a" pp_identifier id
+        | Some (ModeAnnotEq (_, NodeId (_, _, _, _))) when usage.num_pass > 0 ->
+          raise_err_pp "I/O node passed to instance : %a" pp_identifier id
+        | Some (ModeAnnotEq (_, NodeId (OutputNode, _, _, _))) when usage.num_def = 0 ->
+          raise_err_pp "undefined output node : %a" pp_identifier id
+        | Some (ModeAnnotGeq (_, NodeId (InputNode, _, _, _))) -> ()
+        | Some (ModeAnnotGeq (_, NodeId (OutputNode, _, _, _))) -> assert false
+        | None -> Format.printf "oh no\n"
+        | Some annot -> Format.printf "oh no: %a\n" pp_mode_annot annot)
+      env
+  in
   (*
      Types of newnode elements must be determined by module signature.
      You need not dereference types of them.
@@ -633,7 +675,7 @@ let infer_whole_nodes env nodes newnodes =
   let nodes = Idmap.map (infer_node env) nodes in
   let newnodes = Idmap.map (infer_newnode env) newnodes in
   let nodes = Idmap.map deref_nodedef_type nodes in
-  Format.printf "%a\n" pp_env env;
+  check_usage env mode_annots;
   nodes, newnodes, env
 ;;
 
@@ -686,8 +728,13 @@ let infer_module env def =
     def, env
   in
   let infer_module_nodes env def =
+    clear_usage env;
+    def.module_in @ def.module_out
+    |> List.iter (function
+      | id, _, TMode _ -> set_usage id empty_usage env
+      | _ -> ());
     let nodes, newnodes, env =
-      infer_whole_nodes env def.module_nodes def.module_newnodes
+      infer_whole_nodes env def.module_nodes def.module_newnodes def.module_mode_annots
     in
     let all =
       def.module_all
@@ -707,7 +754,7 @@ let infer_module env def =
   def
 ;;
 
-let infer_state env file mname def =
+let infer_state env file mname io_nodes def =
   let make_env def env =
     List.fold_right
       (fun (id, t) env -> add_info id (StateParam t) env)
@@ -736,7 +783,11 @@ let infer_state env file mname def =
     def, env
   in
   let infer_state_nodes env def =
-    let nodes, newnodes, env = infer_whole_nodes env def.state_nodes def.state_newnodes in
+    clear_usage env;
+    List.iter (fun id -> set_usage id empty_usage env) io_nodes;
+    let nodes, newnodes, env =
+      infer_whole_nodes env def.state_nodes def.state_newnodes def.state_mode_annots
+    in
     let all =
       def.state_all
       |> Idmap.fold (fun id def all -> Idmap.add id (SNode def) all) nodes
@@ -849,10 +900,16 @@ let infer_smodule env file def =
   in
   let infer_smodule_states env def =
     let mid = def.smodule_id in
+    let io_nodes =
+      def.smodule_in @ def.smodule_out
+      |> List.filter_map (function
+        | id, _, TMode _ -> Some id
+        | _ -> None)
+    in
     let sts, all =
       Idmap.fold
         (fun id def (sts, all) ->
-          let def = infer_state env file mid def in
+          let def = infer_state env file mid io_nodes def in
           let sts = Idmap.add id def sts in
           let all = Idmap.add id (SMState def) all in
           sts, all)
@@ -872,10 +929,15 @@ let infer_smodule env file def =
 
 let infer (other_progs : xfrp Idmap.t) (file : string) (prog : xfrp) : xfrp =
   let register_modevals file def env : env =
+    let order i =
+      match def with
+      | { mode_val_ord = Some _; _ } -> Order i
+      | _ -> NoOrder
+    in
     (env, 0)
     |> Idmap.fold
          (fun modev acc (env, i) ->
-           let entry = ModeValue (file, def.mode_id, i, acc) in
+           let entry = ModeValue (file, def.mode_id, order i, acc) in
            add_info modev entry env, i + 1)
          def.mode_vals
     |> fst
@@ -933,7 +995,9 @@ let infer (other_progs : xfrp Idmap.t) (file : string) (prog : xfrp) : xfrp =
          (fun _ def env -> if def.smodule_pub then register_smodule file def env else env)
          prog.xfrp_smodules
     |> Idmap.fold
-         (fun _ def env -> if def.mode_pub then add_modety def.mode_id file env else env)
+         (fun _ def env ->
+           let ord = if Option.is_some def.mode_val_ord then Ordered else Unordered in
+           if def.mode_pub then add_modety def.mode_id file ord env else env)
          prog.xfrp_modes
     |> Idmap.fold
          (fun _ def env -> if def.type_pub then add_ty def.type_id file env else env)
@@ -953,7 +1017,8 @@ let infer (other_progs : xfrp Idmap.t) (file : string) (prog : xfrp) : xfrp =
         (fun id def (all, env) ->
           let all = Idmap.add id (XFRPMode def) all in
           let env = register_modevals file def env in
-          let env = add_modety def.mode_id file env in
+          let ord = if Option.is_some def.mode_val_ord then Ordered else Unordered in
+          let env = add_modety def.mode_id file ord env in
           all, env)
         prog.xfrp_modes
         (prog.xfrp_all, env)

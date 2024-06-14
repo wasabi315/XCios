@@ -287,7 +287,8 @@ xfrp_module:
         let all = list_to_idmap module_elem_id elems in
         let consts_ord = tsort_consts consts in
         let update_ord = get_update_ord nodes newnodes in
-        let () = check_nodes in_nodes out_nodes [] nodes newnodes mode_annot in
+        let mode_annot = mode_annot |> List.to_seq |> Idmap.of_seq in
+        let () = check_nodes in_nodes out_nodes [] nodes newnodes in
         {
           module_pub = false;
           module_id = id;
@@ -344,7 +345,7 @@ xfrp_smodule:
         let consts_ord = tsort_consts consts in
         let () =
           List.iter (fun st ->
-            check_nodes in_nodes out_nodes shared_nodes st.state_nodes st.state_newnodes st.state_mode_annots
+            check_nodes in_nodes out_nodes shared_nodes st.state_nodes st.state_newnodes
           ) sts
         in
         {
@@ -390,6 +391,7 @@ state:
         let all = list_to_idmap state_elem_id elems in
         let consts_ord = tsort_consts consts in
         let update_ord = get_update_ord nodes newnodes in
+        let mode_annot = mode_annot |> List.to_seq |> Idmap.of_seq in
         {
           state_id = id;
           state_params = params;

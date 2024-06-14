@@ -78,6 +78,10 @@ type is_ionode =
   | IO
   | NonIO
 
+type modev_order =
+  | NoOrder
+  | Order of int
+
 (* identifier reference *)
 type idinfo =
   | UnknownId
@@ -92,7 +96,7 @@ type idinfo =
   | StateParam of Type.t
   | StateConst of Type.t
   | NodeId of nattr * is_ionode * initialized * Type.t
-  | ModeValue of string * string * int (* order *) * access
+  | ModeValue of string * string * modev_order * access
 
 let pp_idinfo ppf = function
   | UnknownId -> fprintf ppf "unknown"
@@ -412,19 +416,13 @@ let pp_modedef ppf { mode_pub; mode_id; mode_vals; mode_val_ord } =
   fprintf ppf "}@]"
 ;;
 
-type mode_annot_kind =
+type mode_annot =
   | ModeAnnotEq of idref
   | ModeAnnotGeq of idref
 
-let pp_mode_annot_kind ppf = function
+let pp_mode_annot ppf = function
   | ModeAnnotEq modev -> fprintf ppf "= %a" pp_idref modev
   | ModeAnnotGeq modev -> fprintf ppf ">= %a" pp_idref modev
-;;
-
-type mode_annot = identifier * mode_annot_kind
-
-let pp_mode_annot ppf (id, kind) =
-  fprintf ppf "%a %a" pp_identifier id pp_mode_annot_kind kind
 ;;
 
 (* function *)
@@ -529,7 +527,7 @@ type xfrp_module =
   ; module_params : (identifier * Type.t) list
   ; module_in : (identifier * expression option * Type.t) list
   ; module_out : (identifier * expression option * Type.t) list
-  ; module_mode_annots : mode_annot list
+  ; module_mode_annots : mode_annot Idmap.t
   ; module_consts : constdef Idmap.t
   ; module_nodes : node Idmap.t
   ; module_newnodes : newnode Idmap.t
@@ -544,7 +542,7 @@ let pp_xfrp_module ppf def =
   fprintf ppf "public : %a@;" pp_print_bool def.module_pub;
   fprintf ppf "in: @[%a@]@;" (pp_list_comma pp_node_decl) def.module_in;
   fprintf ppf "out: @[%a@]@;" (pp_list_comma pp_node_decl) def.module_out;
-  fprintf ppf "mode_annot: @[%a@]@;" (pp_list_comma pp_mode_annot) def.module_mode_annots;
+  fprintf ppf "mode_annot: @[%a@]@;" (pp_idmap pp_mode_annot) def.module_mode_annots;
   fprintf ppf "consts: @[%a@]@;" (pp_idmap pp_constdef) def.module_consts;
   fprintf ppf "nodes: @[%a@]@;" (pp_idmap pp_node) def.module_nodes;
   fprintf ppf "newnodes: @[%a@]@;" (pp_idmap pp_newnode) def.module_newnodes;
@@ -574,7 +572,7 @@ let state_elem_id = function
 type state =
   { state_id : identifier
   ; state_params : (identifier * Type.t) list
-  ; state_mode_annots : mode_annot list
+  ; state_mode_annots : mode_annot Idmap.t
   ; state_consts : constdef Idmap.t
   ; state_nodes : node Idmap.t
   ; state_newnodes : newnode Idmap.t
@@ -588,7 +586,7 @@ let pp_state ppf def =
   fprintf ppf "@[<v>StateDef: {@;<0 2>";
   fprintf ppf "@[<v>id: %a@;" pp_identifier def.state_id;
   fprintf ppf "params: @[%a@]@;" (pp_list_comma pp_id_and_type) def.state_params;
-  fprintf ppf "mode_annot: @[%a@]@;" (pp_list_comma pp_mode_annot) def.state_mode_annots;
+  fprintf ppf "mode_annot: @[%a@]@;" (pp_idmap pp_mode_annot) def.state_mode_annots;
   fprintf ppf "consts: @[%a@]@;" (pp_idmap pp_constdef) def.state_consts;
   fprintf ppf "nodes: @[%a@]@;" (pp_idmap pp_node) def.state_nodes;
   fprintf ppf "newnodes: @[%a@]@;" (pp_idmap pp_newnode) def.state_newnodes;

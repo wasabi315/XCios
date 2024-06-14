@@ -172,18 +172,20 @@ and visit_node_init node lifetime = visit_init node.node_id node.node_init lifet
 
 and visit_mode_annot annot =
   annot
-  |> List.to_seq
+  |> Idmap.to_seq
   |> Seq.map (function
     | id, ModeAnnotGeq modev -> id, modev
     | id, ModeAnnotEq modev -> id, modev)
   |> Seq.map (function
-    | node_id, (modev, ModeValue (file, mode_id, ord, _)) ->
+    | node_id, (modev, ModeValue (file, mode_id, Order ord, _)) ->
       ( node_id
       , { mode_type = file, mode_id
         ; self_modev = modev, ord
         ; child_modev = []
         ; init_modev = modev, ord
         } )
+    | _, (_, ModeValue (_, _, NoOrder, _)) ->
+      failwith "unimplemented: unordered mode annotation"
     | _ -> assert false)
   |> Idmap.of_seq
 

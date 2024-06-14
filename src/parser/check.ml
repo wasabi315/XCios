@@ -42,7 +42,7 @@ let check_module_attr_newnode (newnode : newnode) : unit =
     newnode.newnode_binds
 ;;
 
-let check_nodes in_decls out_decls shared_decls nodes newnodes mode_annot =
+let check_nodes in_decls out_decls shared_decls nodes newnodes =
   let register_node id attr conflict_msg_f all_nodes =
     match Idmap.find_opt id all_nodes with
     | Some _ ->
@@ -130,21 +130,10 @@ let check_nodes in_decls out_decls shared_decls nodes newnodes mode_annot =
           raise (Error msg))
       all_nodes
   in
-  let check_mode_annot all_nodes_with_mode mode_annot =
-    let annotd_nodes = mode_annot |> List.map fst |> Idset.of_list in
-    let unneeded_annots = Idset.diff annotd_nodes all_nodes_with_mode in
-    if not (Idset.is_empty unneeded_annots)
-    then (
-      let msg =
-        Format.asprintf "Mode annotation on non-I/O node : %a" pp_idset unneeded_annots
-      in
-      raise (Error msg))
-  in
   let all_decls = get_all_declared_nodes out_decls shared_decls in
   let all_nodes = get_all_defined_nodes nodes newnodes in
   let all_io_nodes = get_all_io_nodes in_decls out_decls in
   check_node_init in_decls out_decls;
   check_header_nodes_defined all_decls all_nodes all_io_nodes;
-  check_undecl_header_nodes all_nodes all_decls;
-  check_mode_annot all_io_nodes mode_annot
+  check_undecl_header_nodes all_nodes all_decls
 ;;
