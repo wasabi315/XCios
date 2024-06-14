@@ -92,13 +92,15 @@ and visit_newnode moduledata def (clock, lifetime, mode_calc) =
          , clock + info.module_clockperiod
          , info.module_in_sig
          , info.module_out_sig
-         , Idmap.map (fun mode_calc -> mode_calc.init_modev) info.module_mode_calc )
+         , Idmap.map
+             (fun mode_calc -> Option.get mode_calc.init_modev)
+             info.module_mode_calc )
        | SModuleInfo info ->
          ( (file, module_id)
          , clock + info.smodule_clockperiod
          , info.smodule_in_sig
          , info.smodule_out_sig
-         , Idmap.map snd info.smodule_init_modev ))
+         , Idmap.map (fun (_, modev) -> modev) info.smodule_init_modev ))
     | _ -> assert false
   in
   let lifetime =
@@ -118,13 +120,17 @@ and visit_newnode moduledata def (clock, lifetime, mode_calc) =
           let entry = Idmap.find id1 mode_calc in
           let init_modev =
             match entry.init_modev, Idmap.find id2 init_modev with
-            | (_, ord1), ((_, ord2) as modev) when ord2 > ord1 -> modev
-            | init_modev, _ -> init_modev
+            | None, init_modev -> init_modev
+            | Some ((_, Order o1) as mv1), ((_, Order o2) as mv2) ->
+              if o2 > o1 then mv2 else mv1
+            | Some (_, NoOrder), (_, NoOrder) -> assert false
+            | Some (_, NoOrder), (_, Order _) | Some (_, Order _), (_, NoOrder) ->
+              assert false
           in
           let entry =
             { entry with
               child_modev = (modul, def.newnode_id, id2) :: entry.child_modev
-            ; init_modev
+            ; init_modev = Some init_modev
             }
           in
           Idmap.add id1 entry mode_calc
@@ -143,13 +149,17 @@ and visit_newnode moduledata def (clock, lifetime, mode_calc) =
               let entry = Idmap.find id1 mode_calc in
               let init_modev =
                 match entry.init_modev, Idmap.find id2 init_modev with
-                | (_, ord1), ((_, ord2) as modev) when ord2 > ord1 -> modev
-                | init_modev, _ -> init_modev
+                | None, init_modev -> init_modev
+                | Some ((_, Order o1) as mv1), ((_, Order o2) as mv2) ->
+                  if o2 > o1 then mv2 else mv1
+                | Some (_, NoOrder), (_, NoOrder) -> assert false
+                | Some (_, NoOrder), (_, Order _) | Some (_, Order _), (_, NoOrder) ->
+                  assert false
               in
               let entry =
                 { entry with
                   child_modev = (modul, def.newnode_id, id2) :: entry.child_modev
-                ; init_modev
+                ; init_modev = Some init_modev
                 }
               in
               Idmap.add id1 entry mode_calc
@@ -170,30 +180,30 @@ and visit_init id init lifetime =
 and visit_header_init (id, init, _) lifetime = visit_init id init lifetime
 and visit_node_init node lifetime = visit_init node.node_id node.node_init lifetime
 
-and visit_mode_annot annot =
-  annot
-  |> Idmap.to_seq
-  |> Seq.map (function
-    | id, ModeAnnotGeq modev -> id, modev
-    | id, ModeAnnotEq modev -> id, modev)
-  |> Seq.map (function
-    | node_id, (modev, ModeValue (file, mode_id, Order ord, _)) ->
-      ( node_id
-      , { mode_type = file, mode_id
-        ; self_modev = modev, ord
+and visit_mode_annot annot io_sig =
+  List.to_seq io_sig
+  |> Seq.filter_map (function
+    | id, Type.TMode (file, mode_id, _) -> Some (id, (file, mode_id))
+    | _ -> None)
+  |> Seq.map (fun (id, mode_type) ->
+    match Idmap.find_opt id annot with
+    | None -> id, { mode_type; self_modev = None; init_modev = None; child_modev = [] }
+    | Some (ModeAnnotEq (modev, ModeValue (_, _, ord, _)))
+    | Some (ModeAnnotGeq (modev, ModeValue (_, _, ord, _))) ->
+      ( id
+      , { mode_type
+        ; self_modev = Some (modev, ord)
+        ; init_modev = Some (modev, ord)
         ; child_modev = []
-        ; init_modev = modev, ord
         } )
-    | _, (_, ModeValue (_, _, NoOrder, _)) ->
-      failwith "unimplemented: unordered mode annotation"
-    | _ -> assert false)
+    | Some _ -> assert false)
   |> Idmap.of_seq
 
 and visit_module file def moduledata =
   let param_sig = def.module_params in
   let in_sig = List.map (fun (id, _, t) -> id, t) def.module_in in
   let out_sig = List.map (fun (id, _, t) -> id, t) def.module_out in
-  let mode_calc = visit_mode_annot def.module_mode_annots in
+  let mode_calc = visit_mode_annot def.module_mode_annots (in_sig @ out_sig) in
   let lifetime =
     lifetime_empty
     |> List.fold_right visit_input_node def.module_in
@@ -260,6 +270,8 @@ and visit_state moduledata def lifetime mode_calc =
 and visit_state_init lifetime = update_free_last "state" 2 lifetime
 
 and visit_smodule file def moduledata =
+  let in_sig = List.map (fun (id, _, t) -> id, t) def.smodule_in in
+  let out_sig = List.map (fun (id, _, t) -> id, t) def.smodule_out in
   let lifetime =
     lifetime_empty
     |> List.fold_right visit_input_node def.smodule_in
@@ -271,7 +283,7 @@ and visit_smodule file def moduledata =
   let clock, state_lifetime, state_mode_calc =
     idmap_fold_values
       (fun state (clock, state_lifetime, state_mode_calc) ->
-        let mode_calc = visit_mode_annot state.state_mode_annots in
+        let mode_calc = visit_mode_annot state.state_mode_annots (in_sig @ out_sig) in
         let clock', lifetime', mode_calc =
           visit_state moduledata state lifetime mode_calc
         in
@@ -296,7 +308,7 @@ and visit_smodule file def moduledata =
     match def.smodule_init with
     | EVariant ((state_id, _), _), _ ->
       Idmap.find state_id state_mode_calc
-      |> Idmap.map (fun mode_calc -> mode_calc.mode_type, mode_calc.init_modev)
+      |> Idmap.map (fun mode_calc -> mode_calc.mode_type, Option.get mode_calc.init_modev)
     | _ -> assert false
   in
   let param_sig = def.smodule_params in

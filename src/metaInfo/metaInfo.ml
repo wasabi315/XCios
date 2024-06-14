@@ -98,10 +98,11 @@ let pp_signature ppf signature =
 
 type mode_calc =
   { mode_type : string * identifier (* file * mode_id *)
-  ; self_modev : identifier (* mode value specified by mode annotation *) * int
+  ; self_modev :
+      (identifier (* mode value specified by mode annotation *) * modev_order) option
   ; child_modev : ((string * identifier) * identifier * identifier) list
       (* (instantiated module_id * newnode_id * io_node_name) list *)
-  ; init_modev : identifier * int
+  ; init_modev : (identifier * modev_order) option
   }
 
 let pp_mode_calc ppf modec =
@@ -110,10 +111,18 @@ let pp_mode_calc ppf modec =
   in
   fprintf ppf "@[<v>";
   fprintf ppf "mode_type: %s:%s" (fst modec.mode_type) (snd modec.mode_type);
-  fprintf ppf "@,self_modev: %s" (fst modec.self_modev);
+  fprintf
+    ppf
+    "@,self_modev: %a"
+    (pp_opt (fun ppf (modev, _) -> pp_identifier ppf modev) pp_none)
+    modec.self_modev;
   fprintf ppf "@,@[<hov 2>child_modev: ";
   fprintf ppf "@,%a@]" (pp_list_comma pp_child_modev_elem) modec.child_modev;
-  fprintf ppf "@,init_modev: %s" (fst modec.init_modev);
+  fprintf
+    ppf
+    "@,init_modev: %a"
+    (pp_opt (fun ppf (modev, _) -> pp_identifier ppf modev) pp_none)
+    modec.init_modev;
   fprintf ppf "@]"
 ;;
 
@@ -144,7 +153,7 @@ type smodule_info =
   ; smodule_out_sig : (identifier * Type.t) list
   ; state_lifetime : lifetime Idmap.t
   ; state_mode_calc : mode_calc Idmap.t Idmap.t
-  ; smodule_init_modev : ((string * identifier) * (identifier * int)) Idmap.t
+  ; smodule_init_modev : ((string * identifier) * (identifier * modev_order)) Idmap.t
   }
 
 let pp_smodule_info ppf smodule_info =

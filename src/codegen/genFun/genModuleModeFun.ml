@@ -20,14 +20,19 @@ let gen_mode_calc pp_loc ppf mode_calc =
       (get_newnode_filed newnode_id)
   in
   let gen_mode_calc =
-    let gen_self ppf () =
-      gen_modev_name ppf (mode_calc.mode_type, fst mode_calc.self_modev)
+    let calcs =
+      List.map
+        (fun child_calc ppf () -> gen_child_mode_calc ppf child_calc)
+        mode_calc.child_modev
     in
-    List.fold_right
-      (fun child_mode_calc printer ppf () ->
-        fprintf ppf "MAX(%a,@ %a)" gen_child_mode_calc child_mode_calc printer ())
-      mode_calc.child_modev
-      gen_self
+    let calc, calcs =
+      match mode_calc.self_modev, calcs with
+      | None, [] -> assert false
+      | None, calc :: calcs -> calc, calcs
+      | Some (modev, _), calcs ->
+        (fun ppf () -> gen_modev_name ppf (mode_calc.mode_type, modev)), calcs
+    in
+    List.fold_left (fun ps p ppf () -> fprintf ppf "MAX(%a,@ %a)" p () ps ()) calc calcs
   in
   fprintf ppf "@,@[<hov>return %a;@]" gen_mode_calc ()
 ;;
@@ -58,7 +63,7 @@ let define_module_mode_calc_fun metainfo (file, modul) fun_writers =
         ppf
         "@,return %a;"
         gen_modev_name
-        (mode_calc.mode_type, fst mode_calc.init_modev);
+        (mode_calc.mode_type, fst (Option.get mode_calc.init_modev));
       fprintf ppf "@]@,}";
       gen_mode_calc (fun ppf -> fprintf ppf "&memory->%s") ppf mode_calc;
       fprintf ppf "@]"
@@ -136,7 +141,7 @@ let define_smodule_mode_calc_fun metainfo (file, modul) fun_writers =
                   ppf
                   "@,return %a;"
                   gen_modev_name
-                  (mode_type, fst mode_calc.init_modev);
+                  (mode_type, fst (Option.get mode_calc.init_modev));
                 fprintf ppf "@]@,}");
               gen_mode_calc
                 (fun ppf -> fprintf ppf "&memory->statebody.%a.%s" pp_identifier state_id)

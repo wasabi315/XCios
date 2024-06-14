@@ -225,7 +225,7 @@ let get_mode_init_modev metainfo file module_id =
   match Hashtbl.find metainfo.moduledata (file, module_id) with
   | ModuleInfo info ->
     Idmap.map
-      (fun modecalc -> modecalc.mode_type, modecalc.init_modev)
+      (fun modecalc -> modecalc.mode_type, Option.get modecalc.init_modev)
       info.module_mode_calc
   | SModuleInfo info -> info.smodule_init_modev
 ;;
