@@ -653,18 +653,32 @@ let infer_whole_nodes env nodes newnodes mode_annots =
   let check_usage env mode_annots =
     iter_usage
       (fun id usage ->
-        Format.printf "%a -> %a\n" pp_identifier id pp_usage usage;
-        match Idmap.find_opt id mode_annots with
-        | None when usage.num_pass = 0 ->
-          raise_err_pp "unused I/O node : %a" pp_identifier id
-        | Some (ModeAnnotEq (_, NodeId (_, _, _, _))) when usage.num_pass > 0 ->
-          raise_err_pp "I/O node passed to instance : %a" pp_identifier id
-        | Some (ModeAnnotEq (_, NodeId (OutputNode, _, _, _))) when usage.num_def = 0 ->
-          raise_err_pp "undefined output node : %a" pp_identifier id
-        | Some (ModeAnnotGeq (_, NodeId (InputNode, _, _, _))) -> ()
-        | Some (ModeAnnotGeq (_, NodeId (OutputNode, _, _, _))) -> assert false
-        | None -> Format.printf "oh no\n"
-        | Some annot -> Format.printf "oh no: %a\n" pp_mode_annot annot)
+        let attr, ord =
+          match find_info id env with
+          | NodeId (attr, IO, _, TMode (_, mode_id, _)) ->
+            attr, snd (find_modety mode_id env)
+          | _ -> assert false
+        in
+        let annot = Idmap.find_opt id mode_annots in
+        match annot, ord with
+        | None, Ordered -> raise_err_pp "Missing mode annotation : %a" pp_identifier id
+        | None, Unordered ->
+          if usage.num_pass = 0 then raise_err_pp "Unused I/O node : %a" pp_identifier id;
+          if usage.num_pass > 1
+          then raise_err_pp "I/O node passed to multiple instance : %a" pp_identifier id
+        | Some (ModeAnnotEq _), Ordered -> assert false
+        | Some (ModeAnnotEq (_, ModeValue (_, _, NoOrder, acc))), Unordered ->
+          if usage.num_pass > 0
+          then
+            raise_err_pp
+              "Mode-annotated I/O node passed to instance : %a"
+              pp_identifier
+              id;
+          if acc = Acc && attr = OutputNode && usage.num_def = 0
+          then raise_err_pp "Undefined output node : %a" pp_identifier id
+        | Some (ModeAnnotGeq _), Unordered -> assert false
+        | Some (ModeAnnotGeq _), Ordered -> if attr = OutputNode then assert false
+        | _ -> assert false)
       env
   in
   (*
