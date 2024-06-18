@@ -13,7 +13,7 @@ XCios is a "power-mode-aware" FRP language for small embedded systems.
 
 ```fsharp
 # A GPS module has two power modes: Sleep and On.
-mode GpsMode = Sleep | accessible On
+mode GpsMode = Sleep | acc On
 
 switchmodule Main {
   in  pulse1s: Bool,
@@ -23,7 +23,7 @@ switchmodule Main {
   init Tick
 
   # Increment the time every second. We don't need data from the GPS module in this state so we set the mode of gpsData to Sleep.
-  state Tick with gpsData >= Sleep {
+  state Tick with gpsData = Sleep {
     out node time =
       if pulse1s then add1s(time@last) else time@last
 
@@ -35,7 +35,7 @@ switchmodule Main {
   }
 
   # Adjust the time at midnight using the GPS data. So here we set the mode of gpsData to On.
-  state Adjust with gpsData >= On {
+  state Adjust with gpsData = On {
     out node time = getTime(gpsData)
 
     # Go back to the Tick state after adjusting the time.
