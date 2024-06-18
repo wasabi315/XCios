@@ -47,12 +47,10 @@ let rec unify t1 t2 =
     r := TVBound t;
     t
   | TMode ("", _, _), _ | _, TMode ("", _, _) -> assert false
-  | TMode (file1, mname1, t1), TMode (file2, mname2, t2) ->
-    if file1 = file2 && mname1 = mname2
-    then (
-      let t = unify t1 t2 in
-      TMode (file1, mname1, t))
-    else raise_imcompatible (TMode (file1, mname1, t1)) (TMode (file2, mname2, t2))
+  | TMode (file1, mname1, t1), TMode (file2, mname2, t2)
+    when file1 = file2 && mname1 = mname2 ->
+    let t = unify t1 t2 in
+    TMode (file1, mname1, t)
   | _, _ -> raise_imcompatible t1 t2
 
 (* Unify type list `ts1` and `ts2`. *)
