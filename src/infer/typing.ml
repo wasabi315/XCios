@@ -943,18 +943,20 @@ let infer_smodule env file def =
 
 let infer (other_progs : xfrp Idmap.t) (file : string) (prog : xfrp) : xfrp =
   let register_modevals file def env : env =
-    let order i =
-      match def with
-      | { mode_val_ord = Some _; _ } -> Order i
-      | _ -> NoOrder
+    let ord =
+      match def.mode_val_ord with
+      | Some ord ->
+        List.to_seq ord
+        |> Seq.mapi (fun i modev -> modev, Idmap.find modev def.mode_vals, Order i)
+      | None ->
+        Idmap.to_seq def.mode_vals |> Seq.map (fun (modev, acc) -> modev, acc, NoOrder)
     in
-    (env, 0)
-    |> Idmap.fold
-         (fun modev acc (env, i) ->
-           let entry = ModeValue (file, def.mode_id, order i, acc) in
-           add_info modev entry env, i + 1)
-         def.mode_vals
-    |> fst
+    Seq.fold_left
+      (fun env (modev, acc, ord) ->
+        let entry = ModeValue (file, def.mode_id, ord, acc) in
+        add_info modev entry env)
+      env
+      ord
   in
   let register_typeconses file def env : env =
     Idmap.fold
