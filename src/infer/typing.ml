@@ -946,8 +946,20 @@ let infer (other_progs : xfrp Idmap.t) (file : string) (prog : xfrp) : xfrp =
     let ord =
       match def.mode_val_ord with
       | Some ord ->
+        let should_acc = ref false in
         List.to_seq ord
-        |> Seq.mapi (fun i modev -> modev, Idmap.find modev def.mode_vals, Order i)
+        |> Seq.mapi (fun i modev ->
+          let acc = Idmap.find modev def.mode_vals in
+          (match acc with
+           | Acc -> should_acc := true
+           | Inacc ->
+             if !should_acc
+             then
+               raise_err_pp
+                 "Inaccessible mode value after accessible: %a"
+                 pp_identifier
+                 modev);
+          modev, acc, Order i)
       | None ->
         Idmap.to_seq def.mode_vals |> Seq.map (fun (modev, acc) -> modev, acc, NoOrder)
     in

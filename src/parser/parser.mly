@@ -197,39 +197,14 @@ modedef:
     ; mode_val_ord = None
     }
   }
-  | ORDERED MODE id = UID EQUAL modevs = omode_value_defs
+  | ORDERED MODE id = UID EQUAL modevs = separated_nonempty_list(LT, pair(accessibility, UID))
   {
-    let inacc_modevs , acc_modevs = modevs in
-    let mode_val_ord = inacc_modevs @ acc_modevs in
-    let inacc_modevs =
-      inacc_modevs
-      |> List.to_seq
-      |> Seq.map (fun modev -> (modev, Inacc))
-    in
-    let acc_modevs =
-      acc_modevs
-      |> List.to_seq
-      |> Seq.map (fun modev -> (modev, Acc))
-    in
     { mode_pub = false
     ; mode_id = id
-    ; mode_vals = Idmap.of_seq (Seq.append inacc_modevs acc_modevs)
-    ; mode_val_ord = Some(mode_val_ord)
+    ; mode_vals = List.to_seq modevs |> Seq.map (fun (acc, modev) -> (modev, acc)) |> Idmap.of_seq
+    ; mode_val_ord = Some (List.map snd modevs)
     }
   }
-
-omode_value_defs:
-  | (* empty *)
-    { [], [] }
-  | mode = UID
-    { [mode], [] }
-  | ACC acc_modes = separated_list(pair(LT, ACC), UID)
-    { [], acc_modes }
-  | mode = UID LT modes = omode_value_defs
-    {
-      let modes , acc_modes = modes in
-      mode :: modes, acc_modes
-    }
 
 (* function *)
 fundef:
