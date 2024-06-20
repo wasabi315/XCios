@@ -140,7 +140,7 @@ let gen_activate_fun ppf metainfo =
     let global_name = asprintf "%a" gen_global_constname (file, const.const_id) in
     let gen_body ppf () = fprintf ppf "init_%s();" global_name in
     let gen_address ppf () = pp_print_string ppf global_name in
-    let gen_life ppf () = fprintf ppf "clock + period" in
+    let gen_life ppf () = fprintf ppf "clock + period - 1" in
     let gen_mark_opt = get_mark_writer metainfo const.const_type gen_address gen_life in
     (gen_update gen_body gen_mark_opt None) ppf ()
   in
@@ -291,6 +291,7 @@ let gen_activate_fun ppf metainfo =
     else (
       let gen_sig_init ppf (id, _) = fprintf ppf "memory->%s = %s;" id id in
       fprintf ppf "@,%a" (pp_print_list gen_sig_init) param_sig);
+    fprintf ppf "@,clock = 1;";
     if all_consts = []
     then ()
     else fprintf ppf "@,%a" (pp_print_list gen_body_const_init) all_consts;
